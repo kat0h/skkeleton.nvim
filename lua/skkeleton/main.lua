@@ -103,7 +103,7 @@ function M.init(force)
   -- 使い終わった state を片付ける。CmdlineEnter にすると辞書登録の呼び出しで壊れる。
   -- 挿入モードの <C-o>（niI）などで解除されないよう ModeChanged の :n にする。
   -- SafeState を挟むのは、プラグインによる ModeChanged の呼び出しで解除されるのを防ぐため。
-  -- このイベントは利用者の操作を受け付けるときに呼ばれるので、そこで normal なら改めて処理する
+  -- このイベントは利用者の操作を受け付けるときに呼ばれるので、insert / cmdline / terminal でなければ片付ける
   vim.api.nvim_create_autocmd("ModeChanged", {
     group = group,
     pattern = "*:n",
@@ -112,7 +112,9 @@ function M.init(force)
         group = group,
         once = true,
         callback = function()
-          if vim.fn.mode() == "n" then
+          local m = vim.fn.mode()
+          local s = m:sub(1, 1)
+          if s ~= "i" and s ~= "c" and s ~= "t" and not vim.startswith(m, "ni") and not host.is_in_input() then
             reset()
             host.disable()
           end
