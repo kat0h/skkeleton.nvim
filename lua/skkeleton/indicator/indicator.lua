@@ -279,9 +279,13 @@ function Indicator:insert_rect(mode, border)
   return { math.max(0, math.min(want[1], bottom - h)), math.max(0, math.min(want[2], max_col)) }
 end
 
-local function redraw_if_cmdline()
+local function redraw_if_cmdline(winid)
   if Modes.is_cmdline() then
-    pcall(vim.cmd, "redraw")
+    if winid and vim.api.nvim__redraw then
+      pcall(vim.api.nvim__redraw, { win = winid, valid = false, flush = false })
+    else
+      pcall(vim.cmd, "redraw")
+    end
   end
 end
 
@@ -309,7 +313,6 @@ function Indicator:open()
   local winid = vim.api.nvim_open_win(buf, false, win_cfg)
   self:border_highlight(winid, mode)
   table.insert(self.winid, 1, winid)
-  redraw_if_cmdline()
 end
 
 function Indicator:on_cmdline_leave()
@@ -342,9 +345,12 @@ function Indicator:update()
       self:set_text(vim.api.nvim_win_get_buf(winid), mode)
       pcall(vim.api.nvim_win_set_config, winid, self:win_pos_config(mode, false))
       self:border_highlight(winid, mode)
-      redraw_if_cmdline()
+      redraw_if_cmdline(winid)
     else
       self:open()
+      if self:is_opened() then
+        redraw_if_cmdline(self.winid[1])
+      end
     end
   end
   if Modes.is_cmdline() then
@@ -369,8 +375,6 @@ function Indicator:move()
     local ok = pcall(vim.api.nvim_win_set_config, self.winid[1], self:win_pos_config(mode, false))
     if not ok then
       table.remove(self.winid, 1)
-    else
-      redraw_if_cmdline()
     end
   end
 end
@@ -385,7 +389,6 @@ function Indicator:close()
     end
   end
   self.winid = {}
-  redraw_if_cmdline()
 end
 
 ---@return boolean
