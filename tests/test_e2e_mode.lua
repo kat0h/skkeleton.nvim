@@ -268,6 +268,27 @@ T["immediately entering visual mode after escape resets state"] = function()
   eq(child.g["skkeleton#state"].phase, "input")
 end
 
+T["transitioning directly to visual mode during pre-edit resets state"] = function()
+  child.cmd("set mouse=a")
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "hello world" })
+  child.type_keys("A")
+  type("<Plug>(skkeleton-enable)")
+  type("Kanji")
+  eq(helpers.preedit(child), "▽かんじ")
+  eq(child.g["skkeleton#enabled"], true)
+
+  child.api.nvim_input_mouse("left", "press", "", 0, 0, 2)
+  child.api.nvim_input_mouse("left", "release", "", 0, 0, 2)
+  child.api.nvim_input_mouse("left", "press", "", 0, 0, 2)
+  child.api.nvim_input_mouse("left", "release", "", 0, 0, 2)
+  helpers.settle(child)
+
+  eq(child.fn.mode(), "v")
+  eq(child.g["skkeleton#enabled"], false)
+  eq(helpers.preedit(child), "")
+  eq(child.g["skkeleton#state"].phase, "input")
+end
+
 T["enabling twice keeps working"] = function()
   enable()
   type("<Plug>(skkeleton-enable)")
@@ -429,6 +450,29 @@ I["follows the mode"] = function()
   eq(helpers.indicator(ichild).text, "ア")
   helpers.type(ichild, "<Plug>(skkeleton-disable)")
   eq(helpers.indicator(ichild).text, "Aa")
+end
+
+I["transitioning directly to visual mode during pre-edit resets state and closes indicator"] = function()
+  ichild.cmd("set mouse=a")
+  ichild.api.nvim_buf_set_lines(0, 0, -1, false, { "hello world" })
+  ichild.type_keys("A")
+  helpers.type(ichild, "<Plug>(skkeleton-enable)")
+  helpers.type(ichild, "Kanji")
+  eq(helpers.preedit(ichild), "▽かんじ")
+  eq(ichild.g["skkeleton#enabled"], true)
+  eq(helpers.indicator(ichild) ~= nil, true)
+
+  -- ダブルクリックで単語選択し、insert から visual に直接遷移する
+  ichild.api.nvim_input_mouse("left", "press", "", 0, 0, 2)
+  ichild.api.nvim_input_mouse("left", "release", "", 0, 0, 2)
+  ichild.api.nvim_input_mouse("left", "press", "", 0, 0, 2)
+  ichild.api.nvim_input_mouse("left", "release", "", 0, 0, 2)
+  helpers.settle(ichild)
+
+  eq(ichild.fn.mode(), "v")
+  eq(ichild.g["skkeleton#enabled"], false)
+  eq(helpers.preedit(ichild), "")
+  eq(helpers.indicator(ichild), vim.NIL)
 end
 
 return T

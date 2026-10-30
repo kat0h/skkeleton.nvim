@@ -145,6 +145,22 @@ function M.init(force)
       })
     end,
   })
+  -- insert から直接 visual・select モードへ遷移したとき（マウス選択など）も片付ける。
+  -- 挿入モードの <C-o>（niI）は insert のままなので除外する
+  vim.api.nvim_create_autocmd("ModeChanged", {
+    group = group,
+    pattern = { "i:*", "ic:*", "ix:*" },
+    callback = function()
+      local m = vim.v.event.new_mode:sub(1, 1)
+      if m == "v" or m == "V" or m == "\22" or m == "s" or m == "S" or m == "\19" then
+        if host.is_in_input() then
+          return
+        end
+        reset()
+        host.disable()
+      end
+    end,
+  })
   -- 置換モードでは有効にできない（enable で断る）ので、insert で有効にしたまま <Insert> で
   -- 置換モードに移ったときも、pre-edit を捨てて無効にする（InsertLeave も InsertEnter も来ない）
   vim.api.nvim_create_autocmd("ModeChanged", {
