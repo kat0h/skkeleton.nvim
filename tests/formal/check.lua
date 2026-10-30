@@ -91,6 +91,9 @@ do
       opts.jobs, i = math.min(tonumber(v), math.max(1, #vim.uv.cpu_info() - 2)), i + 1
     elseif k == "--mutate" then
       opts.mutate, i = v, i + 1
+    elseif k == "--config" then
+      -- 再生のときの設定（ファジングの反例の「設定:」をそのまま渡す）
+      opts.config, i = assert(loadstring("return " .. v))(), i + 1
     elseif k == "--no-cache" then
       opts.no_cache = true
     elseif k == "--fuzz" then
@@ -453,6 +456,12 @@ local function report(res)
   print(("\n✗ 反例（%d キー）: %s"):format(#res.keys, keys_str(res.keys)))
   if res.config and next(res.config) then
     print("  設定: " .. vim.inspect(res.config, { newline = " ", indent = "" }))
+    print(
+      ("  再生: --config '%s' --keys '%s'"):format(
+        vim.inspect(res.config, { newline = " ", indent = "" }),
+        table.concat(res.keys, ",")
+      )
+    )
   end
   for _, v in ipairs(res.violations) do
     print(("  - %s\n      %s"):format(v.name, v.msg))
@@ -524,7 +533,7 @@ if opts.keys then
   -- 1 本のキー列を流して、キーごとの観測を出す（反例を追うため）
   local child = new_child()
   local init = INITS[opts.keys[1]] and table.remove(opts.keys, 1) or nil
-  start(child, opts.mutate, init)
+  start(child, opts.mutate, init, opts.config)
   settle(child)
   local base = snapshot(child)
   local prev = base
