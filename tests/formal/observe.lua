@@ -3,7 +3,7 @@
 local M = {}
 
 local function floats()
-  local popup, indicator = {}, {}
+  local popup, indicator, other = {}, {}, {}
   for _, w in ipairs(vim.api.nvim_list_wins()) do
     local cfg = vim.api.nvim_win_get_config(w)
     if cfg.relative ~= "" then
@@ -14,7 +14,13 @@ local function floats()
         height = vim.api.nvim_win_get_height(w),
         border = cfg.border ~= nil and cfg.border ~= "none" and #vim.tbl_flatten({ cfg.border }) > 0,
       }
-      if vim.w[w].skkeleton_popup then
+      local ind_ns = vim.api.nvim_get_namespaces()["skkeleton-indicator"]
+      local fbuf = vim.api.nvim_win_get_buf(w)
+      local is_indicator = ind_ns and #vim.api.nvim_buf_get_extmarks(fbuf, ind_ns, 0, -1, { limit = 1 }) > 0
+      if not vim.w[w].skkeleton_popup and not is_indicator then
+        -- skkeleton のものではない float（blink.cmp のメニューなど）
+        other[#other + 1] = entry
+      elseif vim.w[w].skkeleton_popup then
         entry.lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(w), 0, -1, false)
         popup[#popup + 1] = entry
       else
@@ -23,7 +29,7 @@ local function floats()
       end
     end
   end
-  return popup, indicator
+  return popup, indicator, other
 end
 
 local function marks(ns)
@@ -81,7 +87,7 @@ function M.snapshot()
   local cur = vim.api.nvim_win_get_cursor(0)
   local wpos = vim.api.nvim_win_get_position(win)
   local textoff = vim.fn.getwininfo(win)[1].textoff
-  local popup, indicator = floats()
+  local popup, indicator, other_floats = floats()
   local all_skk_maps = 0
   for _, b in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_loaded(b) then
@@ -129,7 +135,10 @@ function M.snapshot()
     win = win,
     wins = #vim.api.nvim_tabpage_list_wins(0),
     buf = buf,
-    bufs = #vim.api.nvim_list_bufs(),
+    -- blink.cmp は閉じたメニューのバッファを使い回すので数えない
+    bufs = #vim.tbl_filter(function(b)
+      return not vim.bo[b].filetype:match("^blink")
+    end, vim.api.nvim_list_bufs()),
     lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false),
     cursor = cur,
     win_pos = wpos,
@@ -141,6 +150,11 @@ function M.snapshot()
     annot_marks = marks(render.ns_annot),
     popup = popup,
     indicator = indicator,
+    other_floats = #other_floats,
+    -- blink.cmp 以外の float のバッファの数（bufs と同じく blink.cmp のバッファは数えない）
+    other_float_bufs = #vim.tbl_filter(function(e)
+      return not vim.bo[vim.api.nvim_win_get_buf(e.win)].filetype:match("^blink")
+    end, other_floats),
     skk_maps_here = skk_maps(buf, "i"),
     skk_maps_all = all_skk_maps,
     sentinel = type(sentinel) == "table" and sentinel.desc or nil,

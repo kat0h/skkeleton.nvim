@@ -234,6 +234,10 @@ local function check_terminal(s)
   end
   local before = line:sub(1, s.cursor[2])
   local pre = s.preedit_marks[1] and s.preedit_marks[1].text or ""
+  -- 折り返す行は 1 段の画面と比べられないので見ない
+  if vim.fn.strdisplaywidth(line .. pre) >= s.win_width - s.textoff then
+    return
+  end
   local col = s.win_pos[2] + s.textoff + vim.fn.strdisplaywidth(before .. pre) + 1
   if s.term.row ~= s.screen_row or s.term.col ~= col then
     return ("端末のカーソル (%d,%d)、期待 (%d,%d)（headless では (%d,%d)）"):format(

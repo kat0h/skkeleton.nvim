@@ -223,15 +223,16 @@ M.state["popup: 候補一覧は ▼ の 5 番目の候補から"] = function(s)
 end
 
 M.state["resource: ウィンドウとバッファが漏れない"] = function(s, base)
-  local floats = #s.popup + #s.indicator
-  local base_wins = base.wins - #base.popup - #base.indicator
+  local floats = #s.popup + #s.indicator + (s.other_floats or 0)
+  local base_wins = base.wins - #base.popup - #base.indicator - (base.other_floats or 0)
   if s.wins - floats ~= base_wins then
     return ("普通のウィンドウが %d（元は %d）"):format(s.wins - floats, base_wins)
   end
   -- float のバッファは float と一緒に消える（bufhidden=wipe）ので、普通のバッファの数は変わらない
-  local base_bufs = base.bufs - #base.popup - #base.indicator
-  if s.bufs - floats ~= base_bufs then
-    return ("float 以外のバッファが %d（元は %d）"):format(s.bufs - floats, base_bufs)
+  local base_bufs = base.bufs - #base.popup - #base.indicator - (base.other_float_bufs or 0)
+  local float_bufs = #s.popup + #s.indicator + (s.other_float_bufs or 0)
+  if s.bufs - float_bufs ~= base_bufs then
+    return ("float 以外のバッファが %d（元は %d）"):format(s.bufs - float_bufs, base_bufs)
   end
 end
 
@@ -528,6 +529,15 @@ for _, property in ipairs({
     reason = "#20: ▽ の入力中に <C-r>= で式を入れると、pre-edit の表示だけが残る",
   }
 end
+
+-- pre-edit が画面の次の行へ折り返すと、インジケータが前の行の右端に残る（#21）
+M.known[#M.known + 1] = {
+  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
+  match = function(keys)
+    return keys[1] == "#wide" or keys[1] == "#wrap1" or keys[1] == "#wrap2"
+  end,
+  reason = "#21: pre-edit が画面の次の行へ折り返すと、インジケータが前の行の右端に残る",
+}
 
 function M.is_known(name, keys, msg)
   for _, k in ipairs(M.known) do
