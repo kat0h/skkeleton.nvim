@@ -15,8 +15,8 @@ M.ns_annot = ns_annot
 -- 出し終えた回数（テストが処理の完了を待つために数える）
 M.count = 0
 
--- 今出している extmark。tick は描いたときの changedtick
----@type { buf: integer, id: integer, annot_id?: integer, row: integer, col: integer, tick: integer }?
+-- 今出している extmark。line は描いたときの行の文字列
+---@type { buf: integer, id: integer, annot_id?: integer, row: integer, col: integer, line: string }?
 local mark
 -- finish で描く pre-edit と、そのときの vim_mode
 local current_text = ""
@@ -174,7 +174,8 @@ local function draw(text, chunks, annot)
       annot_id = aid
     end
   end
-  mark = { buf = buf, id = id, annot_id = annot_id, row = row, col = col, tick = vim.b[buf].changedtick }
+  local cur_line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1] or ""
+  mark = { buf = buf, id = id, annot_id = annot_id, row = row, col = col, line = cur_line }
 end
 
 -- いま出している pre-edit の表示幅（カーソルがまだ指している行・列のときだけ。なければ 0）。
@@ -218,7 +219,11 @@ function M.is_stale(ctx, vim_mode)
     return true
   end
   local pos = vim.api.nvim_win_get_cursor(0)
-  return pos[1] - 1 ~= mark.row or pos[2] ~= mark.col or vim.b[buf].changedtick ~= mark.tick
+  if pos[1] - 1 ~= mark.row or pos[2] ~= mark.col then
+    return true
+  end
+  local cur_line = vim.api.nvim_buf_get_lines(buf, mark.row, mark.row + 1, false)[1] or ""
+  return cur_line ~= mark.line
 end
 
 -- 描画を終える。確定した文字列が入ったあとに呼ぶ

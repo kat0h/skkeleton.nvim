@@ -21,19 +21,19 @@ local Mode = {
   -- colorscheme が無いとき（または未定義のとき）に使う既定の色
   default_hl = {
     dark = {
-      eiji = { fg = "NvimLightBlue", bg = "NvimDarkGrey2", ctermfg = "blue", ctermbg = "black", bold = true },
+      eiji = { fg = "NvimDarkGrey2", bg = "NvimLightBlue", ctermfg = "black", ctermbg = "blue", bold = true },
       hira = { fg = "NvimDarkGrey2", bg = "NvimLightGreen", ctermfg = "black", ctermbg = "green", bold = true },
       kata = { fg = "NvimDarkGrey2", bg = "NvimLightYellow", ctermfg = "black", ctermbg = "yellow", bold = true },
       hankata = { fg = "NvimDarkGrey2", bg = "NvimLightMagenta", ctermfg = "black", ctermbg = "magenta", bold = true },
-      zenkaku = { fg = "NvimLightGrey2", bg = "NvimDarkCyan", ctermfg = "black", ctermbg = "cyan", bold = true },
-      abbrev = { fg = "NvimLightGrey2", bg = "NvimDarkRed", ctermfg = "white", ctermbg = "red", bold = true },
+      zenkaku = { fg = "NvimDarkGrey2", bg = "NvimLightCyan", ctermfg = "black", ctermbg = "cyan", bold = true },
+      abbrev = { fg = "NvimDarkGrey2", bg = "NvimLightRed", ctermfg = "black", ctermbg = "red", bold = true },
     },
     light = {
-      eiji = { fg = "NvimDarkBlue", bg = "NvimLightGrey2", ctermfg = "blue", ctermbg = "white", bold = true },
+      eiji = { fg = "NvimDarkGrey2", bg = "NvimLightBlue", ctermfg = "black", ctermbg = "blue", bold = true },
       hira = { fg = "NvimDarkGrey2", bg = "NvimLightGreen", ctermfg = "white", ctermbg = "green", bold = true },
       kata = { fg = "NvimDarkGrey2", bg = "NvimLightYellow", ctermfg = "white", ctermbg = "yellow", bold = true },
       hankata = { fg = "NvimDarkGrey2", bg = "NvimLightMagenta", ctermfg = "white", ctermbg = "magenta", bold = true },
-      zenkaku = { fg = "NvimDarkGrey2", bg = "NvimLightBlue", ctermfg = "black", ctermbg = "blue", bold = true },
+      zenkaku = { fg = "NvimDarkGrey2", bg = "NvimLightCyan", ctermfg = "black", ctermbg = "cyan", bold = true },
       abbrev = { fg = "NvimDarkGrey2", bg = "NvimLightRed", ctermfg = "black", ctermbg = "red", bold = true },
     },
   },
