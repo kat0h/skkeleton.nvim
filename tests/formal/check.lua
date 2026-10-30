@@ -91,6 +91,10 @@ do
       opts.jobs, i = math.min(tonumber(v), math.max(1, #vim.uv.cpu_info() - 2)), i + 1
     elseif k == "--mutate" then
       opts.mutate, i = v, i + 1
+    elseif k == "--fuzz" then
+      opts.fuzz, i = tonumber(v), i + 1
+    elseif k == "--seed-depth" then
+      opts.seed_depth, i = tonumber(v), i + 1
     elseif k == "--random" then
       opts.random, i = tonumber(v), i + 1
     elseif k == "--length" then
@@ -172,7 +176,7 @@ end
 
 -- 初期状態（TLA+ の Init に当たる）は profiles.lua にある。キー列の先頭の "#mid" などで選ぶ
 
-local function start(child, mutation, init)
+local function start(child, mutation, init, config)
   child.restart({ "-u", root .. "/tests/minimal_init.lua" })
   local dir = vim.fn.tempname()
   vim.fn.mkdir(dir, "p")
@@ -181,10 +185,14 @@ local function start(child, mutation, init)
   f:write(profile.dict)
   f:close()
   local it = INITS[init] or INITS[INIT_NAMES[1]]
-  child.lua(
-    SETUP,
-    { dir, dict, mutation and MUTATIONS[mutation].code or false, profile.config, it, profile.setup or false }
-  )
+  child.lua(SETUP, {
+    dir,
+    dict,
+    mutation and MUTATIONS[mutation].code or false,
+    vim.tbl_deep_extend("force", profile.config, config or {}),
+    it,
+    profile.setup or false,
+  })
   child.type_keys(it.keys)
 end
 
@@ -273,9 +281,9 @@ end
 -- キー列を流して、各キーのあとで性質を確かめる。最初の違反で止まる
 -- every = false なら最後のキーだけ確かめる（それより前は探索で確かめ済み）。
 -- 観測は毎回取り、2 手以上をまたぐ性質のために履歴（hist）を渡す
-local function run(child, keys, mutation, every)
+local function run(child, keys, mutation, every, config)
   local init = keys[1] and INITS[keys[1]] and keys[1] or nil
-  start(child, mutation, init)
+  start(child, mutation, init, config)
   settle(child)
   local base = snapshot(child)
   local hist = {}
@@ -287,6 +295,8 @@ local function run(child, keys, mutation, every)
     end
   end
   local prev = base
+  -- 通った抽象状態（ファジングのカバレッジに使う）
+  local seen = { abstract(base) }
   for i, key in ipairs(keys) do
     if not (i == 1 and init) then
       -- normal の n や cmdline の <CR> などで Neovim 本体が出すエラー（E35 など）は違反にしない。
@@ -297,20 +307,22 @@ local function run(child, keys, mutation, every)
       end
       if not settle(child) then
         -- 入力待ち（confirm() など）。ここから先は広げない
-        return { steps = i, blocked = true, abstract = "blocked" }
+        return { steps = i, blocked = true, abstract = "blocked", seen = seen }
       end
       local s = snapshot(child)
       if every or i == #keys then
         local v = check(base, prev, key, s, hist)
         if #v > 0 then
-          return { steps = i, violations = v, abstract = abstract(s), snapshot = s, prev = prev }
+          return { steps = i, violations = v, abstract = abstract(s), snapshot = s, prev = prev, seen = seen }
         end
       end
       spec.observe(hist, prev, s)
+      -- 辺（前の抽象状態・キー・次の抽象状態）を記録する
+      seen[#seen + 1] = abstract(prev) .. " >" .. key .. "> " .. abstract(s)
       prev = s
     end
   end
-  return { steps = #keys, abstract = abstract(prev) }
+  return { steps = #keys, abstract = abstract(prev), seen = seen }
 end
 
 -- worker: 入力ファイルのキー列を流して、結果を JSON で書く
@@ -319,11 +331,16 @@ if opts.worker then
   local child = new_child()
   local out = {}
   for _, item in ipairs(items) do
-    local ok, res = pcall(run, child, item.keys, item.mutation, item.every)
+    local ok, res = pcall(run, child, item.keys, item.mutation, item.every, item.config)
     if not ok then
       res = { steps = #item.keys, violations = { { name = "error", msg = tostring(res) } }, abstract = "error" }
     end
     res.keys = item.keys
+    res.config = item.config
+    -- 観測そのものは大きいので、反例のときだけ返す
+    if not res.violations then
+      res.snapshot, res.prev = nil, nil
+    end
     out[#out + 1] = vim.json.encode(res)
   end
   vim.fn.writefile(out, opts.worker.output)
@@ -382,6 +399,9 @@ end
 -- 反例を、そのまま tests/ に貼れる回帰テストの形でも出す
 local function report(res)
   print(("\n✗ 反例（%d キー）: %s"):format(#res.keys, keys_str(res.keys)))
+  if res.config and next(res.config) then
+    print("  設定: " .. vim.inspect(res.config, { newline = " ", indent = "" }))
+  end
   for _, v in ipairs(res.violations) do
     print(("  - %s\n      %s"):format(v.name, v.msg))
   end
@@ -403,9 +423,9 @@ local function report(res)
 end
 
 -- ddmin で反例のキー列を縮める
-local function shrink(keys, mutation)
+local function shrink(keys, mutation, config)
   local function fails(ks)
-    local r = run_parallel({ { keys = ks, mutation = mutation, every = true } })[1]
+    local r = run_parallel({ { keys = ks, mutation = mutation, every = true, config = config } })[1]
     return r.violations and #r.violations > 0 and r or nil
   end
   local best = fails(keys)
@@ -495,6 +515,165 @@ if opts.keys then
     prev = s
   end
   child.stop()
+elseif opts.fuzz then
+  -- カバレッジを手がかりにしたファジング（AFL の考え方を抽象状態に当てはめたもの）と、スウォームテスト。
+  -- 新しい抽象状態に届いたキー列をコーパスに取っておき、まれな状態に届いた列ほど選んで、
+  -- 後ろにキーを足す・途中で切って足す・別の列とつなぐ、で伸ばす。1 本ごとに、キーの集合の一部と
+  -- 設定の組み合わせ（スウォーム）を選んで流す。--fuzz N は流すキー列の本数
+  math.randomseed(opts.seed)
+  local SWARM_CONFIG = {
+    eggLikeNewline = { true, false },
+    keepState = { true, false },
+    showCandidatesCount = { 1, 4 },
+    immediatelyCancel = { true, false },
+    acceptIllegalResult = { true, false },
+    popupBorder = { "none", "rounded" },
+  }
+  local function swarm()
+    local keys = {}
+    for _, k in ipairs(ALPHABET) do
+      if math.random() < 0.8 then
+        keys[#keys + 1] = k
+      end
+    end
+    if #keys == 0 then
+      keys = vim.list_slice(ALPHABET)
+    end
+    local config = {}
+    for name, values in pairs(SWARM_CONFIG) do
+      if math.random() < 0.5 then
+        config[name] = values[math.random(#values)]
+      end
+    end
+    return { keys = keys, config = config }
+  end
+  local function pick(list)
+    return list[math.random(#list)]
+  end
+  local hits = {} -- 辺 -> 届いた回数
+  local corpus = {} -- { keys, config, swarm, rare }
+  local executed, steps_total = 0, 0
+  -- 浅い深さまで幅優先で調べ、抽象状態ごとに最短のキー列を 1 本ずつコーパスに入れる。
+  -- キー列ではなく状態から均等に伸ばすので、まれな状態の先にも届きやすい
+  if (opts.seed_depth or 0) > 0 then
+    local visited, frontier = {}, {}
+    for _, name in ipairs(INIT_NAMES) do
+      frontier[#frontier + 1] = { name }
+    end
+    for _ = 1, opts.seed_depth do
+      local items = {}
+      for _, path in ipairs(frontier) do
+        for _, key in ipairs(ALPHABET) do
+          items[#items + 1] =
+            { keys = vim.list_extend(vim.list_slice(path), { key }), mutation = opts.mutate, every = false }
+        end
+      end
+      frontier = {}
+      for _, r in ipairs(run_parallel(items)) do
+        steps_total = steps_total + (r.steps or 0)
+        if r.violations then
+          local k = slot(r.violations[1].name, r.keys, r.violations[1].msg)
+          found[k] = found[k] or r
+        elseif not r.blocked and not visited[r.abstract] then
+          visited[r.abstract] = true
+          frontier[#frontier + 1] = r.keys
+          corpus[#corpus + 1] = { keys = r.keys, config = {}, swarm = ALPHABET, rare = r.abstract }
+        end
+      end
+    end
+    print(
+      ("fuzz: 幅優先（深さ %d）で抽象状態 %d をコーパスに、%.1f 秒"):format(
+        opts.seed_depth,
+        #corpus,
+        elapsed()
+      )
+    )
+  end
+  local batch = opts.jobs * 6
+  while executed < opts.fuzz do
+    local items = {}
+    for _ = 1, math.min(batch, opts.fuzz - executed) do
+      local item
+      if #corpus == 0 or math.random() < 0.25 then
+        local sw = swarm()
+        local ks = { INIT_NAMES[math.random(#INIT_NAMES)] }
+        for _ = 1, math.random(4, opts.length) do
+          ks[#ks + 1] = pick(sw.keys)
+        end
+        item = { keys = ks, config = sw.config, swarm = sw.keys }
+      else
+        -- まれな状態に届いた列ほど選ぶ（重みは 1 / 届いた回数）
+        local total = 0
+        for _, c in ipairs(corpus) do
+          c.w = 1 / (hits[c.rare] or 1)
+          total = total + c.w
+        end
+        local x, base = math.random() * total, corpus[#corpus]
+        for _, c in ipairs(corpus) do
+          x = x - c.w
+          if x <= 0 then
+            base = c
+            break
+          end
+        end
+        local ks = vim.list_slice(base.keys)
+        local r = math.random()
+        if r < 0.5 then
+          for _ = 1, math.random(1, 12) do
+            ks[#ks + 1] = pick(base.swarm)
+          end
+        elseif r < 0.8 then
+          ks = vim.list_slice(ks, 1, math.random(1, #ks))
+          for _ = 1, math.random(1, 12) do
+            ks[#ks + 1] = pick(base.swarm)
+          end
+        else
+          local other = pick(corpus)
+          for j = 2, #other.keys do
+            ks[#ks + 1] = other.keys[j]
+          end
+        end
+        while #ks > opts.length * 2 do
+          table.remove(ks, 2)
+        end
+        item = { keys = ks, config = base.config, swarm = base.swarm }
+      end
+      item.mutation = opts.mutate
+      item.every = true
+      items[#items + 1] = item
+    end
+    local results = run_parallel(items)
+    executed = executed + #items
+    for idx, r in ipairs(results) do
+      local item = items[idx]
+      steps_total = steps_total + (r.steps or 0)
+      local new, rare, rare_hits = false, nil, math.huge
+      for _, a in ipairs(r.seen or {}) do
+        hits[a] = (hits[a] or 0) + 1
+        if hits[a] == 1 then
+          new = true
+        end
+        if hits[a] < rare_hits then
+          rare, rare_hits = a, hits[a]
+        end
+      end
+      if r.violations then
+        local prefix = vim.list_slice(r.keys, 1, r.steps)
+        local key = slot(r.violations[1].name, prefix, r.violations[1].msg)
+        if not found[key] then
+          local best = shrink(prefix, opts.mutate, item.config) or r
+          best.config = item.config
+          found[key] = best
+        end
+      elseif new and rare then
+        corpus[#corpus + 1] = { keys = r.keys, config = item.config, swarm = item.swarm, rare = rare }
+      end
+    end
+    print(
+      ("fuzz: %d 本、辺 %d、コーパス %d、%.1f 秒"):format(executed, vim.tbl_count(hits), #corpus, elapsed())
+    )
+  end
+  print(("計 %d 遷移、%d 辺"):format(steps_total, vim.tbl_count(hits)))
 elseif opts.random then
   -- ランダムなキー列（深い状態に届く）。違反したら ddmin で縮める
   math.randomseed(opts.seed)
@@ -506,7 +685,11 @@ elseif opts.random then
     end
     items[#items + 1] = { keys = ks, mutation = opts.mutate, every = true }
   end
+  local states = {}
   for _, r in ipairs(run_parallel(items)) do
+    for _, a in ipairs(r.seen or {}) do
+      states[a] = true
+    end
     if r.violations then
       local prefix = vim.list_slice(r.keys, 1, r.steps)
       local key = slot(r.violations[1].name, prefix, r.violations[1].msg)
@@ -515,7 +698,14 @@ elseif opts.random then
       end
     end
   end
-  print(("random: %d 本 × %d キー、%.1f 秒"):format(opts.random, opts.length, elapsed()))
+  print(
+    ("random: %d 本 × %d キー、辺 %d、%.1f 秒"):format(
+      opts.random,
+      opts.length,
+      vim.tbl_count(states),
+      elapsed()
+    )
+  )
 else
   -- 幅優先。frontier の各状態から、すべてのキーを 1 つずつ試す
   local visited = {}
