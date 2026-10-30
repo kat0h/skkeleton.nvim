@@ -76,7 +76,8 @@ function M.input(prompt)
   -- cmdline のマッピングを退避して、<Esc> と <C-g> では取り消す
   map.save("c")
 
-  local input_group = vim.api.nvim_create_augroup("skkeleton-host-input", { clear = true })
+  -- 入れ子の登録が終わるときに外側の登録の WinEnter も消えないよう、入力ごとに別のグループにする
+  local input_group = vim.api.nvim_create_augroup("skkeleton-host-input-" .. (in_input_depth + 1), { clear = true })
   vim.api.nvim_create_autocmd("WinEnter", {
     group = input_group,
     callback = function()
