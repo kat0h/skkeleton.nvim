@@ -91,7 +91,8 @@ T["from_key"] = function()
 end
 
 T["to_key and from_key round trip"] = function()
-  for _, n in ipairs({ "<space>", "<lt>", "<bar>", "<bslash>", "<nl>", "<cr>", "<esc>", "<tab>", "<bs>", "<c-g>", "<up>" }) do
+  local names = { "<space>", "<lt>", "<bar>", "<bslash>", "<nl>", "<cr>", "<esc>", "<tab>", "<bs>", "<c-g>", "<up>" }
+  for _, n in ipairs(names) do
     eq(notation.from_key(notation.to_key(n)), n)
   end
 end

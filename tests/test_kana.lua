@@ -21,7 +21,8 @@ T["customize kanatable"] = function()
   ]])
   local cases = { { "jj", "\n" }, { "z,", "―" }, { "z.", "―" }, { "!", "!" } }
   for _, c in ipairs(cases) do
-    eq(child.lua_get([[(function(keys) H.dispatch(ctx, keys); return ctx.preedit:output("") end)(...)]], { c[1] }), c[2])
+    local code = [[(function(keys) H.dispatch(ctx, keys); return ctx.preedit:output("") end)(...)]]
+    eq(child.lua_get(code, { c[1] }), c[2])
   end
 end
 
@@ -127,7 +128,10 @@ T["load_file with euc-jp"] = function()
   eq(child.lua_get([[kana.get_table("custom"):find("ww1")]]), { "漢字", "" })
   -- 指定がなければ UTF-8 でないものを EUC-JP とみなす
   eq(child.lua_get([[kana.get_table("custom2"):find("ww2")]]), { "かな", "" })
-  eq(child.lua_get([[select(2, pcall(kana.load_file, "nothing", path, "euc-jp", false))]]), "table nothing is not found.")
+  eq(
+    child.lua_get([[select(2, pcall(kana.load_file, "nothing", path, "euc-jp", false))]]),
+    "table nothing is not found."
+  )
 end
 
 T["globalKanaTableFiles"] = function()

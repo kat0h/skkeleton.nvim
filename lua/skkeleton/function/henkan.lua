@@ -55,7 +55,10 @@ function M.henkan_first(ctx, key)
   state.candidate_index = -1
 
   local lib = store.library()
-  local word = state.mode == "okurinasi" and state.henkan_feed or okuri.get_okuri_str(state.henkan_feed, state.okuri_feed)
+  local word = state.henkan_feed
+  if state.mode ~= "okurinasi" then
+    word = okuri.get_okuri_str(state.henkan_feed, state.okuri_feed)
+  end
   state.word = word
   if state.affix == nil and not state.direct_input and (state.mode == "okurinasi" or state.mode == "okuriari") then
     -- ユーザーが手動で henkanPoint を使うと、`>prefix` や `suffix>` のような
@@ -79,7 +82,8 @@ local function show_candidates(state)
     if c == nil then
       break
     end
-    lines[#lines + 1] = ("%s: %s"):format(options.selectCandidateKeys:sub(i + 1, i + 1), candidate.modify(c, state.affix))
+    local key = options.selectCandidateKeys:sub(i + 1, i + 1)
+    lines[#lines + 1] = ("%s: %s"):format(key, candidate.modify(c, state.affix))
   end
   host.show_candidates(lines)
 end

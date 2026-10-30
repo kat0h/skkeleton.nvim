@@ -64,7 +64,9 @@ T["set expands ~ and normalizes dictionary lists"] = function()
   eq(child.lua_get([[config.options.databasePath == home .. "/db"]]), true)
   eq(child.lua_get([[config.options.completionRankFile == home .. "/rank"]]), true)
   eq(
-    child.lua_get([[vim.deep_equal(config.options.globalDictionaries, { { home .. "/a", "" }, { home .. "/b", "euc-jp" } })]]),
+    child.lua_get(
+      [[vim.deep_equal(config.options.globalDictionaries, { { home .. "/a", "" }, { home .. "/b", "euc-jp" } })]]
+    ),
     true
   )
   -- 絶対パスはそのまま
@@ -87,8 +89,14 @@ T["set rejects illegal options"] = function()
     { [[{ selectCandidateKeys = "abc" }]], "Illegal option detected: selectCandidateKeys.length !== 7" },
     { [[{ kanaTable = "nothing" }]], "Illegal option detected: can't use undefined kanaTable: nothing" },
     { [[{ skkServerReqEnc = "latin" }]], "Illegal option detected: latin is invalid encoding" },
-    { [[{ globalDictionaries = { 1 } }]], "Illegal option detected: 'globalDictionaries' must be array of two string tuple" },
-    { [[{ globalKanaTableFiles = { { "a" } } }]], "Illegal option detected: 'globalKanaTableFiles' must be array of two string tuple" },
+    {
+      [[{ globalDictionaries = { 1 } }]],
+      "Illegal option detected: 'globalDictionaries' must be array of two string tuple",
+    },
+    {
+      [[{ globalKanaTableFiles = { { "a" } } }]],
+      "Illegal option detected: 'globalKanaTableFiles' must be array of two string tuple",
+    },
     { [[{ lowercaseMap = { a = 1 } }]], "Illegal option detected: expected record of string" },
   }
   for _, c in ipairs(cases) do
