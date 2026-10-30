@@ -329,6 +329,8 @@ function Recorder:frame(sess, label, note, hold, step)
     out[#out + 1] = "\27[27;1H " .. self:sequence(step)
   end
   if note and note ~= "" then
+    -- 生のバイト（レジスタの中身の 0x80 など）は表示できる形にする
+    note = vim.fn.strtrans(note)
     out[#out + 1] = "\27[28;1H\27[1;97;41m ✗ \27[0m " .. note
   end
   out[#out + 1] = ("\27[%d;%dH"):format(term.row, term.col)
