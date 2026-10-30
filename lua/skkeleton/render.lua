@@ -290,6 +290,61 @@ function M.clean_stale_cmdline()
   end
 end
 
+-- pre-edit の末尾がウィンドウ下端からはみ出している場合、収まるようにスクロールする (#34)
+local function adjust_scroll()
+  local win = vim.api.nvim_get_current_win()
+  if not vim.wo[win].wrap then
+    return
+  end
+  local preedit = M.preedit_text()
+  if preedit == "" then
+    return
+  end
+  local info = vim.fn.getwininfo(win)[1]
+  if not info then
+    return
+  end
+  local text_w = info.width - info.textoff
+  if text_w <= 0 then
+    return
+  end
+  local cur = vim.api.nvim_win_get_cursor(win)
+  local line = vim.api.nvim_buf_get_lines(0, cur[1] - 1, cur[1], false)[1] or ""
+  local sp = vim.fn.screenpos(win, cur[1], math.min(cur[2], #line) + 1)
+  local cursor_winrow = sp.row > 0 and (sp.row - info.winrow + 1) or vim.fn.winline()
+  local text_left = info.wincol - 1 + info.textoff
+  local rel = sp.col > 0 and (sp.col - 1 - text_left) or 0
+  rel = math.max(0, math.min(text_w - 1, rel))
+
+  local cur_row = cursor_winrow
+  local cur_rel = rel
+  for _, char in ipairs(vim.fn.split(preedit, [[\zs]])) do
+    local w = vim.fn.strdisplaywidth(char)
+    if cur_rel + w > text_w then
+      cur_row = cur_row + 1
+      cur_rel = 0
+    end
+    cur_rel = cur_rel + w
+    if cur_rel >= text_w then
+      cur_row = cur_row + 1
+      cur_rel = 0
+    end
+  end
+
+  local overflow = cur_row - info.height
+  if overflow > 0 then
+    local view = vim.fn.winsaveview()
+    local line_count = vim.api.nvim_buf_line_count(0)
+    if view.topline < view.lnum then
+      view.topline = math.min(view.lnum, math.min(line_count, view.topline + overflow))
+      vim.fn.winrestview(view)
+    elseif vim.wo[win].smoothscroll then
+      view.skipcol = view.skipcol + overflow * text_w
+      vim.fn.winrestview(view)
+    end
+  end
+end
+
 -- 描画を終える。確定した文字列が入ったあとに呼ぶ
 function M.finish()
   pending = false
@@ -297,6 +352,7 @@ function M.finish()
   if current_mode == "i" and vm == "i" then
     cmd_mark = nil
     draw(current_text, current_chunks, current_annot)
+    adjust_scroll()
     popup.open()
     -- pre-edit の幅が変わったので、インジケータを画面上のカーソルに寄せ直す
     require("skkeleton.indicator").move()
