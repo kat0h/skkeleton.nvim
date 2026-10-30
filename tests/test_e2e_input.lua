@@ -356,4 +356,78 @@ T["<Insert> で置換モードに移ると pre-edit を捨てて無効になる 
   eq(#marks, 0)
 end
 
+T["ウィンドウの最後の行の右端で入力したとき、折り返した pre-edit が収まるようにスクロールする (#34)"] = function()
+  child.cmd("vsplit")
+  local win = child.api.nvim_get_current_win()
+  child.api.nvim_win_set_width(win, 20)
+  child.api.nvim_win_set_height(win, 5)
+  child.wo[win].wrap = true
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "1", "2", "3", "4", "123456789012345678" })
+  child.fn.winrestview({ topline = 1, lnum = 5, col = 18 })
+  child.type_keys("A")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+  helpers.settle(child)
+  eq(helpers.preedit(child), "▽かn")
+
+  -- pre-edit が折り返してウィンドウ内に収まるようにスクロールされていること (topline が 1 から進んでいる)
+  local view = child.lua_get("vim.fn.winsaveview()")
+  eq(view.topline > 1, true)
+
+  -- 画面上に pre-edit の文字列の一部または全体が可視領域内に表示されていること
+  local win_info = child.lua_get([[vim.fn.getwininfo(vim.api.nvim_get_current_win())[1] ]])
+  local screen_lines = child.lua_get(string.format([[
+    (function()
+      vim.cmd('redraw')
+      local info = vim.fn.getwininfo(vim.api.nvim_get_current_win())[1]
+      local lines = {}
+      for r = info.winrow, info.winrow + info.height - 1 do
+        local s = ''
+        for c = info.wincol, info.wincol + info.width - 1 do
+          s = s .. vim.fn.screenstring(r, c)
+        end
+        lines[#lines + 1] = s
+      end
+      return table.concat(lines, "\n")
+    end)()
+  ]]))
+  eq(screen_lines:find("かn") ~= nil, true)
+
+  -- 確定後、バッファに正しく文字が入り、pre-edit がクリアされること
+  type("<C-j>")
+  helpers.settle(child)
+  eq(helpers.preedit(child), "")
+  eq(child.api.nvim_buf_get_lines(0, 0, -1, false), { "1", "2", "3", "4", "123456789012345678かん" })
+end
+
+T["折り返してスクロールした後に pre-edit をキャンセルしても不整合が起きない (#34)"] = function()
+  child.cmd("vsplit")
+  local win = child.api.nvim_get_current_win()
+  child.api.nvim_win_set_width(win, 20)
+  child.api.nvim_win_set_height(win, 5)
+  child.wo[win].wrap = true
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "1", "2", "3", "4", "123456789012345678" })
+  child.fn.winrestview({ topline = 1, lnum = 5, col = 18 })
+  child.type_keys("A")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+  helpers.settle(child)
+  eq(helpers.preedit(child), "▽かn")
+  local view_scrolled = child.lua_get("vim.fn.winsaveview()")
+  eq(view_scrolled.topline > 1, true)
+
+  -- <C-g> で pre-edit をキャンセル
+  type("<C-g>")
+  helpers.settle(child)
+  eq(helpers.preedit(child), "")
+  eq(child.api.nvim_buf_get_lines(0, 0, -1, false), { "1", "2", "3", "4", "123456789012345678" })
+
+  -- カーソル位置はウィンドウ内に見えており、extmark も残っていないこと
+  local marks =
+    child.lua_get([[vim.api.nvim_buf_get_extmarks(0, vim.api.nvim_get_namespaces()["skkeleton-preedit"], 0, -1, {})]])
+  eq(#marks, 0)
+  local cur_winline = child.fn.winline()
+  eq(cur_winline >= 1 and cur_winline <= 5, true)
+end
+
 return T
