@@ -394,6 +394,23 @@ M.state["macro: レジスタに skkeleton が内部で流したものが入ら�
   end
 end
 
+-- #36・#44 の型: Vim のレジスタと履歴に、pre-edit のマーカーや skkeleton の内部のコマンドが漏れない
+M.state["global: レジスタと履歴にマーカーや内部のコマンドが漏れない"] = function(s)
+  if not s.globals or s.recording ~= "" then
+    return
+  end
+  for where, text in vim.spairs(s.globals) do
+    if text:find("skkeleton.render", 1, true) then
+      return ("%s に skkeleton の内部のコマンド %q"):format(where, vim.fn.strtrans(text):sub(1, 60))
+    end
+    for _, m in ipairs(markers(s)) do
+      if text:find(m, 1, true) then
+        return ("%s に %s（%q）"):format(where, m, vim.fn.strtrans(text):sub(1, 60))
+      end
+    end
+  end
+end
+
 -- 2 手以上をまたぐ性質のための履歴。各キーのあとに呼ぶ
 -- hist.before_register: 辞書登録の input() に入る直前の観測
 function M.observe(hist, prev, s)
@@ -681,6 +698,13 @@ M.known[#M.known + 1] = {
   property = "cmdline: pre-edit が無ければマーカーを残さない",
   match = function(keys)
     return vim.tbl_contains(keys, "<Up>") or vim.tbl_contains(keys, "<Down>")
+  end,
+  reason = "#44: 辞書登録の欄の入力の履歴に、▽ のマーカーごと pre-edit が残る",
+}
+M.known[#M.known + 1] = {
+  property = "global: レジスタと履歴にマーカーや内部のコマンドが漏れない",
+  match = function(_, msg)
+    return msg and msg:find("^hist ") ~= nil
   end,
   reason = "#44: 辞書登録の欄の入力の履歴に、▽ のマーカーごと pre-edit が残る",
 }

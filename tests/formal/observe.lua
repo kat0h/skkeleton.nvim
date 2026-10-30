@@ -196,6 +196,22 @@ function M.snapshot()
     end)(),
     columns = vim.o.columns,
     ambiwidth = vim.o.ambiwidth,
+    -- Vim の全体の状態（レジスタと履歴）。マーカーや skkeleton の内部のコマンドが漏れていないか
+    globals = (function()
+      local g = {}
+      for _, r in ipairs({ ".", '"', "-", ":", "/" }) do
+        g["reg " .. r] = vim.fn.getreg(r)
+      end
+      for _, h in ipairs({ ":", "/", "@" }) do
+        for i = -3, -1 do
+          local e = vim.fn.histget(h, i)
+          if e ~= "" then
+            g[("hist %s %d"):format(h, i)] = e
+          end
+        end
+      end
+      return g
+    end)(),
     -- マクロ（レジスタ a と、記録中か）
     reg_a = vim.fn.getreg("a"),
     recording = vim.fn.reg_recording(),
