@@ -40,6 +40,7 @@ local cases = {
   { "katakana henkan point", "qKa<C-j>", { "カ" }, "", "kata" },
   { "hankaku katakana", "<C-q>ka", { "ｶ" }, "", "hankata" },
   { "zenkaku", "Lab", { "ａｂ" }, "", "zenkaku" },
+  { "hankatakana -> zenkaku -> hankatakana restores table (issue #40)", "<C-q>L<C-q>a&", { "ｱ&" }, "", "hankata" },
   { "abbrev", "/abc<Space>", { "" }, "▼ＡＢＣ", "abbrev" },
   { "abbrev: kakutei", "/abc<Space><C-j>", { "ＡＢＣ" }, "", "hira" },
   { "<C-j> without pre-edit is hiragana", "q<C-j>ka", { "か" }, "", "hira" },

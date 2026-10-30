@@ -68,19 +68,19 @@ end
 
 ---@param ctx skkeleton.Context
 function M.katakana(ctx)
-  if ctx.state.type ~= "input" then
+  if ctx.state.type ~= "input" or ctx.mode == "abbrev" then
     return
   end
   local st = ctx.state
   if st.mode == "direct" then
+    if kana.current_name == "zen" then
+      kana.set_current(options.kanaTable)
+      st.table = kana.get_table()
+    end
     if st.converter then
       st.converter = nil
       mode.mode_change(ctx, "hira")
     else
-      if kana.current_name == "zen" then
-        kana.set_current(options.kanaTable)
-        st.table = kana.get_table()
-      end
       st.converter = hira_to_kata
       mode.mode_change(ctx, "kata")
     end
@@ -91,19 +91,19 @@ end
 
 ---@param ctx skkeleton.Context
 function M.hankatakana(ctx)
-  if ctx.state.type ~= "input" then
+  if ctx.state.type ~= "input" or ctx.mode == "abbrev" then
     return
   end
   local st = ctx.state
   if st.mode == "direct" then
+    if kana.current_name == "zen" then
+      kana.set_current(options.kanaTable)
+      st.table = kana.get_table()
+    end
     if st.converter == hira_to_hankata then
       st.converter = nil
       mode.mode_change(ctx, "hira")
     else
-      if kana.current_name == "zen" then
-        kana.set_current(options.kanaTable)
-        st.table = kana.get_table()
-      end
       st.converter = hira_to_hankata
       mode.mode_change(ctx, "hankata")
     end
@@ -121,6 +121,7 @@ function M.zenkaku(ctx)
   if st.mode ~= "direct" then
     common.kakutei(ctx)
   end
+  st.converter = nil
   kana.set_current("zen")
   st.table = kana.get_table()
   mode.mode_change(ctx, "zenkaku")
