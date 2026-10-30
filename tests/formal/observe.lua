@@ -186,6 +186,7 @@ function M.snapshot()
       return { always_shown = c.always_shown, row = c.row, col = c.col }
     end)(),
     columns = vim.o.columns,
+    ambiwidth = vim.o.ambiwidth,
     editor_lines = vim.o.lines,
     cmdheight = vim.o.cmdheight,
     want_indicator = ok_mode and want_indicator or nil,

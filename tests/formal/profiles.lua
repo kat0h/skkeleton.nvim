@@ -477,6 +477,32 @@ M.steal = {
   dict = dict,
 }
 
+-- 表示に関わる Neovim のオプションを変えたもの。初期状態ごとに違うオプションを入れる
+local opt_line = { "ab cd" }
+M.options = {
+  doc = "number・signcolumn・cmdheight=0・nowrap・ambiwidth=double・list・virtualedit・laststatus=0",
+  config = {},
+  alphabet = base,
+  inits = {
+    ["#number"] = { lines = opt_line, cursor = { 1, 2 }, keys = "i", cmd = "set number signcolumn=yes:2 numberwidth=6" },
+    ["#cmdh0"] = { lines = opt_line, cursor = { 1, 2 }, keys = "i", cmd = "set cmdheight=0 laststatus=0" },
+    ["#nowrap"] = {
+      lines = { ("n"):rep(90) },
+      cursor = { 1, 85 },
+      keys = "a",
+      cmd = "set nowrap sidescroll=1 sidescrolloff=0",
+    },
+    ["#ambi"] = { lines = opt_line, cursor = { 1, 2 }, keys = "i", cmd = "set ambiwidth=double" },
+    ["#list"] = {
+      lines = { "a\tb  c " },
+      cursor = { 1, 1 },
+      keys = "i",
+      cmd = "set list listchars=tab:>-,trail:~,eol:$ virtualedit=all",
+    },
+  },
+  dict = dict,
+}
+
 -- インジケータを切ったもの（ちらつきなどの原因がインジケータかを切り分けるため）
 M.noindicator = {
   doc = "インジケータを切った既定の設定（原因の切り分け用）",

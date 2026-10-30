@@ -516,6 +516,8 @@ local function run(keys, plain)
             )
           )
         end
+        local saved_ambi = vim.o.ambiwidth
+        vim.o.ambiwidth = s.ambiwidth or saved_ambi
         local msg = check_terminal(s)
         if msg then
           result.violations[#result.violations + 1] = { name = "terminal: 端末のカーソルと画面", msg = msg }
@@ -532,6 +534,7 @@ local function run(keys, plain)
             result.violations[#result.violations + 1] = { name = name, msg = tostring(m) }
           end
         end
+        vim.o.ambiwidth = saved_ambi
         s.key = key
         spec.observe(hist, prev, s)
         prev = s

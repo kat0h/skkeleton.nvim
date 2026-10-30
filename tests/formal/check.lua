@@ -315,6 +315,9 @@ end
 
 local function check(base, prev, key, s, hist)
   local out = {}
+  -- 表示幅は子の nvim の 'ambiwidth' で数える（検査する側をそろえる）
+  local saved_ambi = vim.o.ambiwidth
+  vim.o.ambiwidth = s.ambiwidth or saved_ambi
   for name, f in vim.spairs(spec.state) do
     local ok, msg = pcall(f, s, base)
     if not ok or msg then
@@ -329,6 +332,7 @@ local function check(base, prev, key, s, hist)
       end
     end
   end
+  vim.o.ambiwidth = saved_ambi
   return out
 end
 
