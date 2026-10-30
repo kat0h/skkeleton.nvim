@@ -6,7 +6,7 @@ STYLUA ?= $(if $(wildcard .tests/bin/stylua),.tests/bin/stylua,stylua)
 # make test FILE=tests/test_kana.lua で 1 ファイルだけ動かす
 FILE ?=
 
-.PHONY: test deps lint fmt bench
+.PHONY: test deps lint fmt bench difftest bench-keys
 
 test: deps
 	MINI_PATH=$(MINI_PATH) $(NVIM) --headless --noplugin -u tests/minimal_init.lua \
@@ -25,3 +25,13 @@ fmt:
 
 bench:
 	bench/run_all.sh 1
+
+# denops 版（upstream）との差分テスト。deno と denops.vim が要る（無ければ skip）。
+# make difftest ARGS="--random 50 --filter Kan" のように絞れる
+ARGS ?=
+difftest: deps
+	MINI_PATH=$(MINI_PATH) $(NVIM) --headless -u NONE -i NONE -l tests/diff/run.lua $(ARGS)
+
+# キー 1 回ごとの処理時間を測る
+bench-keys: deps
+	MINI_PATH=$(MINI_PATH) $(NVIM) --headless -u NONE -i NONE -l bench/keys.lua $(ARGS)
