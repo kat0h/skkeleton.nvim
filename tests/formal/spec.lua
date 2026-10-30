@@ -460,34 +460,6 @@ end
 -- 当てはまる違反は「既知」として出し、失敗にしない
 M.known = {}
 
--- 枠つきのインジケータは、画面の右端で左へ押し戻されてカーソルに重なる（#16。元の skkeleton_indicator.nvim も同じ）
-M.known[#M.known + 1] = {
-  property = "float: 画面に収まり、カーソルを隠さない",
-  match = function(_, msg)
-    return msg and msg:find("インジケータ（枠つき）", 1, true) and msg:find("隠す", 1, true)
-  end,
-  reason = "#16: 枠つきのインジケータが、画面の右端でカーソルと打った文字を隠す",
-}
-
--- insert のまま cmdline に入って戻ると（<C-r>=）、インジケータが閉じたままになる（#17）
-M.known[#M.known + 1] = {
-  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
-  match = function(keys, msg)
-    return vim.tbl_contains(keys, "<C-r>=1<CR>") and msg and msg:find("0 個", 1, true) ~= nil
-  end,
-  reason = "#17: <C-r>= で式を入れて戻ると、インジケータが消えたままになる",
-}
-
--- 補完のメニューで候補が入っても、インジケータが動かない（#18）
-M.known[#M.known + 1] = {
-  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
-  match = function(keys, msg)
-    local last = keys[#keys] or ""
-    return (last == "<C-x><C-n>" or last == "<C-n>" or last == "<C-p>") and msg and msg:find("期待", 1, true) ~= nil
-  end,
-  reason = "#18: 補完で候補が入ると、インジケータが元の位置に残る",
-}
-
 -- 補完が語を消して入れ直すと、extmark がずれる（#19）
 for _, property in ipairs({
   "preedit: extmark は insert モードの今のバッファのカーソル位置にある",
@@ -536,27 +508,6 @@ for _, property in ipairs({
   }
 end
 
--- pre-edit が画面の次の行へ折り返すと、インジケータが前の行の右端に残る（#21）
-M.known[#M.known + 1] = {
-  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
-  match = function(_, msg)
-    -- インジケータの段がカーソルの段とずれている（折り返し）
-    local got, want = (msg or ""):match("インジケータ { (%d+), %d+ }、期待 { (%d+), %d+ }")
-    return got ~= nil and got ~= want
-  end,
-  reason = "#21: pre-edit が画面の次の行へ折り返すと、インジケータが前の行の右端に残る",
-}
-
--- カーソルの直後にタブがあると、インジケータがタブの後ろに出る（#23）
-M.known[#M.known + 1] = {
-  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
-  match = function(keys, msg)
-    local got, want = (msg or ""):match("インジケータ { (%d+), %d+ }、期待 { (%d+), %d+ }")
-    return got ~= nil and got == want and (vim.tbl_contains(keys, "<Tab>") or vim.tbl_contains(keys, "<S-Tab>"))
-  end,
-  reason = "#23: カーソルの直後にタブがあると、インジケータがタブの後ろに出る",
-}
-
 -- 有効にしても、無効のときに出ていた buffer の補完のメニューが残る（#24）
 M.known[#M.known + 1] = {
   property = "blink: 有効なら、メニューは ▽ の入力中だけ",
@@ -564,15 +515,6 @@ M.known[#M.known + 1] = {
     return keys[#keys] == "<C-j>"
   end,
   reason = "#24: blink.cmp: 有効にしても、無効のときに出ていた buffer の補完のメニューが残る",
-}
-
--- 辞書登録の欄でウィンドウを移ると、cmdline に ▽ が残る（#13 の残り）
-M.known[#M.known + 1] = {
-  property = "cmdline: カーソルの前は pre-edit で終わり、マーカーを残さない",
-  match = function(keys)
-    return vim.tbl_contains(keys, "<Cmd>wincmd w<CR>")
-  end,
-  reason = "#13: 辞書登録の欄でウィンドウを移ると、cmdline に ▽ が残る",
 }
 
 function M.is_known(name, keys, msg)
