@@ -287,6 +287,45 @@ T["register"]["switching windows after a cancelled nested registration keeps the
   type("<Esc>")
 end
 
+T["register"]["cancelling input does not leave markers in input history (#44)"] = function()
+  enable()
+  type("Yomi<Space>")
+  eq(child.fn.mode(), "c")
+  type("Kan")
+  eq(child.fn.getcmdline(), "▽かn")
+  child.type_keys("<C-c>")
+  helpers.settle(child)
+  eq(child.fn.mode(), "i")
+
+  local hist = child.fn.histget("@", -1)
+  eq(hist:find("▽", 1, true), nil)
+  eq(hist:find("▼", 1, true), nil)
+  eq(hist:find("__skkeleton_return__", 1, true), nil)
+
+  type("<Space>")
+  eq(child.fn.mode(), "c")
+  child.type_keys("<Up>")
+  helpers.settle(child)
+  eq(child.fn.getcmdline():find("▽", 1, true), nil)
+  eq(child.fn.getcmdline():find("▼", 1, true), nil)
+  child.type_keys("<Esc>")
+  helpers.settle(child)
+
+  type("<Space>")
+  eq(child.fn.mode(), "c")
+  child.type_keys("<Esc>")
+  helpers.settle(child)
+  local hist_esc = child.fn.histget("@", -1)
+  eq(hist_esc:find("__skkeleton_return__", 1, true), nil)
+
+  type("<Space>")
+  eq(child.fn.mode(), "c")
+  child.type_keys("<C-g>")
+  helpers.settle(child)
+  local hist_cg = child.fn.histget("@", -1)
+  eq(hist_cg:find("__skkeleton_return__", 1, true), nil)
+end
+
 T["purge"] = MiniTest.new_set()
 
 T["purge"]["X removes the candidate after confirming"] = function()

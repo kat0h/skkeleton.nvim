@@ -50,6 +50,28 @@ local function reset()
   update_state_variable()
 end
 
+local function should_delete_hist(item)
+  if type(item) ~= "string" or item == "" then
+    return false
+  end
+  return item:find("▽", 1, true) ~= nil
+    or item:find("▼", 1, true) ~= nil
+    or item:find("__skkeleton_return__", 1, true) ~= nil
+end
+
+local function clean_history(hist_type)
+  local types = { ":", "/", "@" }
+  if hist_type and hist_type ~= "" then
+    table.insert(types, 1, hist_type)
+  end
+  for _, ht in ipairs(types) do
+    local ok, item = pcall(vim.fn.histget, ht, -1)
+    if ok and should_delete_hist(item) then
+      pcall(vim.fn.histdel, ht, -1)
+    end
+  end
+end
+
 -- handle の実行中か（辞書登録の input() などで誤って初期化しない）
 local handling_depth = 0
 
@@ -128,6 +150,7 @@ function M.init(force)
     group = group,
     pattern = "c:*",
     callback = function()
+      clean_history()
       local new_mode = vim.v.event.new_mode:sub(1, 1)
       if new_mode == "i" or new_mode == "c" or new_mode == "t" or new_mode == "n" then
         return
@@ -143,6 +166,18 @@ function M.init(force)
           end
         end,
       })
+    end,
+  })
+  -- cmdline を抜ける際（取り消しも含めて）に pre-edit を取り除き、履歴にマーカーを残さない
+  vim.api.nvim_create_autocmd("CmdlineLeave", {
+    group = group,
+    callback = function()
+      render.clean_stale_cmdline()
+      local cmdtype = vim.v.event.cmdtype
+      clean_history(cmdtype)
+      vim.schedule(function()
+        clean_history(cmdtype)
+      end)
     end,
   })
   -- insert から直接 visual・select モードへ遷移したとき（マウス選択など）も片付ける。

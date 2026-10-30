@@ -101,6 +101,14 @@ function M.input(prompt)
     })
     return vim.fn.input(prompt)
   end)
+  local ok_h, last_hist = pcall(vim.fn.histget, "@", -1)
+  if
+    ok_h
+    and type(last_hist) == "string"
+    and (last_hist == "__skkeleton_return__" or last_hist:find("▽", 1, true) or last_hist:find("▼", 1, true))
+  then
+    pcall(vim.fn.histdel, "@", -1)
+  end
   in_input_depth = in_input_depth - 1
   pcall(vim.api.nvim_del_augroup_by_id, input_group)
 
