@@ -77,6 +77,7 @@ end
 local function show_candidates(state)
   local idx = state.candidate_index
   local lines = {}
+  local annotations = {}
   local keys = util.chars(options.selectCandidateKeys)
   for i = 0, 6 do
     local c = state.candidates[idx + i + 1]
@@ -85,8 +86,12 @@ local function show_candidates(state)
     end
     local key = keys[i + 1] or ""
     lines[#lines + 1] = ("%s: %s"):format(key, candidate.modify(c, state.affix))
+    local semi = c:find(";", 1, true)
+    if semi and #c > semi then
+      annotations[i + 1] = ";" .. c:sub(semi + 1)
+    end
   end
-  host.show_candidates(lines, { index = idx, total = #state.candidates })
+  host.show_candidates(lines, { index = idx, total = #state.candidates, annotations = annotations })
 end
 
 ---@param ctx skkeleton.Context

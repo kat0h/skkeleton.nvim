@@ -22,6 +22,7 @@ T["defaults"] = function()
     lowercaseMap = {},
     markerHenkan = "▽",
     markerHenkanSelect = "▼",
+    popupBorder = "none",
     registerConvertResult = false,
     selectCandidateKeys = "asdfjkl",
     setUndoPoint = true,

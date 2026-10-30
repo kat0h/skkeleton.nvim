@@ -36,10 +36,12 @@ end
 
 ---@param buf integer
 ---@param lines string[]
+---@param meta? { index: integer, total: integer, annotations?: table<integer, string> }
 ---@return integer width
-local function decorate_buf(buf, lines)
+local function decorate_buf(buf, lines, meta)
   ensure_highlights()
   vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+  local ext_annots = meta and meta.annotations or nil
 
   -- First pass: measure max width of "<key>: <candidate>" before ";"
   local max_left_width = 0
@@ -58,6 +60,7 @@ local function decorate_buf(buf, lines)
       key_end = key_end,
       semi_start = semi_start,
       left_w = left_w,
+      ext_annot = ext_annots and ext_annots[i] or nil,
     }
   end
 
@@ -101,7 +104,19 @@ local function decorate_buf(buf, lines)
           hl_group = "SkkeletonPopupCandidate",
         })
       end
-      max_width = math.max(max_width, p.left_w)
+      if p.ext_annot and p.ext_annot ~= "" then
+        local pad = (max_left_width - p.left_w) + 1
+        vim.api.nvim_buf_set_extmark(buf, ns, row, #line, {
+          virt_text = {
+            { string.rep(" ", pad), "SkkeletonPopupCandidate" },
+            { p.ext_annot, "SkkeletonPopupAnnotation" },
+          },
+          virt_text_pos = "inline",
+        })
+        max_width = math.max(max_width, max_left_width + 1 + vim.fn.strdisplaywidth(p.ext_annot))
+      else
+        max_width = math.max(max_width, p.left_w)
+      end
     end
   end
   return max_width
@@ -114,7 +129,7 @@ local function open_float(lines, meta, cfg)
   local buf = vim.api.nvim_create_buf(false, true)
   vim.bo[buf].bufhidden = "wipe"
   vim.api.nvim_buf_set_lines(buf, 0, -1, true, lines)
-  local width = decorate_buf(buf, lines)
+  local width = decorate_buf(buf, lines, meta)
   local border = options.popupBorder or "none"
   local has_border = border ~= "none" and border ~= ""
   local win_cfg = {
