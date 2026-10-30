@@ -240,14 +240,27 @@ function Indicator:insert_rect(mode, border)
   -- カーソルのセル（pre-edit の直後）
   local ccol = text_left + rel
   local cursor_row = row
-  -- virtualedit 設定時にカーソル直後がタブの場合、
-  -- Neovim は端末カーソルを pre-edit の後ろではなく先頭セル (sp.col) に描画する (#35)
-  local ve = vim.wo[win].virtualedit ~= "" and vim.wo[win].virtualedit or vim.o.virtualedit
-  local is_tab = cur[2] < #line and line:sub(cur[2] + 1, cur[2] + 1) == "\t"
-  local ve_active = ve:find("all") ~= nil or ve:find("insert") ~= nil
-  if is_tab and ve_active then
-    ccol = sp.col - 1
-    cursor_row = sp.row - 1
+  -- virtualedit でタブの途中や行末以降にカーソルが進んだ場合、
+  -- バッファ上の列は変わらないが getcurpos()[4] (coladd) に仮想列オフセットが入る (#39)。
+  -- ※ イベントハンドラ内では Neovim の再描画前のため screencol() は古い値を返す場合があるため、
+  --   sp.col + coladd から画面上の端末カーソル位置を求める。
+  local curpos = vim.fn.getcurpos(win)
+  local coladd = curpos[4] or 0
+  if width == 0 then
+    if coladd > 0 then
+      ccol = sp.col - 1 + coladd
+      cursor_row = sp.row - 1
+    end
+  else
+    -- virtualedit 設定時にカーソル直後がタブの場合、
+    -- Neovim は端末カーソルを pre-edit の後ろではなく先頭セル (sp.col) に描画する (#35)
+    local ve = vim.wo[win].virtualedit ~= "" and vim.wo[win].virtualedit or vim.o.virtualedit
+    local is_tab = cur[2] < #line and line:sub(cur[2] + 1, cur[2] + 1) == "\t"
+    local ve_active = ve:find("all") ~= nil or ve:find("insert") ~= nil
+    if is_tab and ve_active then
+      ccol = sp.col - 1
+      cursor_row = sp.row - 1
+    end
   end
   local cursor_cell = { cursor_row, ccol, 1, 1 }
   local first_row = occupied[1] and occupied[1][1] or row

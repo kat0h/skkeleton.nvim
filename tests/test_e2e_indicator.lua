@@ -258,4 +258,39 @@ T["follows cursor before tab with list and virtualedit (#35)"] = function()
   expect_follows()
 end
 
+T["follows cursor when moving inside tab under virtualedit (#39)"] = function()
+  child.api.nvim_ui_attach(80, 24, {})
+  child.cmd("set list listchars=tab:>- virtualedit=all")
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "a\tb" })
+
+  -- skkeleton 無効時 (always_shown)
+  child.api.nvim_win_set_cursor(0, { 1, 1 })
+  child.type_keys("i")
+  helpers.settle(child)
+  eq(child.fn.screencol(), 2)
+  expect_follows()
+  type("<Right>")
+  eq(child.fn.screencol(), 3)
+  expect_follows()
+  type("<Right>")
+  eq(child.fn.screencol(), 4)
+  expect_follows()
+
+  child.type_keys("<Esc>")
+  helpers.settle(child)
+
+  -- skkeleton 有効時
+  child.api.nvim_win_set_cursor(0, { 1, 1 })
+  start()
+  helpers.settle(child)
+  eq(child.fn.screencol(), 2)
+  expect_follows()
+  type("<Right>")
+  eq(child.fn.screencol(), 3)
+  expect_follows()
+  type("<Right>")
+  eq(child.fn.screencol(), 4)
+  expect_follows()
+end
+
 return T
