@@ -640,6 +640,7 @@ end
 -- visual から入った cmdline で有効にして抜けると、無効にならない（#28）
 for _, property in ipairs({
   "preedit: 表示は状態の文字列と一致する",
+  "preedit: extmark は insert モードの今のバッファのカーソル位置にある",
   "frame: skkeleton の外でバッファやカーソルが動いたら pre-edit を捨てる",
   "mapping: 有効なら今のバッファにマッピングがある",
   "mode: g:skkeleton#mode は内部のモードと同じ（無効なら空）",
@@ -648,7 +649,7 @@ for _, property in ipairs({
     property = property,
     match = function(keys)
       for _, k in ipairs(keys) do
-        if k == "<C-q>" or k == "<Esc>v" or k == "v" then
+        if k == "<C-q>" or k == "<Esc>v" or k == "v" or k == "<ClickL2>" then
           return true
         end
       end
