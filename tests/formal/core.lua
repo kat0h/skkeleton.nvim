@@ -552,6 +552,8 @@ local function known(f)
   if f.msg:find("2 個増えた", 1, true) and opts.kanatable then
     return 41 -- かなテーブルで henkanFirst を割り当てたキーのあとの記号が 2 つ入る
   end
+  -- #42・#43 はかなテーブルやキーマップを変えたときの変換のキーの扱いで、今の性質では違反にならない
+  -- （再現は issue の --keys の手順で確かめる）
 end
 local failed = false
 for _, f in pairs(found) do
