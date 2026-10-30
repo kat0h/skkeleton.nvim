@@ -30,7 +30,7 @@ function Indicator.new()
     { "InsertEnter", "*", self:method("open") },
     { "InsertLeave", "*", self:method("close") },
     { "CursorMovedI", "*", self:method("move") },
-    { "CmdlineEnter", "*", self:method("open") },
+    { "CmdlineEnter", "*", self:method("on_cmdline_enter") },
     { "CmdlineLeave", "*", self:method("on_cmdline_leave") },
     { "TextChangedP", "*", self:method("move") },
     { "CompleteChanged", "*", self:method("move") },
@@ -313,6 +313,14 @@ function Indicator:open()
   local winid = vim.api.nvim_open_win(buf, false, win_cfg)
   self:border_highlight(winid, mode)
   table.insert(self.winid, 1, winid)
+end
+
+function Indicator:on_cmdline_enter()
+  vim.schedule(function()
+    if Modes.is_cmdline() and not self:is_disabled() then
+      self:open()
+    end
+  end)
 end
 
 function Indicator:on_cmdline_leave()
