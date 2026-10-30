@@ -312,7 +312,7 @@ local function run(child, keys, mutation, every, config)
     if not (i == 1 and init) then
       -- normal の n や cmdline の <CR> などで Neovim 本体が出すエラー（E35 など）は違反にしない。
       -- skkeleton の Lua のエラーは違反にする
-      local ok, err = pcall(child.type_keys, key)
+      local ok, err = pcall(child.type_keys, profiles.expand(key))
       if not ok and (tostring(err):find("skkeleton", 1, true) or not tostring(err):find("E%d+:")) then
         return { steps = i, violations = { { name = "error", msg = tostring(err) } }, abstract = "error" }
       end
@@ -490,7 +490,7 @@ if opts.keys then
   local hist = {}
   spec.observe(hist, nil, base)
   for _, key in ipairs(opts.keys) do
-    pcall(child.type_keys, key)
+    pcall(child.type_keys, profiles.expand(key))
     if not settle(child) then
       print(key, "入力待ち")
       break

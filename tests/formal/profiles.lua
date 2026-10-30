@@ -391,6 +391,26 @@ M.okuri = {
 
 -- Vim の使い方で、モード・カーソル・ウィンドウがいつもと違う経路で変わるもの。
 -- 特に、キーを押していないのに、タイマーやプラグインがカーソルを奪うもの（LSP の hover、:checktime など）
+-- 別名: キー列に短い名前で書ける操作（--keys は "," で区切るので、"," を含む操作に名前を付ける）
+M.aliases = {
+  ["<ClickL2>"] = "<Cmd>lua vim.api.nvim_input_mouse('left', 'press', '', 0, 1, 0) vim.api.nvim_input_mouse('left', 'release', '', 0, 1, 0)<CR>",
+  ["<WheelDown>"] = "<Cmd>lua vim.api.nvim_input_mouse('wheel', 'down', '', 0, 0, 0)<CR>",
+  ["<StealCursor>"] = "<Cmd>lua vim.defer_fn(function() pcall(vim.api.nvim_win_set_cursor, 0, { 1, 0 }) end, 15)<CR>",
+  ["<StealLine>"] = "<Cmd>lua vim.defer_fn(function() vim.api.nvim_buf_set_lines(0, 0, 0, false, { 'ext' }) end, 15)<CR>",
+  ["<StealWin>"] = "<Cmd>lua vim.defer_fn(function() vim.cmd('wincmd w') end, 15)<CR>",
+  ["<StealFloat>"] = "<Cmd>lua vim.defer_fn(function() local b = vim.api.nvim_create_buf(false, true) "
+    .. "vim.bo[b].bufhidden = 'wipe' vim.api.nvim_open_win(b, true, { relative = 'editor', row = 3, col = 3, width = 10, height = 2 }) end, 15)<CR>",
+  ["<CloseFloats>"] = "<Cmd>lua for _, w in ipairs(vim.api.nvim_list_wins()) do local c = vim.api.nvim_win_get_config(w) "
+    .. "if c.focusable and c.relative ~= '' then pcall(vim.api.nvim_win_close, w, true) end end<CR>",
+  ["<Cols50>"] = "<Cmd>set columns=50<CR>",
+  ["<Cols80>"] = "<Cmd>set columns=80<CR>",
+}
+
+-- 別名を実際のキーにする
+function M.expand(key)
+  return M.aliases[key] or key
+end
+
 local function later(code)
   -- 少し遅れて起きる（落ち着くのを待つあいだに起きるように、wait_ms より短くする）
   return ("<Cmd>lua vim.defer_fn(function() %s end, 15)<CR>"):format(code)
@@ -439,21 +459,16 @@ M.steal = {
     "c",
     "<FocusLost>",
     "<FocusGained>",
-    -- タイマーで奪う
-    later("pcall(vim.api.nvim_win_set_cursor, 0, { 1, 0 })"),
-    later("vim.api.nvim_buf_set_lines(0, 0, 0, false, { 'ext' })"),
-    later("vim.cmd('wincmd w')"),
-    later(
-      "local b = vim.api.nvim_create_buf(false, true) vim.bo[b].bufhidden = 'wipe' "
-        .. "vim.api.nvim_open_win(b, true, { relative = 'editor', row = 3, col = 3, width = 10, height = 2 })"
-    ),
-    "<Cmd>lua for _, w in ipairs(vim.api.nvim_list_wins()) do if vim.api.nvim_win_get_config(w).focusable and vim.api.nvim_win_get_config(w).relative ~= '' then pcall(vim.api.nvim_win_close, w, true) end end<CR>",
-    -- マウス（クリックで 2 行目の先頭へ、ホイール）
-    "<Cmd>lua vim.api.nvim_input_mouse('left', 'press', '', 0, 1, 0) vim.api.nvim_input_mouse('left', 'release', '', 0, 1, 0)<CR>",
-    "<Cmd>lua vim.api.nvim_input_mouse('wheel', 'down', '', 0, 0, 0)<CR>",
-    -- 画面の幅
-    "<Cmd>set columns=50<CR>",
-    "<Cmd>set columns=80<CR>",
+    -- タイマーで奪う・マウス・画面の幅（別名。M.aliases を参照）
+    "<StealCursor>",
+    "<StealLine>",
+    "<StealWin>",
+    "<StealFloat>",
+    "<CloseFloats>",
+    "<ClickL2>",
+    "<WheelDown>",
+    "<Cols50>",
+    "<Cols80>",
   },
   inits = {
     ["#mid"] = { lines = { "ab cd", "ef gh", "ij" }, cursor = { 1, 2 }, keys = "i" },

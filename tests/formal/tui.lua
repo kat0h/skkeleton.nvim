@@ -200,11 +200,37 @@ end
 local Recorder = {}
 Recorder.__index = Recorder
 
-function Recorder.new(path)
-  return setmetatable({ path = path, t = 0, frames = {} }, Recorder)
+-- keys は記録するキー列（初期状態の名前を除く）。何手目かとキー列の全体を画面の下に出す
+function Recorder.new(path, keys)
+  return setmetatable({ path = path, t = 0, frames = {}, keys = keys or {} }, Recorder)
 end
 
-function Recorder:frame(sess, label, note, hold)
+-- キー列の全体。step 番目（1 起点）を反転表示にする。80 桁に収まるよう、今のキーの前後を残す
+function Recorder:sequence(step)
+  local parts = {}
+  for i, k in ipairs(self.keys) do
+    parts[i] = i == step and ("\27[7m" .. k .. "\27[0m") or ("\27[2m" .. k .. "\27[0m")
+  end
+  local lo, hi = 1, #parts
+  local function width(a, b)
+    local w = 0
+    for i = a, b do
+      w = w + vim.fn.strdisplaywidth(self.keys[i]) + 1
+    end
+    return w
+  end
+  while width(lo, hi) > 74 and hi > lo do
+    if step - lo > hi - step then
+      lo = lo + 1
+    else
+      hi = hi - 1
+    end
+  end
+  return (lo > 1 and "… " or "") .. table.concat(vim.list_slice(parts, lo, hi), " ") .. (hi < #parts and " …" or "")
+end
+
+function Recorder:frame(sess, label, note, hold, step)
+  step = step or 0
   local term = sess:terminal()
   local lines = vim.split(sess:screen_ansi(), "\n")
   while #lines > 24 do
@@ -216,9 +242,13 @@ function Recorder:frame(sess, label, note, hold)
   end
   -- 25 行目に区切り、26 行目に押したキー、27 行目に違反
   out[#out + 1] = "\27[25;1H\27[0m\27[2m" .. ("─"):rep(80) .. "\27[0m"
-  out[#out + 1] = "\27[26;1H\27[1;97;44m key \27[0m " .. label
+  -- 26 行目: 何手目か と 今のキー、27 行目: キー列の全体（今のキーを反転）、28 行目: 違反
+  out[#out + 1] = ("\27[26;1H\27[1;97;44m %d/%d \27[0m \27[1m%s\27[0m"):format(step, #self.keys, label)
+  if #self.keys > 0 then
+    out[#out + 1] = "\27[27;1H " .. self:sequence(step)
+  end
   if note and note ~= "" then
-    out[#out + 1] = "\27[27;1H\27[1;97;41m ✗ \27[0m " .. note
+    out[#out + 1] = "\27[28;1H\27[1;97;41m ✗ \27[0m " .. note
   end
   out[#out + 1] = ("\27[%d;%dH"):format(term.row, term.col)
   self.frames[#self.frames + 1] = { self.t, table.concat(out) }
@@ -228,7 +258,7 @@ end
 function Recorder:write()
   local f = assert(io.open(self.path, "w"))
   f:write(
-    vim.json.encode({ version = 2, width = 80, height = 27, timestamp = os.time(), env = { TERM = "xterm-256color" } }),
+    vim.json.encode({ version = 2, width = 80, height = 28, timestamp = os.time(), env = { TERM = "xterm-256color" } }),
     "\n"
   )
   for _, fr in ipairs(self.frames) do
@@ -330,9 +360,15 @@ local function run(keys)
       sess:send(k)
     end
     sess:settle()
-    local rec = opts.record and Recorder.new(opts.record)
+    local rec_keys = {}
+    for i, k in ipairs(keys) do
+      if not (i == 1 and init_name) then
+        rec_keys[#rec_keys + 1] = k
+      end
+    end
+    local rec = opts.record and Recorder.new(opts.record, rec_keys)
     if rec then
-      rec:frame(sess, "（初期状態）", nil, 1.2)
+      rec:frame(sess, "（初期状態）", nil, 1.2, 0)
     end
     local base = snapshot(sess)
     local prev = base
@@ -340,10 +376,11 @@ local function run(keys)
     spec.observe(hist, nil, base)
     for i, key in ipairs(keys) do
       if not (i == 1 and init_name) then
-        if key:match("^<Cmd>") then
-          sess:send(key)
+        local real = profiles.aliases and profiles.aliases[key] or key
+        if real:match("^<Cmd>") then
+          sess:send(real)
         else
-          for _, k in ipairs(tokenize(key)) do
+          for _, k in ipairs(tokenize(real)) do
             sess:send(k)
           end
         end
@@ -397,7 +434,7 @@ local function run(keys)
             note = vim.fn.strcharpart(note, 0, 36) .. "…"
           end
           -- 違反が出たコマは 1 秒ほど長く止める
-          rec:frame(sess, key, note, note and 1.8 or 0.7)
+          rec:frame(sess, key, note, note and 1.8 or 0.7, init_name and i - 1 or i)
           result.violations = {}
         elseif #result.violations > 0 then
           result.steps = i

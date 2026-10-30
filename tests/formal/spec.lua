@@ -89,7 +89,8 @@ local function cells_of(str)
 end
 
 M.state["screen: 画面の行はバッファに pre-edit を差し込んだもの"] = function(s)
-  if not insert_mode(s) or s.pending or s.screen_row <= 0 then
+  -- float の中では headless の screenrow()/screencol() が正しい値を返さない
+  if not insert_mode(s) or s.pending or s.screen_row <= 0 or s.win_float then
     return
   end
   local line = cur_line(s)
@@ -672,6 +673,20 @@ for _, property in ipairs({
     reason = "#29: 有効のまま <Insert> で置換モードに移ると、pre-edit が残ったり見えなくなったりする",
   }
 end
+
+-- insert のままスクロールすると、インジケータが元の画面の位置に残る（#30。skkeleton_indicator.nvim も同じ）
+M.known[#M.known + 1] = {
+  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
+  match = function(keys)
+    for _, k in ipairs(keys) do
+      if k == "<C-x><C-e>" or k == "<PageDown>" or k:find("wheel", 1, true) then
+        return true
+      end
+    end
+    return false
+  end,
+  reason = "#30: insert のままスクロールすると、インジケータが元の画面の位置に残る",
+}
 
 function M.is_known(name, keys, msg)
   for _, k in ipairs(M.known) do
