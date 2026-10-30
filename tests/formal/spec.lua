@@ -620,6 +620,15 @@ M.known[#M.known + 1] = {
   reason = "#38: <Insert> を 2 回押して insert に戻ると、インジケータが消えたままになる",
 }
 
+-- virtualedit でカーソルをタブの途中に進めると、インジケータがずれる（#39）
+M.known[#M.known + 1] = {
+  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
+  match = function(keys)
+    return keys[1] == "#list"
+  end,
+  reason = "#39: virtualedit でカーソルをタブの途中に進めると、インジケータがずれる",
+}
+
 function M.is_known(name, keys, msg)
   for _, k in ipairs(M.known) do
     if k.property == name and k.match(keys, msg) then
