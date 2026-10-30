@@ -187,11 +187,10 @@ M.state["resource: ウィンドウとバッファが漏れない"] = function(s,
   end
 end
 
--- 無効にしたとき（ウィンドウを移ったときなど）は古い値が残る。upstream も handle のときにしか
--- 書き換えないので、有効なときだけ確かめる
+-- 無効にしたとき（ウィンドウを移ったときなど）も含めて状態と一致する
 M.state["g:skkeleton#state は有効なら状態と一致する"] = function(s)
   local g = s.g_state
-  if not g or not s.enabled or registering(s) then
+  if not g or registering(s) then
     return
   end
   if (g.henkanFeed or "") ~= s.state.henkan_feed then
@@ -282,49 +281,7 @@ end
 
 -- 見つかったが、今は直さないもの。反例の性質の名前と、キー列で見分ける。
 -- 当てはまる違反は「既知」として出し、失敗にしない
-M.known = {
-  {
-    property = "popup: 候補一覧は ▼ の 5 番目の候補から",
-    match = function(keys)
-      return keys[#keys]:match("^[asdfjkl]$") ~= nil
-    end,
-    reason = "一覧のページに無い選択キーを押すと、一覧の状態のまま popup だけ閉じる。"
-      .. "upstream も次の skkeleton-handled で popup を閉じるので同じ動き（autoload/skkeleton/popup.vim）",
-  },
-}
--- 辞書登録の input() の途中でウィンドウを移ったとき（<Cmd> のマッピングなど）。WinLeave の autocmd が
--- 状態を作り直してマッピングを外すので、取り消すと pre-edit が移った先のバッファで戻り、確定すると
--- cmdline に残った ▽ ごと登録・確定される（ユーザー辞書にも入る）
-for _, property in ipairs({
-  "register: 取り消すと登録の前に戻る",
-  "buffer: マーカーがバッファに漏れない",
-}) do
-  M.known[#M.known + 1] = {
-    property = property,
-    match = function(keys)
-      return vim.tbl_contains(keys, "<Cmd>wincmd w<CR>")
-    end,
-    reason = "辞書登録の input() の途中でウィンドウを移ると、WinLeave で状態とマッピングが外れる。"
-      .. "取り消すと移った先で pre-edit が戻り、確定すると ▽ ごと登録・確定される",
-  }
-end
-
--- 辞書登録の欄（cmdline）で ▽ を入力中に、skkeleton が処理しないキー（<Left>、<Right>、<C-w>、<C-u>）で
--- cmdline を動かしてから <CR> で確定すると、cmdline に書いた ▽ が消えずに語として登録・確定される。
--- upstream（denops 版）でも同じになる（tests/diff の driver で "A<Space>A<Left><CR><C-g>" を流して確かめた）
-M.known[#M.known + 1] = {
-  property = "buffer: マーカーがバッファに漏れない",
-  match = function(keys)
-    for _, k in ipairs({ "<Left>", "<Right>", "<C-w>", "<C-u>" }) do
-      if vim.tbl_contains(keys, k) then
-        return true
-      end
-    end
-    return false
-  end,
-  reason = "辞書登録の欄で ▽ の入力中に <Left>・<C-w> などで cmdline を動かして確定すると、"
-    .. "▽ ごと登録・確定される（upstream も同じ）",
-}
+M.known = {}
 
 function M.is_known(name, keys)
   for _, k in ipairs(M.known) do

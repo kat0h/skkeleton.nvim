@@ -59,6 +59,13 @@ T["popup"]["a key selects a candidate"] = function()
   eq(helpers.popup(child), vim.NIL)
 end
 
+T["popup"]["stays open when an out-of-range selection key is pressed"] = function()
+  enable()
+  type("Kan<Space><Space><Space><Space><Space>k")
+  eq(helpers.preedit(child), "▼管")
+  eq(helpers.popup(child), { "a: 管", "s: 館", "d: 観" })
+end
+
 T["popup"]["is closed when disabled"] = function()
   enable()
   type("Kan<Space><Space><Space><Space><Space>")
@@ -213,6 +220,49 @@ T["register"]["the cursor stays at the end of a line when cancelled with <Esc> o
   type("<Space><C-g>")
   eq(helpers.cursor(child), { 1, 9 })
   eq(helpers.preedit(child), "▽よみ")
+end
+
+T["register"]["moving the cursor or deleting in the registration prompt drops the pre-edit without leaking markers"] = function()
+  enable()
+  type("A<Space>A")
+  eq(child.fn.mode(), "c")
+  eq(child.fn.getcmdline(), "▽あ")
+  -- <Left> でカーソルを動かしてから <CR> を押すと、未確定の ▽あ は破棄されて空入力（取り消し）になる
+  child.type_keys("<Left>")
+  type("<CR>")
+  eq(child.fn.mode(), "i")
+  eq(helpers.buffer(child), { "" })
+  eq(helpers.preedit(child), "▽あ")
+  eq(user_dictionary():find("▽", 1, true), nil)
+
+  -- <C-w> で読みの一部を消したときも、残った ▽ が取り除かれる
+  type("<Space>Kan")
+  eq(child.fn.getcmdline(), "▽かn")
+  child.type_keys("<C-w>")
+  helpers.settle(child)
+  eq(child.fn.getcmdline(), "")
+  type("<CR>")
+  eq(child.fn.mode(), "i")
+  eq(helpers.buffer(child), { "" })
+  eq(helpers.preedit(child), "▽あ")
+end
+
+T["register"]["switching windows during input() does not break state or mappings"] = function()
+  child.cmd("botright new")
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "xy" })
+  child.cmd("wincmd p")
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "ab cd" })
+  child.api.nvim_win_set_cursor(0, { 1, 2 })
+  enable()
+  type("AA")
+  eq(child.fn.mode(), "c")
+  child.type_keys("<Cmd>wincmd w<CR>")
+  helpers.settle(child)
+  type("<Esc>")
+  eq(child.fn.mode(), "i")
+  eq(helpers.buffer(child), { "ab cd" })
+  eq(helpers.cursor(child), { 1, 2 })
+  eq(helpers.preedit(child), "▽あ*あ")
 end
 
 T["purge"] = MiniTest.new_set()

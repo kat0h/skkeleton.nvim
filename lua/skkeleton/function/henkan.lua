@@ -158,6 +158,8 @@ function M.henkan_input(ctx, key)
       if state.candidate_index + cand_idx < #state.candidates then
         state.candidate_index = state.candidate_index + cand_idx
         common.kakutei(ctx)
+      else
+        show_candidates(state)
       end
       return
     end

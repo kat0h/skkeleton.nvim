@@ -43,14 +43,14 @@ make verify ARGS="--depth 5 --mutate no-stale-check"
 
 d5fc182（行末で辞書登録を取り消すとカーソルが 1 文字左にずれる）は、修正前のコードでも headless の子ではずれが出ず、この方法では見つけられませんでした。上流で足したテストも修正前のコードで失敗しないので、実際の端末でだけ起きるものと考えられます。
 
-## 見つかったもの
+## 見つかったもの（すべて修正済み）
 
-`spec.lua` の `M.known` に理由と一緒に書き、探索を続けられるようにしています。
+探索で見つかり修正したバグは以下の 4 件です。
 
-1. 辞書登録の欄で ▽ を入力中に `<Left>`・`<C-w>` などで cmdline を動かしてから確定すると、▽ ごと語として登録・確定される。例: `A <Space> A <Left> <CR>` でバッファに `▽あ` が入る。upstream でも同じになる（`tests/diff` の driver で確かめた）。
-2. 辞書登録の `input()` の途中でウィンドウを移ると（`<Cmd>` のマッピングなど）、`WinLeave` の autocmd が状態を作り直してマッピングを外す。取り消すと移った先のバッファで pre-edit が戻り、確定すると ▽ ごと登録・確定される。
-3. 候補一覧で、ページに無い選択キーを押すと、一覧の状態のまま popup だけ閉じる。upstream も同じ動き。
-4. ウィンドウを移ったあと `g:skkeleton#state` に古い値が残る。upstream も handle のときにしか書き換えないので、有効なときだけ確かめている。
+1. 辞書登録の欄で ▽ を入力中に `<Left>`・`<C-w>` などで cmdline を動かしてから確定すると、▽ ごと語として登録・確定される。例: `A <Space> A <Left> <CR>` でバッファに `▽あ` が入る。upstream でも同じになる（`tests/diff` の driver で確かめた）。→ `render.lua` で cmdline の pre-edit 範囲を記録し、ずれを検出した際（`CmdlineChanged` および次のキー処理時）に `setcmdline()` で残存 pre-edit を取り除くよう修正。
+2. 辞書登録の `input()` の途中でウィンドウを移ると（`<Cmd>` のマッピングなど）、`WinLeave` の autocmd が状態を作り直してマッピングを外す。取り消すと移った先のバッファで pre-edit が戻り、確定すると ▽ ごと登録・確定される。→ `host.input()` 中は `WinLeave` の初期化をスキップし、元のウィンドウを維持するよう修正。
+3. 候補一覧で、ページに無い選択キーを押すと、一覧の状態のまま popup だけ閉じる。upstream も同じ動き。→ `henkan.lua` でページ範囲外の選択キーが押された際にも `show_candidates()` を呼んで popup を維持するよう修正。
+4. ウィンドウを移ったあと `g:skkeleton#state` に古い値が残る。→ `main.lua` の `reset()` でも `update_state_variable()` を呼ぶよう修正。
 
 ## 確かめていないこと
 

@@ -41,6 +41,18 @@ function M.show_candidates(lines, meta)
   require("skkeleton.popup").set(lines, meta)
 end
 
+local in_input_depth = 0
+
+---@return boolean
+function M.is_in_input()
+  return in_input_depth > 0
+end
+
+---@return integer
+function M.in_input_depth()
+  return in_input_depth
+end
+
 -- 辞書登録の入力。取り消しなら nil か ""
 -- 入力中は新しい Context で skkeleton を有効にし、終わったら元の Context とモードに戻す
 ---@param prompt string
@@ -64,6 +76,17 @@ function M.input(prompt)
   -- cmdline のマッピングを退避して、<Esc> と <C-g> では取り消す
   map.save("c")
 
+  local input_group = vim.api.nvim_create_augroup("skkeleton-host-input", { clear = true })
+  vim.api.nvim_create_autocmd("WinEnter", {
+    group = input_group,
+    callback = function()
+      if vim.api.nvim_win_is_valid(win) and vim.api.nvim_get_current_win() ~= win then
+        pcall(vim.api.nvim_set_current_win, win)
+      end
+    end,
+  })
+
+  in_input_depth = in_input_depth + 1
   local ok, res = pcall(function()
     store.init_context()
     vim.api.nvim_create_autocmd("CmdlineEnter", {
@@ -77,7 +100,12 @@ function M.input(prompt)
     })
     return vim.fn.input(prompt)
   end)
+  in_input_depth = in_input_depth - 1
+  pcall(vim.api.nvim_del_augroup_by_id, input_group)
 
+  if vim.api.nvim_win_is_valid(win) and vim.api.nvim_get_current_win() ~= win then
+    pcall(vim.api.nvim_set_current_win, win)
+  end
   vim.o.virtualedit = saved_ve
   if vim.api.nvim_win_is_valid(win) then
     pcall(vim.api.nvim_win_set_cursor, win, saved_cursor)

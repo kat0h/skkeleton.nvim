@@ -18,8 +18,12 @@ M.count = 0
 -- 今出している extmark。line は描いたときの行の文字列
 ---@type { buf: integer, id: integer, annot_id?: integer, row: integer, col: integer, line: string }?
 local mark
+-- cmdline に書いた pre-edit の位置と、書いた直後の cmdline 全体
+---@type { text: string, start_pos: integer, end_pos: integer, line: string }?
+local cmd_mark
 -- finish で描く pre-edit と、そのときの vim_mode
 local current_text = ""
+local current_cmd_text = ""
 ---@type string[][]?
 local current_chunks = nil
 local current_annot = ""
@@ -207,8 +211,11 @@ function M.is_stale(ctx, vim_mode)
     return false
   end
   if vim_mode == "c" then
-    local line = vim.fn.getcmdline():sub(1, vim.fn.getcmdpos() - 1)
-    return line:sub(-#pre) ~= pre
+    if not cmd_mark then
+      local line = vim.fn.getcmdline():sub(1, vim.fn.getcmdpos() - 1)
+      return line:sub(-#pre) ~= pre
+    end
+    return vim.fn.getcmdline() ~= cmd_mark.line or vim.fn.getcmdpos() ~= cmd_mark.end_pos
   elseif vim_mode == "t" then
     return false
   end
@@ -227,19 +234,76 @@ function M.is_stale(ctx, vim_mode)
   return cur_line ~= mark.line
 end
 
+-- cmdline で pre-edit が残ったままカーソル移動や部分削除が起きたとき、残っている pre-edit を取り除く
+function M.clean_stale_cmdline()
+  if not cmd_mark then
+    return
+  end
+  local cm = cmd_mark
+  cmd_mark = nil
+  local line = vim.fn.getcmdline()
+  local pos = vim.fn.getcmdpos()
+  local before = cm.line:sub(1, cm.start_pos - 1)
+  local after = cm.line:sub(cm.end_pos)
+  local new_line, new_pos
+  if line == cm.line then
+    new_line = before .. after
+    if pos <= cm.start_pos then
+      new_pos = pos
+    elseif pos >= cm.end_pos then
+      new_pos = pos - #cm.text
+    else
+      new_pos = cm.start_pos
+    end
+  elseif
+    line:sub(1, #before) == before
+    and (#after == 0 or line:sub(-#after) == after)
+    and #line >= #before + #after
+  then
+    local mid = line:sub(#before + 1, #line - #after)
+    if mid ~= "" and (cm.text:sub(1, #mid) == mid or cm.text:sub(-#mid) == mid) then
+      new_line = before .. after
+      new_pos = cm.start_pos
+    end
+  elseif (#after == 0 or line:sub(-#after) == after) and #line >= #after then
+    local rem = line:sub(1, #line - #after)
+    if rem ~= "" and cm.text:sub(-#rem) == rem then
+      new_line = after
+      new_pos = 1
+    end
+  end
+  if new_line ~= nil then
+    pcall(vim.fn.setcmdline, new_line, new_pos)
+  end
+end
+
 -- 描画を終える。確定した文字列が入ったあとに呼ぶ
 function M.finish()
   pending = false
   local vm = vim.api.nvim_get_mode().mode:sub(1, 1)
   if current_mode == "i" and vm == "i" then
+    cmd_mark = nil
     draw(current_text, current_chunks, current_annot)
     popup.open()
     -- pre-edit の幅が変わったので、インジケータを画面上のカーソルに寄せ直す
     require("skkeleton.indicator").move()
   elseif vm == "c" then
     M.clear()
+    if current_cmd_text ~= "" then
+      local cmdline = vim.fn.getcmdline()
+      local cmdpos = vim.fn.getcmdpos()
+      cmd_mark = {
+        text = current_cmd_text,
+        start_pos = math.max(1, cmdpos - #current_cmd_text),
+        end_pos = cmdpos,
+        line = cmdline,
+      }
+    else
+      cmd_mark = nil
+    end
     popup.open()
   else
+    cmd_mark = nil
     M.clear()
     popup.close()
   end
@@ -255,9 +319,11 @@ function M.update(ctx, prefix)
   local pre = ctx:to_string()
   local keys, esc
   if vm == "c" or vm == "t" then
+    esc = pre == "\27"
     keys = (prefix or "") .. ctx.preedit:output(pre)
     current_mode = vm
     current_text = ""
+    current_cmd_text = (vm == "c" and not esc) and pre or ""
     current_chunks = nil
     current_annot = ""
   else
@@ -267,10 +333,14 @@ function M.update(ctx, prefix)
     keys = (prefix or "") .. kakutei .. (esc and "\27" or "")
     current_mode = "i"
     current_text = esc and "" or pre
+    current_cmd_text = ""
     current_chunks, current_annot = build_chunks(ctx, current_text)
   end
-  -- 流した文字が入ってから描く。Esc で抜けるときはその場で片付ける
-  local deferred = keys ~= "" and not esc and (current_mode == "i" or popup.has_pending())
+  -- 流した文字が入ってから描く。Esc や改行で cmdline を抜けるときはその場で片付ける
+  local leaves_cmdline = vm == "c" and (esc or keys:find("[\r\n]$") ~= nil)
+  local deferred = keys ~= ""
+    and not esc
+    and (current_mode == "i" or (current_mode == "c" and not leaves_cmdline) or popup.has_pending())
   pending = keys ~= "" and deferred
   if keys ~= "" then
     feed(keys, deferred and FINISH_CMD or nil)

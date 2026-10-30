@@ -322,6 +322,9 @@ T["the state is exposed in g:skkeleton#state"] = function()
   eq(child.g["skkeleton#state"].henkanFeed, "か")
   type("n<Space>")
   eq(child.g["skkeleton#state"].phase, "henkan")
+  -- ウィンドウを移ったり normal に戻ったりして状態が初期化されたら g:skkeleton#state も初期化される
+  child.cmd("botright new")
+  eq(child.g["skkeleton#state"], { phase = "input", henkanFeed = "" })
 end
 
 T["register_kanatable adds a table"] = function()
