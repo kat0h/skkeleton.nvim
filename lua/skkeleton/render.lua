@@ -121,10 +121,14 @@ end
 local FINISH_CMD = vim.api.nvim_replace_termcodes("<Cmd>lua require('skkeleton.render').finish()<CR>", true, true, true)
 
 -- keys の K_SPECIAL (0x80) を逃がして流す。cmd があれば逃がさずにあとへ続ける。
--- 「、」のように 0x80 を含む文字が、特殊キーの始まりと読まれないようにするため
-local function feed(keys, cmd)
+-- 「、」のように 0x80 を含む文字が、特殊キーの始まりと読まれないようにするため。
+-- insert モードでは "t" を外すことでマクロ記録（qa）やドットリピート（.）に
+-- feedkeys で流した確定文字列や FINISH_CMD が混入するのを防ぐ (#36)。
+-- cmdline や terminal では BS による再描画や制御文字の処理のために "t" を残す。
+local function feed(keys, cmd, mode)
   keys = keys:gsub("\128", "\128\254X")
-  vim.api.nvim_feedkeys(keys .. (cmd or ""), "nit", false)
+  local flags = (mode == "i") and "ni" or "nit"
+  vim.api.nvim_feedkeys(keys .. (cmd or ""), flags, false)
 end
 
 -- pre-edit の extmark を消す
@@ -412,7 +416,7 @@ function M.update(ctx, prefix)
     and (current_mode == "i" or (current_mode == "c" and not leaves_cmdline) or popup.has_pending())
   pending = keys ~= "" and deferred
   if keys ~= "" then
-    feed(keys, deferred and FINISH_CMD or nil)
+    feed(keys, deferred and FINISH_CMD or nil, current_mode)
   end
   if not deferred then
     M.finish()

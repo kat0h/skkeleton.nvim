@@ -372,6 +372,74 @@ T["hooks"]["insert 中に <C-r>= で式を確定して戻ってもインジケ�
   eq(f[1].row, ins_row)
 end
 
+T["hooks"]["cmdline に入ると画面上にインジケータが描画され、<Esc> や <BS> で抜けると閉じる (#31)"] = function()
+  child.api.nvim_ui_attach(80, 24, {})
+  setup({ showInCmdline = true })
+
+  local function screen_row(r)
+    return child.lua_get(string.format(
+      [[(function()
+      local line = ""
+      for c = 1, vim.o.columns do
+        line = line .. vim.fn.screenstring(%d, c)
+      end
+      return line
+    end)()]],
+      r
+    ))
+  end
+
+  -- normal モードから ':' を入力
+  child.type_keys(":")
+  eq(#floats(), 1)
+  -- 画面上のインジケータ行（lines - 1 行目）に "Aa" が描画されている
+  local row23 = screen_row(23)
+  eq(row23:find("Aa") ~= nil, true)
+
+  -- <Esc> で cmdline を抜けると閉じる
+  child.type_keys("<Esc>")
+  eq(#floats(), 0)
+  eq(screen_row(23):find("Aa") == nil, true)
+
+  -- 再び ':' で入る
+  child.type_keys(":")
+  eq(#floats(), 1)
+  eq(screen_row(23):find("Aa") ~= nil, true)
+
+  -- 空の cmdline から <BS> で抜けると閉じる
+  child.type_keys("<BS>")
+  eq(#floats(), 0)
+  eq(screen_row(23):find("Aa") == nil, true)
+end
+
+T["hooks"]["cmdline 中に mode-changed すると画面上のインジケータが更新される (#31)"] = function()
+  child.api.nvim_ui_attach(80, 24, {})
+  setup({ showInCmdline = true })
+
+  local function screen_row(r)
+    return child.lua_get(string.format(
+      [[(function()
+      local line = ""
+      for c = 1, vim.o.columns do
+        line = line .. vim.fn.screenstring(%d, c)
+      end
+      return line
+    end)()]],
+      r
+    ))
+  end
+
+  child.type_keys(":")
+  eq(screen_row(23):find("Aa") ~= nil, true)
+
+  child.g["skkeleton#mode"] = "hira"
+  child.lua("_G.fire('skkeleton-mode-changed')")
+  eq(screen_row(23):find("あ") ~= nil, true)
+
+  child.type_keys("<Esc>")
+  eq(#floats(), 0)
+end
+
 T["hooks"]["補完で候補が入ったときにインジケーターが追従する"] = function()
   setup({})
   child.api.nvim_buf_set_lines(0, 0, -1, false, { "ab cd" })

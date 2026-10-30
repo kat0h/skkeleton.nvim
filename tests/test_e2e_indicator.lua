@@ -212,4 +212,26 @@ T["follows cursor on window scroll (#30)"] = function()
   eq(after.float[1], before.float[1] - 1)
 end
 
+T["follows cursor before tab with list and virtualedit (#35)"] = function()
+  child.api.nvim_ui_attach(80, 24, {})
+  child.cmd("set list listchars=tab:>-,trail:~,eol:$ virtualedit=all")
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "a\tb  c " })
+  child.api.nvim_win_set_cursor(0, { 1, 1 })
+  start()
+  type("n")
+  helpers.settle(child)
+
+  -- 画面上は pre-edit "n" が "a" とタブの間に表示される
+  local sline = child.lua_get([[(function()
+    local s = ""
+    for c = 1, 10 do s = s .. vim.fn.screenstring(1, c) end
+    return s
+  end)()]])
+  eq(sline:sub(1, 8), "an>-----")
+
+  -- virtualedit 下で Neovim は端末カーソルを pre-edit 先頭セルに置くが、
+  -- インジケータは実際の端末カーソル位置に追従する
+  expect_follows()
+end
+
 return T
