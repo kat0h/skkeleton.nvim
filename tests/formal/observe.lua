@@ -100,6 +100,15 @@ function M.snapshot()
   local ok_mode, want_indicator = pcall(function()
     return require("skkeleton.indicator.modes").new():detect().text
   end)
+  -- ▼ の今の候補の注釈（; のあと）。インラインで出るはずの注釈（#11）
+  local want_annot = ""
+  if st.type == "henkan" and st.candidates and st.candidate_index < options.showCandidatesCount then
+    local c = st.candidates[st.candidate_index + 1] or ""
+    local semi = c:find(";", 1, true)
+    if semi and #c > semi then
+      want_annot = " ;" .. c:sub(semi + 1)
+    end
+  end
   -- 今の候補一覧のページで popup に出るはずの候補（"a: 候補" の「候補」の部分）
   local want_popup
   if st.type == "henkan" and st.candidates and st.candidate_index >= options.showCandidatesCount then
@@ -195,6 +204,7 @@ function M.snapshot()
     cmdheight = vim.o.cmdheight,
     want_indicator = ok_mode and want_indicator or nil,
     want_popup = want_popup,
+    want_annot = want_annot,
     cmdpos = vm:sub(1, 1) == "c" and vim.fn.getcmdpos() or nil,
     cmdline = vm:sub(1, 1) == "c" and vim.fn.getcmdline() or nil,
     cmdtype = vm:sub(1, 1) == "c" and vim.fn.getcmdtype() or nil,

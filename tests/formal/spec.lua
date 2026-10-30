@@ -218,7 +218,8 @@ M.state["indicator: insert では pre-edit の直後に 1 つ、normal では出
   local ind = s.indicator[1]
   -- 位置は枠を含めた左上
   local b = ind.border and 1 or 0
-  local expect = { s.screen.row - 1 + s.ind_cfg.row, s.screen.col - 1 + s.ind_cfg.col }
+  -- 注釈（#11）が出ているときは、注釈に重ならないよう、その後ろに置く（render.preedit_width が注釈の幅も足す）
+  local expect = { s.screen.row - 1 + s.ind_cfg.row, s.screen.col - 1 + s.ind_cfg.col + width(annot_text(s)) }
   -- float の中では headless の screenrow()/screencol() が正しい値を返さないので、位置は確かめない
   if s.win_float then
     return
@@ -358,6 +359,17 @@ M.state["blink: 有効なら、メニューは ▽ の入力中だけ"] = functi
       st.henkan_feed,
       short(s.menu_items)
     )
+  end
+end
+
+-- #11: ▼ の候補に注釈があれば、候補一覧より前（showCandidatesCount 未満）の間は pre-edit の後ろに ;注釈 を薄く出す
+M.state["annotation: 注釈は ▼ の今の候補のものだけ"] = function(s)
+  if not insert_mode(s) or s.pending or s.want_annot == nil then
+    return
+  end
+  local got = annot_text(s)
+  if got ~= s.want_annot then
+    return ("注釈の表示 %q、今の候補なら %q"):format(got, s.want_annot)
   end
 end
 
