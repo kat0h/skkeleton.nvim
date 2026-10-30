@@ -260,6 +260,14 @@ T["leaving insert mode with <C-c> disables"] = function()
   eq(child.fn.mode(), "n")
 end
 
+T["immediately entering visual mode after escape resets state"] = function()
+  enable()
+  type("<Esc>v")
+  eq(child.fn.mode(), "v")
+  eq(child.g["skkeleton#enabled"], false)
+  eq(child.g["skkeleton#state"].phase, "input")
+end
+
 T["enabling twice keeps working"] = function()
   enable()
   type("<Plug>(skkeleton-enable)")
