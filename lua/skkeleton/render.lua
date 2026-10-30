@@ -168,7 +168,7 @@ local function draw(text, chunks, annot)
       virt_text = { { annot, "SkkeletonAnnotation" } },
       virt_text_pos = "inline",
       hl_mode = "combine",
-      right_gravity = false,
+      right_gravity = true,
     })
     if ok_annot then
       annot_id = aid

@@ -202,6 +202,19 @@ T["register"]["the cursor stays at the end of a line"] = function()
   eq(helpers.cursor(child), { 1, 6 })
 end
 
+T["register"]["the cursor stays at the end of a line when cancelled with <Esc> or <C-g>"] = function()
+  enable()
+  type("aiu")
+  eq(helpers.buffer(child), { "あいう" })
+  eq(helpers.cursor(child), { 1, 9 })
+  type("Yomi<Space><Esc>")
+  eq(helpers.cursor(child), { 1, 9 })
+  eq(helpers.preedit(child), "▽よみ")
+  type("<Space><C-g>")
+  eq(helpers.cursor(child), { 1, 9 })
+  eq(helpers.preedit(child), "▽よみ")
+end
+
 T["purge"] = MiniTest.new_set()
 
 T["purge"]["X removes the candidate after confirming"] = function()

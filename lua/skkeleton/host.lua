@@ -49,12 +49,15 @@ function M.input(prompt)
   local map = require("skkeleton.map")
   local ctx = store.context()
   local buf = vim.api.nvim_get_current_buf()
+  local win = vim.api.nvim_get_current_win()
+  local saved_cursor = vim.api.nvim_win_get_cursor(win)
+  local saved_ve = vim.o.virtualedit
+
+  -- 行末の挿入位置（col == #line）で input() に入ってもカーソルが1文字左へ戻らないよう virtualedit=all にする
+  vim.o.virtualedit = "all"
 
   -- cmdline のマッピングを退避して、<Esc> と <C-g> では取り消す
   map.save("c")
-  for _, k in ipairs({ "<Esc>", "<C-g>" }) do
-    vim.api.nvim_buf_set_keymap(buf, "c", k, "__skkeleton_return__<CR>", { noremap = true, silent = true })
-  end
 
   local ok, res = pcall(function()
     store.init_context()
@@ -62,10 +65,18 @@ function M.input(prompt)
       once = true,
       callback = function()
         map.map()
+        for _, k in ipairs({ "<Esc>", "<C-g>" }) do
+          vim.api.nvim_buf_set_keymap(buf, "c", k, "__skkeleton_return__<CR>", { noremap = true, silent = true })
+        end
       end,
     })
     return vim.fn.input(prompt)
   end)
+
+  vim.o.virtualedit = saved_ve
+  if vim.api.nvim_win_is_valid(win) then
+    pcall(vim.api.nvim_win_set_cursor, win, saved_cursor)
+  end
 
   pcall(vim.api.nvim_buf_del_keymap, buf, "c", "<Esc>")
   pcall(vim.api.nvim_buf_del_keymap, buf, "c", "<C-g>")
