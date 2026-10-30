@@ -4,6 +4,13 @@ local M = {}
 M.root = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h:h")
 M.testdata = M.root .. "/tests/testdata"
 
+-- 子が input() などで止まっても 1 ケース 10 秒で落ちるようにする。
+-- 子の中のタイマーで自分を kill すると、親の待ち中の呼び出しがエラーになり、ケースが失敗になる
+local function restart(child)
+  child.restart({ "-u", M.root .. "/tests/minimal_init.lua" })
+  child.lua([[vim.fn.timer_start(10000, function() vim.uv.kill(vim.uv.os_getpid(), "sigkill") end)]])
+end
+
 -- 子の nvim を使うテストの set を作る。ケースごとに子を作り直すので状態が漏れない
 ---@return table set, table child
 function M.child_set(opts)
@@ -11,7 +18,7 @@ function M.child_set(opts)
   local set = MiniTest.new_set(vim.tbl_deep_extend("force", {
     hooks = {
       pre_case = function()
-        child.restart({ "-u", M.root .. "/tests/minimal_init.lua" })
+        restart(child)
       end,
       post_once = child.stop,
     },
@@ -46,7 +53,7 @@ function M.e2e_set(opts)
   set, child = M.child_set({
     hooks = {
       pre_case = function()
-        child.restart({ "-u", M.root .. "/tests/minimal_init.lua" })
+        restart(child)
         local dir = vim.fn.tempname()
         vim.fn.mkdir(dir, "p")
         local dict = dir .. "/dict"

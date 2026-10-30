@@ -167,10 +167,9 @@ T["host.mode_changed sets variable and fires User event"] = function()
   eq(child.lua_get([[events]]), { "kata", "hira" })
 end
 
+-- input と confirm は本物の入力待ちになるので、E2E（test_e2e_dictionary.lua）で確かめる
 T["host defaults do nothing"] = function()
   init()
-  eq(child.lua_get([[require("skkeleton.host").input("p")]]), vim.NIL)
-  eq(child.lua_get([[require("skkeleton.host").confirm("m")]]), false)
   eq(child.lua_get([[pcall(require("skkeleton.host").disable)]]), true)
   eq(child.lua_get([[pcall(require("skkeleton.host").show_candidates, { "a: b" })]]), true)
   eq(child.lua_get([[pcall(require("skkeleton.host").keep_state_on_insert_enter)]]), true)
