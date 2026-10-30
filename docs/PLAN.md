@@ -101,3 +101,10 @@
 - モジュールの担当とインターフェースは [docs/ARCHITECTURE.md](ARCHITECTURE.md) に決めた。実装はサブエージェントに分けて渡し、タスクは GitHub の issue で管理する
 - 計画からの変更: 確定した文字列は `nvim_buf_set_text` ではなく、upstream と同じく `feedkeys` で流す。autoindent（upstream の「new line」のテスト）、`<C-g>u` の undo point、`.` のリピート、略語の展開を保つため。pre-edit を extmark で表示する点は変えない
 - upstream の今のバージョン（`770b265d`）には kakuteiUndo が無いので、v1 の範囲から外す
+
+### v1 で実装したものと実装しなかったもの（2026-10-30）
+- 実装した: コアの変換（ひらがな、カタカナ、半角カタカナ、全角英数、abbrev、送りあり・なし、接頭辞と接尾辞、数値変換）、SKK 辞書、ユーザー辞書、DB（形式 v1）、辞書登録、候補の popup、insert・cmdline・terminal での入力、インジケータの内蔵、設定のキーの検証
+- 実装しなかった: skkserv、Google 日本語入力、ddc の補完と rank file、yaml と msgpack の辞書、`skkeleton#handle()` と `skkeleton#dangerously_clear_buffer_local_mappings()`、kakuteiUndo。`skkServer*` と `completionRankFile` は upstream の設定をそのまま使えるように、値の確認だけをする
+- 設定に残した互換: `sources` の `deno_kv` は `skk_dictionary` と同じ扱い。`databasePath` は Deno KV のファイルではなく DB を置くディレクトリ
+- 利用者向けの説明は [README.md](../README.md) と `doc/skkeleton.txt`（`:help skkeleton`）に書いた。CI は `.github/workflows/test.yml`（nvim の stable と nightly で `make test`、stylua の確認）
+- `make lint` に含めていた lua-language-server の確認は入れていない
