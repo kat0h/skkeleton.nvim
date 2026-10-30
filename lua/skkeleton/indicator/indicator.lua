@@ -32,7 +32,6 @@ function Indicator.new()
     { "CursorMovedI", "*", self:method("move") },
     { "CmdlineEnter", "*", self:method("open") },
     { "CmdlineLeave", "*", self:method("on_cmdline_leave") },
-    { "CmdlineChanged", "*", self:method("move") },
     { "User", "skkeleton-mode-changed", self:method("update") },
     { "User", "skkeleton-disable-post", self:method("update") },
     { "User", "skkeleton-enable-post", self:method("update") },
@@ -266,6 +265,11 @@ end
 -- relative = "cursor" は画面上のカーソル位置を設定した時点で読むため、inline の pre-edit が
 -- 描かれる前後で値が変わる。バッファ位置（bufpos）に固定し、pre-edit の表示幅を足して決める
 function Indicator:move()
+  if Modes.is_cmdline() then
+    -- コマンドライン中は文字入力ごとのカーソル追従（win_set_config + redraw）を
+    -- 行わず、モード切り替え時のみ表示・更新することでカーソルのちらつきを防止する
+    return
+  end
   if self:is_opened() then
     local mode = self.modes:detect()
     -- ウィンドウがすでに消えていると失敗することがある
