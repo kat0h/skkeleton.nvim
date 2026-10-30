@@ -188,7 +188,7 @@ local function check_state(run, key, prev_committed)
   end
   local committed = pre == "" and run.line or run.line:sub(1, #run.line - #pre)
   for _, m in ipairs(markers()) do
-    if committed:find(m, 1, true) then
+    if m ~= "" and committed:find(m, 1, true) then
       return ("確定した文字列 %q に %s が入った"):format(committed, m)
     end
   end
@@ -208,11 +208,18 @@ local function check_state(run, key, prev_committed)
     if st.candidate_index < 0 or st.candidate_index >= #st.candidates then
       return ("候補の番号 %d が範囲外（候補 %d 個）"):format(st.candidate_index, #st.candidates)
     end
-    if not vim.startswith(pre, config.options.markerHenkanSelect) then
+    local sel = config.options.markerHenkanSelect
+    if not vim.startswith(pre, sel) then
       return ("▼ の状態なのに pre-edit %q"):format(pre)
     end
   elseif st.type == "input" then
-    local marked = vim.startswith(pre, config.options.markerHenkan)
+    -- マーカーも今のモードの変換（カタカナなど）を通る（upstream の toString と同じ）
+    local mh = config.options.markerHenkan
+    if st.converter then
+      mh = st.converter(mh)
+    end
+    local marked = mh ~= "" and vim.startswith(pre, mh)
+      or (mh == "" and (st.mode == "okurinasi" or st.mode == "okuriari"))
     local want = st.mode == "okurinasi" or st.mode == "okuriari"
     if marked ~= want then
       return ("状態 %s なのに pre-edit %q"):format(st.mode, pre)

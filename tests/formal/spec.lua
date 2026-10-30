@@ -4,8 +4,11 @@
 -- どちらも違反なら説明の文字列を、成り立てば nil を返す
 local M = {}
 
+-- 空のマーカー（upstream #103）は探せないので除く
 local function markers(s)
-  return { s.opt.markerHenkan, s.opt.markerHenkanSelect }
+  return vim.tbl_filter(function(m)
+    return m ~= nil and m ~= ""
+  end, { s.opt.markerHenkan, s.opt.markerHenkanSelect })
 end
 
 local function width(s)
@@ -338,6 +341,19 @@ M.state["blink: 有効なら、メニューは ▽ の入力中だけ"] = functi
   end
 end
 
+-- upstream #69: skkeleton#mode() と実際のモードが食い違う
+M.state["mode: g:skkeleton#mode は内部のモードと同じ（無効なら空）"] = function(s)
+  if registering(s) then
+    return
+  end
+  if s.enabled and s.skk_mode ~= s.ctx_mode then
+    return ("g:skkeleton#mode %q、内部のモード %q"):format(s.skk_mode, tostring(s.ctx_mode))
+  end
+  if not s.enabled and s.skk_mode ~= "" then
+    return ("無効なのに g:skkeleton#mode が %q"):format(s.skk_mode)
+  end
+end
+
 -- 2 手以上をまたぐ性質のための履歴。各キーのあとに呼ぶ
 -- hist.before_register: 辞書登録の input() に入る直前の観測
 function M.observe(hist, prev, s)
@@ -357,6 +373,60 @@ function M.observe(hist, prev, s)
 end
 
 M.action = {}
+
+local function count(s, name)
+  return (s.events or {})[name] or 0
+end
+
+-- upstream #130: 辞書登録から出るときに disable の autocmd が発火する。
+-- disable-post は、有効から無効に変わったときだけ発火する
+M.action["event: disable-post は無効になったときだけ"] = function(p, key, s)
+  if not p.events or not s.events or registering(p) or registering(s) then
+    return
+  end
+  local fired = count(s, "skkeleton-disable-post") > count(p, "skkeleton-disable-post")
+  local disabled = p.enabled and not s.enabled
+  if fired ~= disabled then
+    return ("%s で disable-post %s、有効 %s -> %s"):format(
+      key,
+      fired and "が発火" or "が発火しない",
+      tostring(p.enabled),
+      tostring(s.enabled)
+    )
+  end
+end
+
+-- upstream #43: skkeleton-mode-changed がすぐに発火しない
+M.action["event: モードが変わったら mode-changed が発火する"] = function(p, key, s)
+  if not p.events or not s.events then
+    return
+  end
+  if p.skk_mode ~= s.skk_mode and count(s, "skkeleton-mode-changed") == count(p, "skkeleton-mode-changed") then
+    return ("%s でモードが %q -> %q になったのに mode-changed が来ない"):format(
+      key,
+      p.skk_mode,
+      s.skk_mode
+    )
+  end
+end
+
+-- upstream #4・#45: toggle で無効にできない／二度押しが要る。
+-- 打ちかけの無い入力中なら無効にし、無効ならひらがな（keepMode なら前のモード）で有効にする
+M.action["toggle: <C-j> で有効・無効が切り替わる"] = function(p, key, s)
+  if key ~= "<C-j>" or not insert_mode(p) or not insert_mode(s) or registering(p) then
+    return
+  end
+  if not p.enabled then
+    if not s.enabled then
+      return "無効のときに <C-j> を押しても有効にならない"
+    end
+    return
+  end
+  local plain = p.state.type == "input" and p.state.mode == "direct" and p.state.feed == "" and p.ctx_text == ""
+  if plain and (p.skk_mode == "hira" or p.skk_mode == "kata" or p.skk_mode == "hankata") and s.enabled then
+    return ("モード %q の入力中に <C-j> を押しても無効にならない"):format(p.skk_mode)
+  end
+end
 
 -- <Left> などでカーソルだけ動いたときは、次のキーで片付ける（#12 の修正）。
 -- skkeleton がキーを処理した直後は、cmdline のカーソルの前が pre-edit で終わる

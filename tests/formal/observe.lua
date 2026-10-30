@@ -130,6 +130,8 @@ function M.snapshot()
       candidate_index = st.candidate_index,
     },
     ctx_text = ctx:to_string(),
+    ctx_mode = ctx.mode,
+    events = vim.deepcopy(_G.formal_events or {}),
     pending = render.is_pending(),
     handled = render.count,
     win = win,

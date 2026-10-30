@@ -142,6 +142,17 @@ local SETUP = [[
     indicator = {},
   }, extra))
   vim.keymap.set({ "i", "c" }, "<C-j>", "<Plug>(skkeleton-toggle)")
+  -- User イベントの回数（イベントの性質で使う）
+  _G.formal_events = {}
+  for _, name in ipairs({ "skkeleton-enable-post", "skkeleton-disable-post", "skkeleton-mode-changed" }) do
+    _G.formal_events[name] = 0
+    vim.api.nvim_create_autocmd("User", {
+      pattern = name,
+      callback = function()
+        _G.formal_events[name] = _G.formal_events[name] + 1
+      end,
+    })
+  end
   local function sentinel()
     vim.keymap.set("i", "<C-g>", "<Nop>", { buffer = true, desc = "user-sentinel" })
     vim.b.formal_sentinel = true
@@ -528,6 +539,10 @@ elseif opts.fuzz then
     immediatelyCancel = { true, false },
     acceptIllegalResult = { true, false },
     popupBorder = { "none", "rounded" },
+    keepMode = { true, false },
+    -- upstream #33（絵文字のマーカー）と #103（空のマーカー）
+    markerHenkan = { "▽", "", "🍣", "<<" },
+    markerHenkanSelect = { "▼", "", "👍🏽", "[[" },
   }
   local function swarm()
     local keys = {}
