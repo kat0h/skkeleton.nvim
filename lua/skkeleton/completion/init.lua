@@ -155,6 +155,8 @@ local function hide()
   end
 end
 
+M.hide = hide
+
 -- User skkeleton-handled のたびに呼ばれる。メニューを開く、開き直す、閉じる
 function M.refresh()
   local opts = M.options

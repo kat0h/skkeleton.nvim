@@ -142,6 +142,7 @@ local function draw(text, chunks, annot)
   if text == "" then
     return
   end
+  ensure_highlights()
   local buf = vim.api.nvim_get_current_buf()
   if not vim.api.nvim_buf_is_valid(buf) then
     return

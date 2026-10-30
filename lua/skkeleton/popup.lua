@@ -132,6 +132,7 @@ local function open_float(lines, meta, cfg)
   local width = decorate_buf(buf, lines, meta)
   local border = options.popupBorder or "none"
   local has_border = border ~= "none" and border ~= ""
+  local border_cols = (has_border and border ~= "shadow") and 2 or 0
   local win_cfg = {
     border = border,
     width = width,
@@ -148,7 +149,11 @@ local function open_float(lines, meta, cfg)
     win_cfg.footer = { { footer_text, "SkkeletonPopupFooter" } }
     win_cfg.footer_pos = "right"
   end
-  local win = vim.api.nvim_open_win(buf, false, vim.tbl_extend("force", win_cfg, cfg))
+  local merged = vim.tbl_extend("force", win_cfg, cfg)
+  if merged.relative == "editor" then
+    merged.col = math.max(0, math.min(merged.col or 0, vim.o.columns - merged.width - border_cols))
+  end
+  local win = vim.api.nvim_open_win(buf, false, merged)
   vim.w[win].skkeleton_popup = true
   windows[#windows + 1] = win
 end
@@ -158,16 +163,12 @@ local function open_cmdline(lines, meta)
   if #lines == 0 then
     return
   end
-  local width = 1
-  for _, l in ipairs(lines) do
-    width = math.max(width, vim.fn.strdisplaywidth(l))
-  end
   local border = options.popupBorder or "none"
   local border_rows = (border ~= "none" and border ~= "" and border ~= "shadow") and 2 or 0
   local top = vim.o.lines - math.max(1, vim.o.cmdheight) - #lines - border_rows
   open_float(lines, meta, {
     relative = "editor",
-    col = math.max(0, math.min(vim.fn.getcmdscreenpos() - 1, vim.o.columns - width)),
+    col = vim.fn.getcmdscreenpos() - 1,
     row = math.max(0, top),
   })
   vim.cmd("redraw")

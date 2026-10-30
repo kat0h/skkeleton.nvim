@@ -31,6 +31,7 @@ function M.disable()
   vim.g["skkeleton#enabled"] = false
   require("skkeleton.render").clear()
   require("skkeleton.popup").close()
+  require("skkeleton.completion").hide()
 end
 
 -- 候補一覧の popup。lines は "a: 候補" の配列。描画のあとに開く
@@ -52,6 +53,10 @@ function M.input(prompt)
   local win = vim.api.nvim_get_current_win()
   local saved_cursor = vim.api.nvim_win_get_cursor(win)
   local saved_ve = vim.o.virtualedit
+
+  -- 辞書登録に入る前に補完メニューや候補ポップアップを閉じる
+  require("skkeleton.popup").close()
+  require("skkeleton.completion").hide()
 
   -- 行末の挿入位置（col == #line）で input() に入ってもカーソルが1文字左へ戻らないよう virtualedit=all にする
   vim.o.virtualedit = "all"

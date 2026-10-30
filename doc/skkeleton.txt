@@ -708,9 +708,28 @@ abbrevHlName ~
 	ドで使用するハイライトグループ名です。
 
 eijiText、hiraText、kataText、hankataText、zenkakuText、abbrevText ~
-	既定値: "英字"、"ひら"、"カタ"、"半ｶﾀ"、"全英"、"abbr"
+	既定値: "Aa"、"あ"、"ア"、"ｶﾅ"、"Ａ"、"ab"
 	型: string
 	各モードでインジケータに表示する文字列です。
+
+style ~
+	既定値: "default"
+	型: "default" | "rounded" | "minimal" | "pill"
+	インジケータの外観プリセットを指定します。`"pill"` は Nerd Font の半円
+	グリフを使ったカプセル型、`"rounded"` は角丸枠線、`"minimal"` は余白な
+	しの最小表示になります。
+
+winblend ~
+	既定値: 0（style が "rounded" または "minimal" のときは 10、"pill" のと
+	きは半円グリフとの色ズレを防ぐため常に 0）
+	型: integer (0〜100)
+	インジケータウィンドウの透過度（'winblend'）を指定します。
+
+showInCmdline ~
+	既定値: true
+	型: boolean
+	コマンドラインモード（`:`、`/`、`?`）や辞書登録プロンプトでもインジケー
+	タを表示するかどうかを指定します。
 
 border ~
 	既定値: nil

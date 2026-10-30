@@ -164,7 +164,7 @@ local function handle_keys(opts, vim_mode)
   end
 
   -- blink.cmp のメニューで項目を選んでいるときの <CR>。選んだ項目で確定する（確定は completion の execute が行う）
-  if table.concat(keys) == "<cr>" and require("skkeleton.completion").accept_selected() then
+  if table.concat(keys) == "<cr>" and options.eggLikeNewline and require("skkeleton.completion").accept_selected() then
     return
   end
 

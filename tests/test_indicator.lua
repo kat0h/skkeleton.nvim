@@ -237,7 +237,7 @@ T["hooks"]["setup を何度呼んでも 1 つしか出ない。設定は最後�
   local f = floats()
   eq(#f, 1)
   eq(f[1].text, "Aa")
-  eq(#child.api.nvim_get_autocmds({ group = "skkeleton-indicator" }), 10)
+  eq(#child.api.nvim_get_autocmds({ group = "skkeleton-indicator" }), 11)
 end
 
 T["hooks"]["style = rounded / minimal / pill と winblend が反映される"] = function()
@@ -325,6 +325,38 @@ T["hooks"]["background が変わると色を作り直す"] = function()
   local hl = child.lua_get("vim.api.nvim_get_hl(0, { name = 'SkkeletonIndicatorEiji' })")
   eq(hl.bold, true)
   eq(#floats(), 1)
+end
+
+T["hooks"]["ColorScheme イベントでもハイライトが再作成される"] = function()
+  setup({ style = "pill" })
+  child.type_keys("i")
+  child.cmd("highlight clear")
+  child.cmd("doautocmd ColorScheme")
+  wait(30)
+  local hl = child.lua_get("vim.api.nvim_get_hl(0, { name = 'SkkeletonIndicatorEiji' })")
+  local cap = child.lua_get("vim.api.nvim_get_hl(0, { name = 'SkkeletonIndicatorEijiCap' })")
+  eq(hl.bold, true)
+  eq(cap.fg ~= nil, true)
+  eq(#floats(), 1)
+end
+
+T["hooks"]["insert 中に input() へ入り抜けてもインジケーターが連動する"] = function()
+  setup({ showInCmdline = true })
+  child.type_keys("i")
+  eq(floats()[1].relative, "win")
+
+  -- Insert 中に Cmdline へ遷移したとき即座に relative=editor になる
+  child.type_keys("<C-r>=")
+  local f_cmd = floats()
+  eq(#f_cmd, 1)
+  eq(f_cmd[1].relative, "editor")
+
+  -- Cmdline を抜けて Insert に戻ると再びインジケーターが開く
+  child.type_keys("<Esc>")
+  wait(30)
+  local f_ins = floats()
+  eq(#f_ins, 1)
+  eq(f_ins[1].relative, "win")
 end
 
 T["hooks"]["indicator のバッファは閉じたときに wipe される"] = function()
