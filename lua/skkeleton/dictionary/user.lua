@@ -7,6 +7,7 @@ local skk = require("skkeleton.dictionary.skk")
 local util = require("skkeleton.util")
 
 local uv = vim.uv
+local bit = require("bit")
 
 ---@class skkeleton.UserDictionary
 ---@field path string
@@ -190,11 +191,21 @@ function User:save()
   table.insert(lines, skk.OKURI_NASI_MARKER)
   vim.list_extend(lines, sorted_lines(self.maps.okurinasi, false))
   table.insert(lines, "")
+  -- 書いている途中で落ちても辞書が欠けないよう、同じディレクトリの一時ファイルに書いてから rename する。
+  -- シンボリックリンクはリンク先を書き換える（リンクそのものは残す）
+  local target = uv.fs_realpath(self.path) or self.path
+  local stat = uv.fs_stat(target)
+  local tmp = ("%s.%d.tmp"):format(target, uv.os_getpid())
   local ok = false
-  local fd = uv.fs_open(self.path, "w", 420)
+  local fd = uv.fs_open(tmp, "w", stat and bit.band(stat.mode, 511) or 420)
   if fd then
     ok = uv.fs_write(fd, table.concat(lines, "\n"), 0) ~= nil
+    ok = uv.fs_fsync(fd) ~= nil and ok
     uv.fs_close(fd)
+    ok = ok and uv.fs_rename(tmp, target) ~= nil
+    if not ok then
+      uv.fs_unlink(tmp)
+    end
   end
   if not ok then
     vim.notify(("skkeleton: can't write userDictionary to %s"):format(self.path), vim.log.levels.WARN)

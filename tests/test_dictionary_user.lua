@@ -232,4 +232,27 @@ T["get_prefix"] = function()
   )
 end
 
+T["save keeps a symlink, the file mode and leaves no temporary file"] = function()
+  eq(
+    run([[
+      local real = write("real", "")
+      vim.uv.fs_chmod(real, 384)
+      local link = TMP .. "/link"
+      vim.uv.fs_symlink(real, link)
+      local u = User.new()
+      u:load({ path = link })
+      u:register_henkan_result("okurinasi", "あ", "亜")
+      u:save()
+      local leftovers = vim.fn.glob(TMP .. "/*.tmp", true, true)
+      return {
+        vim.uv.fs_lstat(link).type,
+        read(real):find("あ /亜/", 1, true) ~= nil,
+        bit.band(vim.uv.fs_stat(real).mode, 511),
+        #leftovers,
+      }
+    ]]),
+    { "link", true, 384, 0 }
+  )
+end
+
 return T
