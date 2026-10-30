@@ -26,6 +26,9 @@ do
       opts.length, i = tonumber(v), i + 1
     elseif k == "--seed" then
       opts.seed, i = tonumber(v), i + 1
+    elseif k == "--record" then
+      -- asciinema の形式（.cast）で、1 キーごとの画面を書き出す。違反があっても最後のキーまで流す
+      opts.record, i = v, i + 1
     elseif k == "--verbose" then
       opts.verbose = true
     end
@@ -188,6 +191,52 @@ function Session:terminal()
   return { row = tonumber(y) + 1, col = tonumber(x) + 1 }, screen
 end
 
+-- 色つきの画面（エスケープシーケンスつき）
+function Session:screen_ansi()
+  return sh({ "tmux", "capture-pane", "-p", "-e", "-t", self.name })
+end
+
+-- asciinema の形式（v2）の記録。画面の下に、押したキーと違反を出す
+local Recorder = {}
+Recorder.__index = Recorder
+
+function Recorder.new(path)
+  return setmetatable({ path = path, t = 0, frames = {} }, Recorder)
+end
+
+function Recorder:frame(sess, label, note, hold)
+  local term = sess:terminal()
+  local lines = vim.split(sess:screen_ansi(), "\n")
+  while #lines > 24 do
+    table.remove(lines)
+  end
+  local out = { "\27[0m\27[2J\27[H" }
+  for i, l in ipairs(lines) do
+    out[#out + 1] = ("\27[%d;1H%s\27[0m"):format(i, l)
+  end
+  -- 25 行目に区切り、26 行目に押したキー、27 行目に違反
+  out[#out + 1] = "\27[25;1H\27[0m\27[2m" .. ("─"):rep(80) .. "\27[0m"
+  out[#out + 1] = "\27[26;1H\27[1;97;44m key \27[0m " .. label
+  if note and note ~= "" then
+    out[#out + 1] = "\27[27;1H\27[1;97;41m ✗ \27[0m " .. note
+  end
+  out[#out + 1] = ("\27[%d;%dH"):format(term.row, term.col)
+  self.frames[#self.frames + 1] = { self.t, table.concat(out) }
+  self.t = self.t + (hold or 0.9)
+end
+
+function Recorder:write()
+  local f = assert(io.open(self.path, "w"))
+  f:write(
+    vim.json.encode({ version = 2, width = 80, height = 27, timestamp = os.time(), env = { TERM = "xterm-256color" } }),
+    "\n"
+  )
+  for _, fr in ipairs(self.frames) do
+    f:write(vim.json.encode({ fr[1], "o", fr[2] }), "\n")
+  end
+  f:close()
+end
+
 function Session:stop()
   pcall(vim.fn.chanclose, self.chan)
   sh({ "tmux", "kill-session", "-t", self.name })
@@ -281,6 +330,10 @@ local function run(keys)
       sess:send(k)
     end
     sess:settle()
+    local rec = opts.record and Recorder.new(opts.record)
+    if rec then
+      rec:frame(sess, "（初期状態）", nil, 1.2)
+    end
     local base = snapshot(sess)
     local prev = base
     local hist = {}
@@ -331,11 +384,28 @@ local function run(keys)
         end
         spec.observe(hist, prev, s)
         prev = s
-        if #result.violations > 0 then
+        if rec then
+          local note = #result.violations > 0
+              and table.concat(
+                vim.tbl_map(function(v)
+                  return v.msg
+                end, result.violations),
+                " / "
+              )
+            or nil
+          if note and vim.fn.strdisplaywidth(note) > 74 then
+            note = vim.fn.strcharpart(note, 0, 36) .. "…"
+          end
+          rec:frame(sess, key, note, i == #keys and 3 or 1.0)
+          result.violations = {}
+        elseif #result.violations > 0 then
           result.steps = i
           return
         end
       end
+    end
+    if rec then
+      rec:write()
     end
   end)
   if not ok then
