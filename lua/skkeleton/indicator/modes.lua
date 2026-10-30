@@ -61,7 +61,7 @@ function Mode.new(name)
   if config.style == "pill" then
     self.left_cap = Mode.LEFT_CAP
     self.right_cap = Mode.RIGHT_CAP
-    self.text = Mode.LEFT_CAP .. " " .. raw_text .. " " .. Mode.RIGHT_CAP
+    self.text = Mode.LEFT_CAP .. raw_text .. Mode.RIGHT_CAP
     self.cap_hl_name = self.hl_name .. "Cap"
     local resolved = vim.api.nvim_get_hl(0, { name = self.hl_name, link = false })
     local normal = vim.api.nvim_get_hl(0, { name = "Normal", link = false })

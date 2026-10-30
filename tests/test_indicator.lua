@@ -57,8 +57,8 @@ T["hooks"]["insert モードに入ると英字が出て、出ると閉じる"] =
   child.type_keys("i")
   local f = floats()
   eq(#f, 1)
-  eq(f[1].text, "英字")
-  eq(f[1].width, 4)
+  eq(f[1].text, "Aa")
+  eq(f[1].width, 2)
   eq(f[1].hl, "SkkeletonIndicatorEiji")
   child.type_keys("<Esc>")
   eq(#floats(), 0)
@@ -68,12 +68,12 @@ T["hooks"]["mode-changed でテキスト、幅、ハイライトが変わる"] =
   setup({})
   child.type_keys("i")
   local cases = {
-    { "hira", "ひら", 4, "SkkeletonIndicatorHira" },
-    { "kata", "カタ", 4, "SkkeletonIndicatorKata" },
-    { "hankata", "半ｶﾀ", 4, "SkkeletonIndicatorHankata" },
-    { "zenkaku", "全英", 4, "SkkeletonIndicatorZenkaku" },
-    { "abbrev", "abbr", 4, "SkkeletonIndicatorAbbrev" },
-    { "", "英字", 4, "SkkeletonIndicatorEiji" },
+    { "hira", "あ", 2, "SkkeletonIndicatorHira" },
+    { "kata", "ア", 2, "SkkeletonIndicatorKata" },
+    { "hankata", "ｶﾅ", 2, "SkkeletonIndicatorHankata" },
+    { "zenkaku", "Ａ", 2, "SkkeletonIndicatorZenkaku" },
+    { "abbrev", "ab", 2, "SkkeletonIndicatorAbbrev" },
+    { "", "Aa", 2, "SkkeletonIndicatorEiji" },
   }
   for _, c in ipairs(cases) do
     child.g["skkeleton#mode"] = c[1]
@@ -89,7 +89,7 @@ T["hooks"]["未知のモード名は英字になる"] = function()
   setup({})
   child.g["skkeleton#mode"] = "unknown"
   child.type_keys("i")
-  eq(floats()[1].text, "英字")
+  eq(floats()[1].text, "Aa")
 end
 
 T["hooks"]["既定のハイライトグループが定義される"] = function()
@@ -108,7 +108,7 @@ T["hooks"]["fadeOutMs 後に閉じる。次の更新でまた出る"] = function
   child.g["skkeleton#mode"] = "hira"
   child.lua("_G.fire('skkeleton-mode-changed')")
   wait(30)
-  eq(floats()[1].text, "ひら")
+  eq(floats()[1].text, "あ")
 end
 
 T["hooks"]["fadeOutMs = 0 なら閉じない"] = function()
@@ -137,7 +137,7 @@ T["hooks"]["alwaysShown = false は skkeleton が有効なときだけ出す"] =
   child.g["skkeleton#mode"] = "hira"
   child.lua("_G.fire('skkeleton-enable-post')")
   wait(30)
-  eq(floats()[1].text, "ひら")
+  eq(floats()[1].text, "あ")
   child.g["skkeleton#enabled"] = false
   child.g["skkeleton#mode"] = ""
   child.lua("_G.fire('skkeleton-disable-post')")
@@ -157,7 +157,7 @@ T["hooks"]["alwaysShown = true は無効でも disable-post で閉じない"] = 
   child.type_keys("i")
   child.lua("_G.fire('skkeleton-disable-post')")
   wait(30)
-  eq(floats()[1].text, "英字")
+  eq(floats()[1].text, "Aa")
 end
 
 T["hooks"]["ignoreFt のファイルタイプでは出ない"] = function()
@@ -236,7 +236,7 @@ T["hooks"]["setup を何度呼んでも 1 つしか出ない。設定は最後�
   child.type_keys("i")
   local f = floats()
   eq(#f, 1)
-  eq(f[1].text, "英字")
+  eq(f[1].text, "Aa")
   eq(#child.api.nvim_get_autocmds({ group = "skkeleton-indicator" }), 10)
 end
 
@@ -260,7 +260,7 @@ T["hooks"]["style = rounded / minimal / pill と winblend が反映される"] =
   child.g["skkeleton#mode"] = "hira"
   child.type_keys("i")
   local f3 = floats()[1]
-  eq(f3.text, "\238\130\182 ひら \238\130\180")
+  eq(f3.text, "\238\130\182あ\238\130\180")
   eq(#f3.marks, 3)
   eq(f3.marks[1][4].hl_group, "SkkeletonIndicatorHiraCap")
   eq(f3.marks[2][4].hl_group, "SkkeletonIndicatorHira")
@@ -273,12 +273,12 @@ T["hooks"]["コマンドラインモード（: や /）でもインジケータ�
   child.type_keys(":")
   local f = floats()
   eq(#f, 1)
-  eq(f[1].text, "英字")
+  eq(f[1].text, "Aa")
   eq(f[1].relative, "editor")
 
   child.g["skkeleton#mode"] = "hira"
   child.lua("_G.fire('skkeleton-mode-changed')")
-  eq(floats()[1].text, "ひら")
+  eq(floats()[1].text, "あ")
 
   child.type_keys("<Esc>")
   eq(#floats(), 0)
@@ -362,7 +362,7 @@ T["hooks"]["fade_epoch により古いタイマーコールバックが新しい
   -- fade_epoch が上がっているため、古いタイマーで閉じずにひらが出ている
   local f = floats()
   eq(#f, 1)
-  eq(f[1].text, "ひら")
+  eq(f[1].text, "あ")
   -- 更新後の fadeOutMs が経過すると閉じる
   wait(100)
   eq(#floats(), 0)
@@ -388,7 +388,7 @@ T["config"]["setup は既定値から作り直す"] = function()
   child.lua("_G.cfg = require('skkeleton.indicator.config')")
   child.lua("_G.cfg.setup({ eijiText = 'X', fadeOutMs = 1 })")
   child.lua("_G.cfg.setup({})")
-  eq(child.lua_get("{ _G.cfg.eiji_text, _G.cfg.fade_out_ms, _G.cfg.always_shown }"), { "英字", 3000, true })
+  eq(child.lua_get("{ _G.cfg.eiji_text, _G.cfg.fade_out_ms, _G.cfg.always_shown }"), { "Aa", 3000, true })
 end
 
 -- strings（skkeleton_indicator.nvim の strings.test.lua の移植）
