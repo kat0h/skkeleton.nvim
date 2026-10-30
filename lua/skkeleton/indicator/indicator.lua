@@ -239,13 +239,23 @@ function Indicator:insert_rect(mode, border)
   end
   -- カーソルのセル（pre-edit の直後）
   local ccol = text_left + rel
-  local cursor_cell = { row, ccol, 1, 1 }
+  local cursor_row = row
+  -- virtualedit 設定時にカーソル直後がタブの場合、
+  -- Neovim は端末カーソルを pre-edit の後ろではなく先頭セル (sp.col) に描画する (#35)
+  local ve = vim.wo[win].virtualedit ~= "" and vim.wo[win].virtualedit or vim.o.virtualedit
+  local is_tab = cur[2] < #line and line:sub(cur[2] + 1, cur[2] + 1) == "\t"
+  local ve_active = ve:find("all") ~= nil or ve:find("insert") ~= nil
+  if is_tab and ve_active then
+    ccol = sp.col - 1
+    cursor_row = sp.row - 1
+  end
+  local cursor_cell = { cursor_row, ccol, 1, 1 }
   local first_row = occupied[1] and occupied[1][1] or row
 
   local b = (border ~= nil and border ~= "none" and border ~= "shadow") and 1 or 0
   local h, w = 1 + 2 * b, mode.width + 2 * b
   local bottom = vim.o.lines - math.max(1, vim.o.cmdheight)
-  local want = { row + config.row, ccol + config.col }
+  local want = { cursor_row + config.row, ccol + config.col }
   local function ok(r, c)
     if r < 0 or c < 0 or r + h > bottom or c + w > vim.o.columns then
       return false
@@ -263,7 +273,7 @@ function Indicator:insert_rect(mode, border)
   end
   local max_col = vim.o.columns - w
   -- 先に下と上（右端なら画面に収まるところまで左へ寄せる）を試し、打った文字を隠す左側は最後にする
-  local rows = { want[1], row + 1, first_row - h, row - h }
+  local rows = { want[1], cursor_row + 1, first_row - h, cursor_row - h }
   for _, r in ipairs(rows) do
     for _, c in ipairs({ want[2], math.min(want[2], max_col) }) do
       if ok(r, c) then
@@ -271,7 +281,7 @@ function Indicator:insert_rect(mode, border)
       end
     end
   end
-  for _, r in ipairs({ row, row + 1, first_row - h }) do
+  for _, r in ipairs({ cursor_row, cursor_row + 1, first_row - h }) do
     if ok(r, ccol - w) then
       return { r, ccol - w }
     end
