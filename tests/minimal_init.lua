@@ -9,6 +9,8 @@ vim.opt.runtimepath = { vim.env.VIMRUNTIME, root, mini }
 -- tests/helpers.lua などを require できるようにする
 package.path = root .. "/tests/?.lua;" .. package.path
 vim.opt.packpath = {}
+-- tests/ の補助（helpers、core_helpers など）を require できるようにする
+package.path = root .. "/tests/?.lua;" .. package.path
 vim.o.swapfile = false
 vim.o.shada = ""
 -- テストが書く辞書やキャッシュを手元の環境と分ける
