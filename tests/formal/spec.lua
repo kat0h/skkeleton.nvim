@@ -676,6 +676,15 @@ M.known[#M.known + 1] = {
   reason = "#39: virtualedit でカーソルをタブの途中に進めると、インジケータがずれる",
 }
 
+-- 辞書登録の欄の入力の履歴に、▽ のマーカーごと pre-edit が残る（#44）
+M.known[#M.known + 1] = {
+  property = "cmdline: pre-edit が無ければマーカーを残さない",
+  match = function(keys)
+    return vim.tbl_contains(keys, "<Up>") or vim.tbl_contains(keys, "<Down>")
+  end,
+  reason = "#44: 辞書登録の欄の入力の履歴に、▽ のマーカーごと pre-edit が残る",
+}
+
 function M.is_known(name, keys, msg)
   for _, k in ipairs(M.known) do
     if k.property == name and k.match(keys, msg) then
