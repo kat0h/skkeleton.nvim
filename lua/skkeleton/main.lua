@@ -68,10 +68,9 @@ local function check_stale()
   if not render.is_stale(ctx, vm) then
     return
   end
+  render.clear()
   if vm == "c" then
     render.clean_stale_cmdline()
-  else
-    render.clear()
   end
   mode_mod.initialize_state_with_abbrev(ctx, { "converter" })
   ctx.preedit:output("")
@@ -130,7 +129,7 @@ function M.init(force)
     end,
   })
   -- upstream ではバッファの文字だった pre-edit が <C-u> や矢印キーで消える動きに合わせる
-  vim.api.nvim_create_autocmd({ "TextChangedI", "TextChangedP", "CursorMovedI", "CmdlineChanged" }, {
+  vim.api.nvim_create_autocmd({ "TextChangedI", "TextChangedP", "CursorMovedI", "CmdlineChanged", "CompleteDone" }, {
     group = group,
     callback = check_stale,
   })
@@ -255,10 +254,9 @@ function M.handle_inner(func, opts)
   local ctx = store.context()
   -- 補完の後など pre-edit とバッファが合わなくなったときはリセットする
   if render.is_stale(ctx, short) then
+    render.clear()
     if short == "c" then
       render.clean_stale_cmdline()
-    else
-      render.clear()
     end
     mode_mod.initialize_state_with_abbrev(ctx, { "converter" })
     ctx.preedit:output("")

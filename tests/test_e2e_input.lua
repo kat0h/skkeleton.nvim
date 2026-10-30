@@ -315,4 +315,28 @@ T["preedit renders semantic highlight chunks and inline ghost annotation"] = fun
   })
 end
 
+T["stale preedit: 補完のキャンセルで extmark がずれたらリセットされる (#19)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "ab cd" })
+  child.api.nvim_win_set_cursor(0, { 1, 5 })
+  child.type_keys("a")
+  type("<Plug>(skkeleton-enable)")
+  child.type_keys("Kan<C-n>R<C-e>")
+  local marks =
+    child.lua_get([[vim.api.nvim_buf_get_extmarks(0, vim.api.nvim_get_namespaces()["skkeleton-preedit"], 0, -1, {})]])
+  eq(#marks, 0)
+end
+
+T["stale preedit: insert 中に <C-r>= で cmdline に入ったとき extmark が残らない (#20)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "ab cd" })
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.type_keys("i")
+  type("<Plug>(skkeleton-enable)")
+  child.type_keys("O<C-r>=1<CR>")
+  local marks =
+    child.lua_get([[vim.api.nvim_buf_get_extmarks(0, vim.api.nvim_get_namespaces()["skkeleton-preedit"], 0, -1, {})]])
+  eq(#marks, 0)
+  local lines = child.api.nvim_buf_get_lines(0, 0, -1, false)
+  eq(lines, { "1ab cd" })
+end
+
 return T

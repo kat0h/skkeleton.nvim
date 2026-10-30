@@ -167,4 +167,14 @@ T["hooks"]["completion.enabled = false never opens the menu"] = function()
   eq(menu_visible(), false)
 end
 
+T["hooks"]["enabling skkeleton closes any previously open completion menu (#24)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "Kanji", "" })
+  child.api.nvim_win_set_cursor(0, { 2, 0 })
+  child.type_keys("iKan")
+  eq(wait("require('blink.cmp').is_menu_visible()"), true)
+  type("<Plug>(skkeleton-enable)")
+  helpers.settle(child)
+  eq(menu_visible(), false)
+end
+
 return T
