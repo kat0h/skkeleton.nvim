@@ -237,7 +237,7 @@ T["hooks"]["setup を何度呼んでも 1 つしか出ない。設定は最後�
   local f = floats()
   eq(#f, 1)
   eq(f[1].text, "Aa")
-  eq(#child.api.nvim_get_autocmds({ group = "skkeleton-indicator" }), 14)
+  eq(#child.api.nvim_get_autocmds({ group = "skkeleton-indicator" }), 15)
 end
 
 T["hooks"]["style = rounded / minimal / pill と winblend が反映される"] = function()

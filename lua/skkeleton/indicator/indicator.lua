@@ -36,6 +36,7 @@ function Indicator.new()
     { "CompleteChanged", "*", self:method("move") },
     { "WinScrolled", "*", self:method("move") },
     { "WinResized", "*", self:method("move") },
+    { "ModeChanged", "*", self:method("on_mode_changed") },
     { "User", "skkeleton-mode-changed", self:method("update") },
     { "User", "skkeleton-disable-post", self:method("update") },
     { "User", "skkeleton-enable-post", self:method("update") },
@@ -330,6 +331,13 @@ function Indicator:on_cmdline_leave()
       self:open()
     end
   end)
+end
+
+-- <C-c> で insert を抜けたときなど InsertLeave が来ない場合も閉じる
+function Indicator:on_mode_changed()
+  if not Modes.is_active() and self:is_opened() then
+    self:close()
+  end
 end
 
 -- skkeleton の User イベントで呼ばれる。InsertLeave のときも mode-changed が来るので、

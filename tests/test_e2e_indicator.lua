@@ -189,6 +189,16 @@ T["is closed when insert is left with <C-c> (#27)"] = function()
   eq(positions(), vim.NIL)
 end
 
+T["is closed when insert is left with <C-c> without enabling skkeleton (#27)"] = function()
+  child.type_keys("i")
+  helpers.settle(child)
+  eq(positions() ~= nil, true)
+  type("<C-c>")
+  helpers.settle(child)
+  eq(child.fn.mode(), "n")
+  eq(positions(), vim.NIL)
+end
+
 T["follows cursor on window scroll (#30)"] = function()
   child.api.nvim_buf_set_lines(0, 0, -1, false, { "line 1", "line 2", "line 3", "line 4", "line 5" })
   child.api.nvim_win_set_cursor(0, { 2, 6 })
