@@ -477,6 +477,15 @@ M.steal = {
   dict = dict,
 }
 
+-- インジケータを切ったもの（ちらつきなどの原因がインジケータかを切り分けるため）
+M.noindicator = {
+  doc = "インジケータを切った既定の設定（原因の切り分け用）",
+  config = { indicator = false },
+  alphabet = base,
+  inits = line_inits,
+  dict = dict,
+}
+
 M.names = {
   "default",
   "modes",

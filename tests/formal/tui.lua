@@ -549,7 +549,7 @@ local function run(keys, plain)
           -- 普通のコマは 1.5 秒、違反が出たコマは 3 秒（最後のコマは agg の --last-frame-duration で 5 秒）
           rec:frame(sess, key, note, note and 3 or 1.5, init_name and i - 1 or i)
           result.violations = {}
-        elseif #result.violations > 0 then
+        elseif #result.violations > 0 and not opts.flicker then
           result.steps = i
           return
         end
