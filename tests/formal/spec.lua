@@ -135,6 +135,16 @@ M.state["buffer: マーカーがバッファに漏れない"] = function(s)
   if s.buftype == "terminal" and (s.ctx_text ~= "" or registering(s)) then
     return
   end
+  -- terminal の前の行は動いているプログラムの出力（<C-c> で ^C つきで残るなど）なので、カーソルの行だけ見る
+  if s.buftype == "terminal" then
+    local l = s.lines[s.cursor[1]] or ""
+    for _, m in ipairs(markers(s)) do
+      if l:find(m, 1, true) then
+        return ("terminal の今の行 %q に %s"):format(l, m)
+      end
+    end
+    return
+  end
   for i, l in ipairs(s.lines) do
     for _, m in ipairs(markers(s)) do
       if l:find(m, 1, true) then
@@ -619,6 +629,27 @@ for _, property in ipairs({
       return vim.tbl_contains(keys, "<C-c>")
     end,
     reason = "#27: insert を <C-c> で抜けると、インジケータが normal モードで残る",
+  }
+end
+
+-- visual から入った cmdline で有効にして抜けると、無効にならない（#28）
+for _, property in ipairs({
+  "preedit: 表示は状態の文字列と一致する",
+  "frame: skkeleton の外でバッファやカーソルが動いたら pre-edit を捨てる",
+  "mapping: 有効なら今のバッファにマッピングがある",
+  "mode: g:skkeleton#mode は内部のモードと同じ（無効なら空）",
+}) do
+  M.known[#M.known + 1] = {
+    property = property,
+    match = function(keys)
+      for _, k in ipairs(keys) do
+        if k == "<C-q>" or k == "<Esc>v" or k == "v" then
+          return true
+        end
+      end
+      return false
+    end,
+    reason = "#28: visual から入った cmdline で有効にして抜けると、skkeleton が無効にならない",
   }
 end
 

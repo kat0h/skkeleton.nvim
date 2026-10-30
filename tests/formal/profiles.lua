@@ -389,6 +389,79 @@ M.okuri = {
   dict = dict,
 }
 
+-- Vim の使い方で、モード・カーソル・ウィンドウがいつもと違う経路で変わるもの。
+-- 特に、キーを押していないのに、タイマーやプラグインがカーソルを奪うもの（LSP の hover、:checktime など）
+local function later(code)
+  -- 少し遅れて起きる（落ち着くのを待つあいだに起きるように、wait_ms より短くする）
+  return ("<Cmd>lua vim.defer_fn(function() %s end, 15)<CR>"):format(code)
+end
+M.steal = {
+  doc = "抜け方・insert の中の移動・タイマーでカーソルやウィンドウを奪う・マウス・画面の幅",
+  config = {},
+  wait_ms = 60,
+  alphabet = {
+    "<C-j>",
+    "Kan",
+    "k",
+    "a",
+    "<Space>",
+    "<CR>",
+    "<C-g>",
+    "<Esc>",
+    "i",
+    -- insert の抜け方
+    "<C-[>",
+    "<C-\\><C-n>",
+    "<C-o>u",
+    "<C-o><C-^>",
+    "<Insert>",
+    -- insert の中での移動と編集
+    "<C-g>j",
+    "<C-x><C-e>",
+    "<C-e>",
+    "<C-y>",
+    "<C-t>",
+    "<C-d>",
+    "<C-a>",
+    "<C-k>a:",
+    "<Home>",
+    "<End>",
+    "<S-Left>",
+    "<Up>",
+    "<Down>",
+    "<PageDown>",
+    -- normal から: 前回の入力を繰り返す、visual を通って cmdline や insert へ
+    ".",
+    "<C-c>",
+    "<Esc>v",
+    "/",
+    ":",
+    "c",
+    "<FocusLost>",
+    "<FocusGained>",
+    -- タイマーで奪う
+    later("pcall(vim.api.nvim_win_set_cursor, 0, { 1, 0 })"),
+    later("vim.api.nvim_buf_set_lines(0, 0, 0, false, { 'ext' })"),
+    later("vim.cmd('wincmd w')"),
+    later(
+      "local b = vim.api.nvim_create_buf(false, true) "
+        .. "vim.api.nvim_open_win(b, true, { relative = 'editor', row = 3, col = 3, width = 10, height = 2 })"
+    ),
+    "<Cmd>lua for _, w in ipairs(vim.api.nvim_list_wins()) do if vim.api.nvim_win_get_config(w).focusable and vim.api.nvim_win_get_config(w).relative ~= '' then pcall(vim.api.nvim_win_close, w, true) end end<CR>",
+    -- マウス（クリックで 2 行目の先頭へ、ホイール）
+    "<Cmd>lua vim.api.nvim_input_mouse('left', 'press', '', 0, 1, 0) vim.api.nvim_input_mouse('left', 'release', '', 0, 1, 0)<CR>",
+    "<Cmd>lua vim.api.nvim_input_mouse('wheel', 'down', '', 0, 0, 0)<CR>",
+    -- 画面の幅
+    "<Cmd>set columns=50<CR>",
+    "<Cmd>set columns=80<CR>",
+  },
+  inits = {
+    ["#mid"] = { lines = { "ab cd", "ef gh", "ij" }, cursor = { 1, 2 }, keys = "i" },
+    ["#eol"] = { lines = { "ab cd", "ef gh", "ij" }, cursor = { 2, 4 }, keys = "a" },
+  },
+  dict = dict,
+}
+
 M.names = {
   "default",
   "modes",
