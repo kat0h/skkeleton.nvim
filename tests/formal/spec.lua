@@ -312,7 +312,9 @@ M.state["cmdline: カーソルの前は pre-edit で終わり、マーカーを�
     return
   end
   local before = s.cmdline:sub(1, s.cmdpos - 1)
-  if s.ctx_text ~= "" and before:sub(-#s.ctx_text) ~= s.ctx_text then
+  -- <Left> などでカーソルだけ動いたときは、次のキーで片付ける（#12 の修正）ので、行末にあるときだけ確かめる
+  local at_end = s.cmdpos == #s.cmdline + 1
+  if at_end and s.ctx_text ~= "" and before:sub(-#s.ctx_text) ~= s.ctx_text then
     return ("cmdline %q（位置 %d）が pre-edit %q で終わらない"):format(s.cmdline, s.cmdpos, s.ctx_text)
   end
   if s.ctx_text == "" then
@@ -496,6 +498,34 @@ for _, property in ipairs({
       return false
     end,
     reason = "#19: ▽ の入力中に補完を入れたり取り消したりすると、pre-edit が行の途中に描かれる",
+  }
+end
+
+-- #12 の残り: 辞書登録の欄で <Tab> などで cmdline に文字が入ると、状態は初期化されるのに ▽ が残る
+M.known[#M.known + 1] = {
+  property = "cmdline: カーソルの前は pre-edit で終わり、マーカーを残さない",
+  match = function(keys, msg)
+    local last = keys[#keys] or ""
+    return (last == "<Tab>" or last:match("^<C%-") ~= nil)
+      and msg ~= nil
+      and msg:find("残っている", 1, true) ~= nil
+  end,
+  reason = "#12: 辞書登録の欄で <Tab> を押すと、▽ が cmdline に残る",
+}
+
+-- #12 の修正で入った退行（#20）。▽ の入力中に <C-r>= で式を入れると、pre-edit の表示だけが残る
+for _, property in ipairs({
+  "preedit: extmark は insert モードの今のバッファのカーソル位置にある",
+  "preedit: 表示は状態の文字列と一致する",
+  "screen: 画面の行はバッファに pre-edit を差し込んだもの",
+  "frame: skkeleton の外でバッファやカーソルが動いたら pre-edit を捨てる",
+}) do
+  M.known[#M.known + 1] = {
+    property = property,
+    match = function(keys)
+      return vim.tbl_contains(keys, "<C-r>=1<CR>")
+    end,
+    reason = "#20: ▽ の入力中に <C-r>= で式を入れると、pre-edit の表示だけが残る",
   }
 end
 
