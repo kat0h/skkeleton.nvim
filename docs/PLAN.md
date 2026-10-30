@@ -98,13 +98,13 @@
 - Phase 1: `nvim --headless -u NONE -l bench/verify.lua` がすべての実装で 0 件不一致になること、`bench/run.lua` の結果の表が目標と並べて `bench/results/` に保存されていること。その表を使ってユーザーに報告する
 
 ## Phase 2 の進め方（2026-10-30）
-- モジュールの担当とインターフェースは [docs/ARCHITECTURE.md](ARCHITECTURE.md) に決めた。実装はサブエージェントに分けて渡し、タスクは GitHub の issue で管理する
-- 計画からの変更: 確定した文字列は `nvim_buf_set_text` ではなく、upstream と同じく `feedkeys` で流す。autoindent（upstream の「new line」のテスト）、`<C-g>u` の undo point、`.` のリピート、略語の展開を保つため。pre-edit を extmark で表示する点は変えない
-- upstream の今のバージョン（`770b265d`）には kakuteiUndo が無いので、v1 の範囲から外す
+- モジュールの担当とインターフェースは [docs/ARCHITECTURE.md](ARCHITECTURE.md) に定義した。実装はサブエージェントに分担して進め、タスクは GitHub の issue で管理する
+- 計画からの変更点: 確定した文字列は `nvim_buf_set_text` ではなく、upstream と同様に `feedkeys` で送出する。autoindent（upstream の「new line」のテスト）、`<C-g>u` の undo point、`.` のリピート、略語展開などの挙動を維持するため。pre-edit を extmark で表示する点は変わらない
+- upstream の対象バージョン（`770b265d`）には `kakuteiUndo` が存在しないため、v1 の対象範囲から外す
 
-### v1 で実装したものと実装しなかったもの（2026-10-30）
-- 実装した: コアの変換（ひらがな、カタカナ、半角カタカナ、全角英数、abbrev、送りあり・なし、接頭辞と接尾辞、数値変換）、SKK 辞書、ユーザー辞書、DB（形式 v1）、辞書登録、候補の popup、insert・cmdline・terminal での入力、インジケータの内蔵、設定のキーの検証
-- 実装しなかった: skkserv、Google 日本語入力、ddc の補完と rank file、yaml と msgpack の辞書、`skkeleton#handle()` と `skkeleton#dangerously_clear_buffer_local_mappings()`、kakuteiUndo。`skkServer*` と `completionRankFile` は upstream の設定をそのまま使えるように、値の確認だけをする
-- 設定に残した互換: `sources` の `deno_kv` は `skk_dictionary` と同じ扱い。`databasePath` は Deno KV のファイルではなく DB を置くディレクトリ
-- 利用者向けの説明は [README.md](../README.md) と `doc/skkeleton.txt`（`:help skkeleton`）に書いた。CI は `.github/workflows/test.yml`（nvim の stable と nightly で `make test`、stylua の確認）
-- `make lint` に含めていた lua-language-server の確認は入れていない
+### v1 の実装範囲と非対応機能（2026-10-30）
+- 実装済み: コアの変換機能（ひらがな、カタカナ、半角カタカナ、全角英数、abbrev、送りあり・なし変換、接頭辞・接尾辞、数値変換）、SKK 辞書、ユーザー辞書、DB キャッシュ（形式 v1）、辞書登録、候補のポップアップ表示、insert・cmdline・terminal モードでの入力、インジケータの内蔵、設定キーのバリデーション
+- 非対応: skkserv、Google 日本語入力、ddc.vim の補完ソースと `completionRankFile`、YAML・MessagePack 形式の辞書、`skkeleton#handle()` および `skkeleton#dangerously_clear_buffer_local_mappings()`、`kakuteiUndo`。なお、`skkServer*` と `completionRankFile` は upstream の設定をそのまま移行できるよう型の検証のみ行う
+- 設定の互換対応: `sources` の `"deno_kv"` は `"skk_dictionary"` と同じものとして扱う。`databasePath` は Deno KV の単一ファイルではなく DB ファイルを配置するディレクトリとして扱う
+- ユーザー向けドキュメントは [README.md](../README.md) および `doc/skkeleton.txt`（`:help skkeleton`）に整備した。CI は `.github/workflows/test.yml`（Neovim の stable と nightly での `make test` および `stylua` チェック）を構成した
+- `make lint` に含める予定だった `lua-language-server` のチェックは今回は見送った

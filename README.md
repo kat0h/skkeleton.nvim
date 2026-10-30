@@ -1,17 +1,17 @@
 # skkeleton.nvim
 
-Neovim で SKK 方式の日本語入力をするためのプラグインです。kuuote さんの [skkeleton](https://github.com/vim-skk/skkeleton) を Neovim 向けに Lua で書き直しています。入力モードの表示は delphinus さんの [skkeleton_indicator.nvim](https://github.com/delphinus/skkeleton_indicator.nvim) を元にしたものを内蔵しています。
+Neovim で SKK 方式の日本語入力を行うプラグインです。kuuote さんの [skkeleton](https://github.com/vim-skk/skkeleton) を Neovim 向けに Lua で再実装したもので、delphinus さんの [skkeleton_indicator.nvim](https://github.com/delphinus/skkeleton_indicator.nvim) をベースにした入力モードのインジケータも内蔵しています。
 
-設定のキー、`<Plug>` マッピング、User イベント、`g:skkeleton#mode` などの変数は skkeleton と同じ名前を使います。すべてを移したわけではありません。使えるものと使えないものは [skkeleton から移る](#skkeleton-から移る) に書きました。
+設定のキー名や `<Plug>` マッピング、`User` イベント、`g:skkeleton#mode` などの変数名は skkeleton と互換性があります。ただし、すべての機能を移植しているわけではありません。対応状況や変更点については「[skkeleton からの移行](#skkeleton-からの移行)」を参照してください。
 
 ## 必要なもの
 
-- Neovim 0.12 で動作を確かめています
-- SKK 辞書。[SKK-JISYO.L](https://skk-dev.github.io/dict/) などを展開して、パスを設定に書きます。辞書は EUC-JP と UTF-8 を自動で判別します
+- Neovim 0.12（動作確認済み）
+- SKK 辞書（[SKK-JISYO.L](https://skk-dev.github.io/dict/) などを展開し、ファイルのパスを設定で指定してください。文字コードは EUC-JP と UTF-8 を自動判別します）
 
 ## インストール
 
-[lazy.nvim](https://github.com/folke/lazy.nvim) の例です。
+[lazy.nvim](https://github.com/folke/lazy.nvim) を使う場合の設定例です。
 
 ```lua
 {
@@ -26,15 +26,15 @@ Neovim で SKK 方式の日本語入力をするためのプラグインです�
 }
 ```
 
-`<C-j>` で SKK の有効と無効を切り替えます。端末バッファでも使うときは、モードに `"t"` を足します。有効にしたあとのキーの割り当ては、`:help skkeleton-keymappings` にあります。
+この例では `<C-j>` で SKK の有効・無効を切り替えます。端末モードでも使う場合は、マッピングのモードに `"t"` を追加してください。SKK が有効な間のキーマッピングについては `:help skkeleton-keymappings` を参照してください。
 
-辞書は最初に使うときに読み込みます。起動直後に準備しておくには `require("skkeleton").initialize()` を呼びます。初回は辞書の DB を作るため、少し時間がかかります。DB は `stdpath("cache")/skkeleton` に置き、次からはこれを引きます。
+辞書は初回使用時に読み込まれます。Neovim の起動時にあらかじめ準備しておく場合は `require("skkeleton").initialize()` を呼び出してください。初回のみ辞書から DB ファイルを生成するため少し時間がかかりますが、生成された DB は `stdpath("cache")/skkeleton` に保存され、次回以降はそのまま利用されます。
 
-設定のすべてのキーと使い方は `:help skkeleton` にまとめています。
+設定項目や使い方の詳細は `:help skkeleton` にまとめています。
 
 ## インジケータ
 
-`setup()` を呼ぶと、カーソルの近くに入力モードを示す小さなウィンドウが出ます。表示の文字、色、位置は `indicator` で変えられます。`false` を渡すと使いません。
+`setup()` を呼ぶと、カーソル付近に現在の入力モードを示す小さなウィンドウが表示されます。表示する文字列や色、位置などは `indicator` オプションで変更できます。無効にする場合は `false` を指定してください。
 
 ```lua
 require("skkeleton").setup({
@@ -46,17 +46,17 @@ require("skkeleton").setup({
   },
 })
 
--- 使わないとき
+-- 無効にする場合
 require("skkeleton").setup({ indicator = false })
 ```
 
-オプションとハイライトグループは `:help skkeleton-indicator` にあります。skkeleton_indicator.nvim と同じ名前です。
+設定可能なオプションとハイライトグループの詳細は `:help skkeleton-indicator` を参照してください。オプション名やハイライトグループ名は skkeleton_indicator.nvim と同じです。
 
-## skkeleton から移る
+## skkeleton からの移行
 
-skkeleton.nvim は skkeleton を置き換えるものです。同じ Neovim に両方を入れず、どちらかだけにしてください。
+skkeleton.nvim は skkeleton を置き換えるプラグインです。同じ Neovim に両方を導入せず、どちらか一方のみを有効にしてください。
 
-設定のキー（`eggLikeNewline` など）はそのまま使えます。呼び出しの名前は次のように変わります。
+設定のキー名（`eggLikeNewline` など）はそのまま引き継げます。関数などの呼び出し方は次のように変わります。
 
 | skkeleton | skkeleton.nvim |
 |---|---|
@@ -69,17 +69,21 @@ skkeleton.nvim は skkeleton を置き換えるものです。同じ Neovim に�
 | `require("skkeleton_indicator").setup({...})` | `require("skkeleton").setup({ indicator = {...} })` |
 | `<Plug>(skkeleton-enable)` ほか | 同じ |
 
-違いがあるところは次のとおりです。
+主な違いは以下のとおりです。
 
-- `databasePath` はディレクトリです。辞書ごとに `<ハッシュ>.db` というファイルをその下に作ります。skkeleton が作った DB のファイルは使わず、新しく作ります。パスがファイルとして存在するか、`skk.db` のように拡張子があるときは、その親ディレクトリを使います。空にすると `stdpath("cache")/skkeleton` です
-- `sources` の `"deno_kv"` は `"skk_dictionary"` と同じ扱いです。どちらを書いても、辞書は DB にして引きます。DB を使うために `databasePath` を設定する必要はありません
-- `skkServer*` と `completionRankFile` は値の確認だけをして使いません
-- 次のものは v1 では使えません。`sources` の `"skk_server"` と `"google_japanese_input"`、ddc の補完ソース、rank file、yaml と msgpack の辞書（JSON の辞書は読めます）、`skkeleton#handle()`、`skkeleton#dangerously_clear_buffer_local_mappings()`
+- `databasePath` にはファイルではなくディレクトリを指定します。指定したディレクトリ内に、辞書ごとの `<ハッシュ>.db` ファイルが生成されます（skkeleton が作成した DB ファイルは使用せず、新しく作成します）。既存のファイルパスや `skk.db` のような拡張子付きのパスが指定された場合は、その親ディレクトリを使用します。省略時（`""`）の保存先は `stdpath("cache")/skkeleton` です。
+- `sources` の `"deno_kv"` は `"skk_dictionary"` と同じものとして扱われます。どちらを指定しても辞書は DB 化して検索されるため、DB を使うために `databasePath` を設定する必要はありません。
+- `skkServer*` と `completionRankFile` は互換性のために型の検証のみ行い、実際の処理では使用しません。
+- 以下の機能には対応していません。
+  - `sources` の `"skk_server"` および `"google_japanese_input"`
+  - ddc.vim の補完ソースおよび `completionRankFile`
+  - YAML 形式・MessagePack 形式の辞書（JSON 形式の辞書には対応しています）
+  - `skkeleton#handle()`、`skkeleton#dangerously_clear_buffer_local_mappings()`
 
-設定の移し方の例です。
+設定の移行例です。
 
 ```lua
--- 移す前（skkeleton）
+-- 移行前（skkeleton）
 vim.fn["skkeleton#config"]({
   globalDictionaries = { "~/.config/skk/SKK-JISYO.L" },
   eggLikeNewline = true,
@@ -92,35 +96,35 @@ require("skkeleton_indicator").setup()
 ```
 
 ```lua
--- 移した後（skkeleton.nvim）
+-- 移行後（skkeleton.nvim）
 local skkeleton = require("skkeleton")
 skkeleton.setup({
   globalDictionaries = { "~/.config/skk/SKK-JISYO.L" },
   eggLikeNewline = true,
-  -- sources と databasePath は書かなくても同じように動く
+  -- sources と databasePath は省略しても同じように動作します
 })
 skkeleton.register_kanatable("rom", { [","] = { "，", "" }, ["."] = { "．", "" } })
 vim.keymap.set({ "i", "c" }, "<C-j>", "<Plug>(skkeleton-toggle)")
--- インジケータは setup() で有効になる
+-- インジケータは setup() で自動的に有効になります
 ```
 
-`databasePath` を残すときは、`~/.cache/skk.db` ではなく `~/.cache/skkeleton` のような専用のディレクトリを指すのを勧めます。`~/.cache/skk.db` のままだと、親の `~/.cache` に DB のファイルが並びます。
+`databasePath` の指定を残す場合は、`~/.cache/skk.db` ではなく `~/.cache/skkeleton` のような専用ディレクトリに変更することを推奨します（`~/.cache/skk.db` のままにすると、親ディレクトリの `~/.cache` 直下に DB ファイルが作られます）。
 
 ## ライセンスと謝辞
 
-zlib ライセンスです（[LICENSE](LICENSE)）。skkeleton と skkeleton_indicator.nvim の著作権表示は [LICENSES/](LICENSES/) にあります。
+ライセンスは zlib ライセンスです（[LICENSE](LICENSE)）。移植元である skkeleton と skkeleton_indicator.nvim の著作権表示は [LICENSES/](LICENSES/) にあります。
 
-入力の仕組み、設定の項目、ドキュメントの多くは、kuuote さんの skkeleton を元にしています。インジケータは delphinus さんの skkeleton_indicator.nvim を元にしています。お二人に感謝します。
+入力処理の仕組みや設定項目、ドキュメントの多くは kuuote さんの skkeleton を元にしています。インジケータ機能は delphinus さんの skkeleton_indicator.nvim を元にしています。両作者に感謝いたします。
 
 ## 開発
 
-テストは [mini.nvim](https://github.com/echasnovski/mini.nvim) の mini.test で動かします。
+テストには [mini.nvim](https://github.com/echasnovski/mini.nvim) の `mini.test` を使用しています。
 
 ```sh
-make test              # 全部。.tests/mini.nvim が無ければ clone する
+make test              # 全テストを実行（.tests/mini.nvim がなければ自動で clone します）
 make test FILE=tests/test_kana.lua
 make lint              # stylua --check
 make fmt
 ```
 
-stylua は `.tests/bin/stylua` があればそれを使います。設計は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)、計画と経緯は [docs/PLAN.md](docs/PLAN.md) にあります。
+`stylua` は `.tests/bin/stylua` が存在すればそちらを優先して使用します。内部設計は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)、開発計画と経緯は [docs/PLAN.md](docs/PLAN.md) を参照してください。

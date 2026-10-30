@@ -1,23 +1,23 @@
-*skkeleton.txt*	Neovim 向けの SKK 日本語入力
+*skkeleton.txt*	Neovim 向けの SKK 日本語入力プラグイン
 
 Author: Kota Kato (kat0h)
 License: zlib
 
-このドキュメントは kuuote さんの skkeleton の doc/skkeleton.jax と
+このドキュメントは kuuote さんの skkeleton の doc/skkeleton.jax および
 doc/skkeleton-functions.jax（Copyright (c) 2021 kuuote、zlib ライセンス）、
 delphinus さんの skkeleton_indicator.nvim の doc/skkeleton_indicator.jax
-（Copyright (c) 2021 Yasushi Jinnouchi、zlib ライセンス）の文章を元にして、
-skkeleton.nvim の動作に合わせて書き直したものです。元の表示は LICENSES/ に
-あります。
+（Copyright (c) 2021 Yasushi Jinnouchi、zlib ライセンス）を元に、
+skkeleton.nvim の仕様に合わせて加筆・修正したものです。元の著作権表示は
+LICENSES/ ディレクトリにあります。
 
 ==============================================================================
-目次                                                        *skkeleton-contents*
+目次                                                      *skkeleton-contents*
 
   はじめに ............................ |skkeleton-introduction|
-  インストールと最小の設定 ............ |skkeleton-install|
+  インストールと最小限の設定 .......... |skkeleton-install|
   Lua API ............................. |skkeleton-api|
   マッピング .......................... |skkeleton-keymappings|
-  機能 ................................ |skkeleton-functions|
+  機能一覧 ............................ |skkeleton-functions|
   設定 ................................ |skkeleton-config|
   かなテーブルとキーマップ ............ |skkeleton-kanatable|
   フックと変数 ........................ |skkeleton-hooks|
@@ -27,23 +27,24 @@ skkeleton.nvim の動作に合わせて書き直したものです。元の表�
   skkeleton からの移行 ................ |skkeleton-migration|
 
 ==============================================================================
-はじめに                                                *skkeleton-introduction*
+はじめに                                              *skkeleton-introduction*
 
-*skkeleton.nvim* は Neovim で SKK 方式の日本語入力をするプラグインです。
-skkeleton を Neovim 向けに Lua で書き直したものです。
-入力中の文字（pre-edit）は、バッファに書かずに extmark の virtual text で
-表示します。確定した文字だけがバッファに入ります。
+*skkeleton.nvim* は Neovim で SKK 方式の日本語入力を行うプラグインです。
+skkeleton を Neovim 向けに Lua で再実装しています。
+変換確定前の文字列（pre-edit）はバッファに直接書き込まず、extmark の仮想テキ
+スト（virtual text）として表示します。確定した文字列のみがバッファに挿入され
+ます。
 
 必要なもの~
 
-- Neovim 0.12 で動作を確かめています。
-- SKK 辞書。SKK-JISYO.L などを展開して |skkeleton-config-globalDictionaries|
-  に書きます。
+- Neovim 0.12（動作確認済み）
+- SKK 辞書（SKK-JISYO.L などを展開し、|skkeleton-config-globalDictionaries|
+  でパスを指定してください）
 
 ==============================================================================
-インストールと最小の設定                                    *skkeleton-install*
+インストールと最小限の設定                                 *skkeleton-install*
 
-lazy.nvim の例です。
+lazy.nvim を使う場合の設定例です。
 >lua
     {
       "kat0h/skkeleton.nvim",
@@ -56,97 +57,105 @@ lazy.nvim の例です。
       end,
     }
 <
-辞書の DB は、最初に使うときに作ります。起動時に準備するには、|skkeleton-faq|
-の |skkeleton-faq-initialize| を見てください。
+辞書の DB ファイルは初回使用時に自動生成されます。Neovim の起動時にあらかじめ
+準備しておきたい場合は、|skkeleton-faq| の |skkeleton-faq-initialize| を参照し
+てください。
 
 ==============================================================================
-Lua API                                                          *skkeleton-api*
+Lua API                                                        *skkeleton-api*
 
-すべて `require("skkeleton")` が返す表の関数です。
+以下の関数はすべて `require("skkeleton")` が返すテーブルから呼び出します。
 
-                                                          *skkeleton.setup()*
+                                                           *skkeleton.setup()*
 setup([{opts}])
-	設定します。{opts} のキーは |skkeleton-config| のものです。`indicator`
-	だけは |skkeleton-indicator| の設定になります。何度でも呼べます。2 回目
-	以降は書いたキーだけを変えます。
-	未知のキーや型の違う値があるときは、何も変えずにエラーにします。
-	辞書に関する設定は最初に使う前に済ませてください。
+	プラグインの設定を行います。{opts} には |skkeleton-config| の各設定
+	キーを指定します（`indicator` のみ |skkeleton-indicator| の設定テー
+	ブルまたは boolean を指定します）。複数回呼び出すことができ、2 回目
+	以降は指定したキーのみが上書きされます。
+	未知のキーや型の異なる値が含まれている場合は、設定を変更せずにエラーを
+	送出します。
+	辞書に関する設定は、SKK を初めて有効化する前に行ってください。
 
-                                                         *skkeleton.enable()*
+                                                          *skkeleton.enable()*
 enable()
 	SKK を有効にします。|<Plug>(skkeleton-enable)| と同じです。
 
-                                                        *skkeleton.disable()*
+                                                         *skkeleton.disable()*
 disable()
 	SKK を無効にします。|<Plug>(skkeleton-disable)| と同じです。
 
-                                                         *skkeleton.toggle()*
+                                                          *skkeleton.toggle()*
 toggle()
-	有効と無効を切り替えます。|<Plug>(skkeleton-toggle)| と同じです。
+	SKK の有効・無効を切り替えます。|<Plug>(skkeleton-toggle)| と同じで
+	す。
 
-                                                           *skkeleton.mode()*
+                                                            *skkeleton.mode()*
 mode()
-	今のモードの名前を返します。無効なときは空の文字列です。
-	"hira"、"kata"、"hankata"、"zenkaku"、"abbrev" があります。
+	現在の入力モード名を返します。SKK が無効なときは空文字列（`""`）を返し
+	ます。有効時は `"hira"`、`"kata"`、`"hankata"`、`"zenkaku"`、
+	`"abbrev"` のいずれかを返します。
 
-                                                     *skkeleton.is_enabled()*
+                                                      *skkeleton.is_enabled()*
 is_enabled()
-	有効なら true を返します。
+	SKK が有効であれば `true`、無効であれば `false` を返します。
 
-                                                       *skkeleton.get_config()*
+                                                      *skkeleton.get_config()*
 get_config()
-	今の設定の表を返します。書き換えずに読むために使ってください。
+	現在の設定テーブルを返します。読み取り用として使用し、直接書き換えない
+	でください。
 
                                                       *skkeleton.initialize()*
 initialize([{force}])
-	初期化して、辞書を UI を止めずに準備します。DB を作る処理は小分けにして
-	進めます。{force} が真なら、初期化し直します。
-	|skkeleton-initialize-pre| と |skkeleton-initialize-post| のフックは、
-	最初の 1 回だけ実行されます。
+	初期化を行い、UI をブロックせずに辞書を読み込みます。DB ファイルの生成
+	は非同期に分割して実行されます。{force} が真の場合は再初期化を行いま
+	す。
+	|skkeleton-initialize-pre| および |skkeleton-initialize-post| フックは
+	初回の初期化時のみ実行されます。
 
-                                                  *skkeleton.update_database()*
+                                                 *skkeleton.update_database()*
 update_database({path} [, {encoding} [, {force}]])
-	{path} の辞書の DB を作り直します。
-	- {path}: 辞書のパス。
-	- {encoding}: 辞書のエンコーディング。省略するか空だと自動で判別します。
-	- {force}: 真なら、辞書が変わっていなくても作り直します。
-	偽のときは、辞書の大きさか更新時刻が DB の記録と合わないときだけ作り
-	直します。
+	{path} に指定した辞書の DB ファイルを更新（再生成）します。
+	- {path}: 辞書ファイルのパス。
+	- {encoding}: 辞書の文字コード。省略または空文字列の場合は自動判別しま
+	  す。
+	- {force}: 真の場合は、辞書ファイルが変更されていなくても DB を再生成
+	  します。偽（省略時）の場合は、辞書ファイルのサイズまたは更新時刻が
+	  DB の記録と異なるときのみ再生成します。
 
-                                                  *skkeleton.register_keymap()*
+                                                 *skkeleton.register_keymap()*
 register_keymap({state}, {key}, {func})
-	|skkeleton-kanatable-keymap| を見てください。
+	|skkeleton-kanatable-keymap| を参照してください。
 
-                                               *skkeleton.register_kanatable()*
+                                              *skkeleton.register_kanatable()*
 register_kanatable({name}, {tbl} [, {create}])
-	|skkeleton-kanatable-register| を見てください。
+	|skkeleton-kanatable-register| を参照してください。
 
-                                          *skkeleton.register_kanatable_file()*
+                                         *skkeleton.register_kanatable_file()*
 register_kanatable_file({name}, {path} [, {encoding} [, {create}]])
-	|skkeleton-kanatable-file| を見てください。
+	|skkeleton-kanatable-file| を参照してください。
 
-Vim script の関数として `skkeleton#is_enabled()` と `skkeleton#mode()` だけを
-用意しています（ステータスラインから呼ぶためです）。
+なお、ステータスラインなどから呼び出せるよう、Vim script 関数として
+`skkeleton#is_enabled()` と `skkeleton#mode()` も提供しています。
 
 ==============================================================================
-マッピング                                                *skkeleton-keymappings*
+マッピング                                             *skkeleton-keymappings*
 
-次の |<Plug>| マッピングは挿入モード、コマンドラインモード、端末モード
-で使えます。有効なときは、直接入力の状態でだけ働きます。
+以下の |<Plug>| マッピングは挿入モード、コマンドラインモード、端末モードで使用
+できます。SKK が有効な間は、未入力（直接入力）状態のときのみ機能します。
 
-<Plug>(skkeleton-enable)                             *<Plug>(skkeleton-enable)*
+<Plug>(skkeleton-enable)                            *<Plug>(skkeleton-enable)*
 	SKK を有効にします。
 
-<Plug>(skkeleton-disable)                           *<Plug>(skkeleton-disable)*
+<Plug>(skkeleton-disable)                          *<Plug>(skkeleton-disable)*
 	SKK を無効にします。
 
-<Plug>(skkeleton-toggle)                             *<Plug>(skkeleton-toggle)*
-	有効と無効を切り替えます。
+<Plug>(skkeleton-toggle)                            *<Plug>(skkeleton-toggle)*
+	SKK の有効・無効を切り替えます。
 >lua
     vim.keymap.set({ "i", "c", "t" }, "<C-j>", "<Plug>(skkeleton-toggle)")
 <
-有効なあいだは、次のキーが |skkeleton-functions| に割り当てられています。
-|skkeleton.register_keymap()| で変えられます。
+SKK が有効な間は、既定で以下のキーに |skkeleton-functions| の機能が割り当てら
+れています。割り当ては |skkeleton.register_keymap()| で変更できます。
 
 input:
 	<BS>      |skkeleton-functions-deleteChar|
@@ -166,36 +175,38 @@ henkan:
 	X         |skkeleton-functions-purgeCandidate|
 	>         |skkeleton-functions-suffix|
 
-                                                       *g:skkeleton#mapped_keys*
+                                                     *g:skkeleton#mapped_keys*
 g:skkeleton#mapped_keys
-	SKK が有効なあいだにバッファローカルで奪うキーの一覧に、足すキーです。
-	表記は |<>| の形です。既定のキーは英数字、記号、`<BS>`、`<C-h>`、
-	`<CR>`、`<Space>`、`<C-q>`、`<C-j>`、`<C-g>`、`<Esc>` などです。
-	足したキーには |skkeleton.register_keymap()| で機能を割り当てられます。
+	SKK が有効な間にバッファローカルでマッピングする対象キーを追加するため
+	のリストです。キーは |<>| 表記で指定します。
+	既定では英数字、各種記号、`<BS>`、`<C-h>`、`<CR>`、`<Space>`、
+	`<C-q>`、`<C-j>`、`<C-g>`、`<Esc>` などが対象になっています。それ以外
+	のキーに |skkeleton.register_keymap()| で機能を割り当てたい場合は、こ
+	の変数にキーを追加してください。
 >lua
     vim.g["skkeleton#mapped_keys"] = { "<C-l>" }
     require("skkeleton").register_keymap("input", "<C-l>", "zenkaku")
 <
 ==============================================================================
-機能                                                       *skkeleton-functions*
+機能一覧                                                 *skkeleton-functions*
 
-キーに割り当てられる機能です。名前は skkeleton と同じです。括弧は使える
-状態と、既定で割り当てたキーです。
+キーに割り当て可能な機能の一覧です。機能名は skkeleton と同じです。括弧内は
+利用可能な状態（state）と既定のキー割り当てを示します。
 
 kakutei                                          *skkeleton-functions-kakutei*
 	(input: <NL>, henkan: <NL>)
-	入力中や変換中の文字列を確定します。何も入力していないときは、かな
-	入力などのモードを解除します。
+	入力中または変換中の文字列を確定します。未入力状態のときは、カナ入力な
+	どのモードを解除してひらがなモードに戻ります。
 
 newline                                          *skkeleton-functions-newline*
 	(input: <CR>, henkan: <CR>)
-	今の入力を確定して改行します。確定のあとに改行するかどうかは
-	|skkeleton-config-eggLikeNewline| で変えられます。
+	現在の入力を確定して改行します。確定後に改行を挿入するかどうかは
+	|skkeleton-config-eggLikeNewline| で変更できます。
 
 cancel                                            *skkeleton-functions-cancel*
 	(input: <C-g>, henkan: <C-g>)
-	今の入力を取り消します。どこまで戻るかは
-	|skkeleton-config-immediatelyCancel| で変えられます。
+	現在の入力や変換をキャンセルします。キャンセル時の戻り先は
+	|skkeleton-config-immediatelyCancel| で変更できます。
 
 disable                                          *skkeleton-functions-disable*
 	(input, henkan)
@@ -203,116 +214,124 @@ disable                                          *skkeleton-functions-disable*
 
 escape                                            *skkeleton-functions-escape*
 	(input: <Esc>, henkan: <Esc>)
-	挿入モードかコマンドラインモードを抜けます。|skkeleton-config-keepState|
-	が真なら、次に入ったときに SKK が有効になります。
+	挿入モードまたはコマンドラインモードを抜けます。
+	|skkeleton-config-keepState| が真の場合は、次回挿入モードに入った際に
+	SKK が再び有効になります。
 
 henkanFirst                                  *skkeleton-functions-henkanFirst*
 	(input)
-	変換を始めます。直接入力のときは、かなテーブルの処理をします。
+	変換を開始します。直接入力状態のときは、かなテーブルのルールに従って処
+	理します。
 
 henkanForward                              *skkeleton-functions-henkanForward*
 	(henkan: <Space>)
-	変換候補を次に進めます。
+	次の変換候補に進みます。
 
 henkanBackward                            *skkeleton-functions-henkanBackward*
 	(henkan: x)
-	変換候補を前に戻します。戻りきると入力の状態に戻ります。
+	前の変換候補に戻ります。最初の候補からさらに戻ると、変換前の入力状態に
+	戻ります。
 
 purgeCandidate                            *skkeleton-functions-purgeCandidate*
 	(input, henkan: X)
-	今選んでいる変換候補をユーザー辞書から消します。変換中でなければ、
-	直前に確定した候補が対象です。消したときは入力の状態を解除します。
+	選択中の変換候補をユーザー辞書から削除します。変換中でない場合は、直前
+	に確定した候補が対象になります。削除後は未入力状態に戻ります。
 
 henkanInput                                  *skkeleton-functions-henkanInput*
 	(henkan)
-	変換候補を確定して、続けて文字を入力します。
+	現在選択している変換候補を確定し、続けて次の文字を入力します。
 
 kakuteiFeed                                  *skkeleton-functions-kakuteiFeed*
 	(input)
-	直接入力のときに、確定できる入力があれば確定します（ローマ字の
-	「n」が残っているときなど）。
+	直接入力状態のときに、未確定のローマ字（「n」など）が残っていれば確定
+	します。
 
 henkanPoint                                  *skkeleton-functions-henkanPoint*
 	(input)
-	変換ポイントを置きます。いわゆる sticky key です。
+	変換開始位置（▽）を設定します。いわゆる sticky key として使います。
 
 deleteChar                                    *skkeleton-functions-deleteChar*
 	(input: <BS>, <C-h>)
-	入力を 1 文字消します。変換ポイントまで戻ると、それを解除します。
+	入力中の文字を 1 文字削除します。変換開始位置まで削除すると、変換入力
+	状態を解除します。
 
 hirakana                                        *skkeleton-functions-hirakana*
 	(input)
-	ひらがなモードに入ります。
+	ひらがな入力モードに切り替えます。
 
 katakana                                        *skkeleton-functions-katakana*
 	(input)
-	カタカナモードに入ります。変換ポイントがあるときは、カタカナに変換
-	します。
+	カタカナ入力モードに切り替えます。変換入力中（▽）の場合は、入力中の文
+	字列をカタカナに変換して確定します。
 
 hankatakana                                  *skkeleton-functions-hankatakana*
 	(input: <C-q>)
-	半角カタカナモードに入ります。変換ポイントがあるときは、半角カタカナ
-	に変換します。
+	半角カタカナ入力モードに切り替えます。変換入力中（▽）の場合は、入力中
+	の文字列を半角カタカナに変換して確定します。
 
 zenkaku                                          *skkeleton-functions-zenkaku*
 	(input)
-	全角英数モードに入ります。
+	全角英数入力モードに切り替えます。
 
 abbrev                                            *skkeleton-functions-abbrev*
 	(input)
-	abbrev モードに入ります。
+	abbrev（英数変換）モードに切り替えます。
 
 prefix                                            *skkeleton-functions-prefix*
 	(input: >)
-	接頭辞の入力を始めます。始められないときは、そのキーをかな入力として
-	扱います。
+	接頭辞の入力を開始します。開始できない状態では、そのキーを通常のかな入
+	力として処理します。
 
 suffix                                            *skkeleton-functions-suffix*
 	(henkan: >)
-	接尾辞の入力を始めます。
+	接尾辞の入力を開始します。
 
 ==============================================================================
-設定                                                          *skkeleton-config*
+設定                                                        *skkeleton-config*
 
-|skkeleton.setup()| に表で渡します。キーの名前は skkeleton と同じです。パス
-は先頭の `~` だけを展開します。
+|skkeleton.setup()| にテーブルを渡して設定します。キー名は skkeleton と同じで
+す。ファイルパスでは先頭の `~` がホームディレクトリに展開されます。
 >lua
     require("skkeleton").setup({
       eggLikeNewline = true,
     })
 <
 acceptIllegalResult                     *skkeleton-config-acceptIllegalResult*
-	(既定: false)
-	真にすると、入力に失敗したローマ字がバッファに残ります。
+	(既定値: false)
+	真にすると、かな変換に失敗した不完全なローマ字もそのままバッファに残し
+	ます。
 
 completionRankFile                       *skkeleton-config-completionRankFile*
-	(既定: "")
-	v1 では使いません。skkeleton の設定をそのまま使えるように、文字列の
-	確認だけをします。
+	(既定値: "")
+	skkeleton との設定互換性のために用意されています。型の検証のみを行い、
+	実際の処理では使用しません。
 
 databasePath                                   *skkeleton-config-databasePath*
-	(既定: "")
-	辞書の DB を置くディレクトリです。空なら `stdpath("cache")/skkeleton`
-	です。DB は辞書ごとに `<辞書のパスのハッシュ>.db` というファイルです。
-	パスがファイルとして存在するか、`skk.db` のように拡張子があるとき
-	は、その親のディレクトリを使います。|skkeleton-faq-database| も見て
-	ください。
+	(既定値: "")
+	辞書の DB ファイルを保存するディレクトリです。空文字列の場合は
+	`stdpath("cache")/skkeleton` が使われます。指定したディレクトリ内に、
+	辞書ごとの `<辞書パスのハッシュ>.db` ファイルが作成されます。
+	指定したパスが既存のファイルである場合や、`skk.db` のように拡張子を持
+	つ場合は、その親ディレクトリが使用されます。|skkeleton-faq-database|
+	も参照してください。
 
 debug                                                 *skkeleton-config-debug*
-	(既定: false。|g:skkeleton#debug| が真なら true)
-	真にすると、処理するキーなどをメッセージで知らせます。
+	(既定値: false。|g:skkeleton#debug| が真なら true)
+	真にすると、入力されたキーなどのデバッグ情報をメッセージ出力します。
 
 eggLikeNewline                               *skkeleton-config-eggLikeNewline*
-	(既定: false)
-	真にすると、変換モードで改行キーを押したときに、確定だけをします。
+	(既定値: false)
+	真にすると、変換中に改行キー（|skkeleton-functions-newline|）を押した
+	際に、改行を挿入せず確定のみを行います。
 
 globalDictionaries                       *skkeleton-config-globalDictionaries*
-	(既定: {})
-	グローバル辞書です。パスの文字列か、パスとエンコーディングの組の
-	配列を並べます。エンコーディングを省くと自動で判別します（EUC-JP と
-	UTF-8 を判別できます）。圧縮した辞書は展開してから指定してくださ
-	い。拡張子が `.json` の辞書は JSON の辞書として読みます。yaml と
-	msgpack の辞書は読めません。
+	(既定値: {})
+	使用するグローバル辞書のリストです。ファイルパスの文字列、または
+	`{ パス, エンコーディング }` の配列を並べて指定します。エンコーディン
+	グを省略した場合は自動判別します（EUC-JP と UTF-8 に対応）。圧縮された
+	辞書は展開してから指定してください。拡張子が `.json` のファイルは
+	JSON 辞書として読み込みます（YAML 形式および MessagePack 形式には対応
+	していません）。
 >lua
     globalDictionaries = {
       { "/usr/share/skk/SKK-JISYO.L", "euc-jp" },
@@ -320,113 +339,122 @@ globalDictionaries                       *skkeleton-config-globalDictionaries*
     }
 <
 globalKanaTableFiles                   *skkeleton-config-globalKanaTableFiles*
-	(既定: {})
-	複数のかなテーブルを使うときに指定する、かなテーブルのファイルです。
-	書き方は |skkeleton-config-globalDictionaries| と同じです。
+	(既定値: {})
+	かなテーブル定義ファイルのリストです。指定形式は
+	|skkeleton-config-globalDictionaries| と同じです。
 >lua
     globalKanaTableFiles = { { "/usr/share/skk/azik_us.rule", "euc-jp" } }
 <
 immediatelyCancel                         *skkeleton-config-immediatelyCancel*
-	(既定: true)
-	真にすると、候補選択などで |skkeleton-functions-cancel| を使ったとき
-	に、一気に未入力の状態へ戻ります。
+	(既定値: true)
+	真にすると、変換候補の選択中などに |skkeleton-functions-cancel| を実行
+	した際、1 段階ずつ戻るのではなく一気に未入力状態へ戻ります。
 
 immediatelyDictionaryRW             *skkeleton-config-immediatelyDictionaryRW*
-	(既定: true)
-	真にすると、変換と確定のたびにユーザー辞書を読み書きします。Neovim を
-	複数動かすときに役立ちます。
+	(既定値: true)
+	真にすると、変換や確定のたびにユーザー辞書を読み書きします。複数の
+	Neovim インスタンス間でユーザー辞書を共有する場合に有効です。
 
 immediatelyOkuriConvert             *skkeleton-config-immediatelyOkuriConvert*
-	(既定: true)
-	真にすると、送りあり変換の途中で「っ」を直接打った時点で、タ行の送り
-	仮名が打たれたとみなして変換を始めます。ローマ字の連続入力で「っ」を
-	入力するときのように、続く文字があるときには影響しません。
+	(既定値: true)
+	真にすると、送りあり変換の途中で「っ」が直接入力された時点で、タ行の送
+	り仮名が入力されたものとみなして直ちに変換を開始します。ローマ字の連続
+	入力で「っ」を入力する場合のように、後続の未確定文字がある場合には影響
+	しません。
 
 kanaTable                                         *skkeleton-config-kanaTable*
-	(既定: "rom")
-	使うかなテーブルの名前です。存在するテーブルだけを指定できます。まだ
-	無いテーブルを指定するには、先に |skkeleton.register_kanatable()| で
-	作ってください。
+	(既定値: "rom")
+	使用するかなテーブルの名前です。登録済みのテーブル名のみ指定できます。
+	独自のテーブルを使う場合は、先に |skkeleton.register_kanatable()| など
+	でテーブルを作成してください。
 
 keepMode                                           *skkeleton-config-keepMode*
-	(既定: false)
-	真にすると、無効にしても前のモード（カナ入力など）を覚えておきます。
+	(既定値: false)
+	真にすると、SKK を一度無効にして再度有効にした際、前回の入力モード（カ
+	タカナモードなど）を維持します。
 
 keepState                                         *skkeleton-config-keepState*
-	(既定: false)
-	真にすると、挿入モードを抜けても前の状態を保ちます。
+	(既定値: false)
+	真にすると、SKK が有効なまま挿入モードを抜けた際、次に挿入モードに入っ
+	たときにも有効状態を維持します。
 
 lowercaseMap                                   *skkeleton-config-lowercaseMap*
-	(既定: {})
-	かな入力中に大文字を打つと、小文字にして変換ポイントを置きます。かな
-	テーブルを変えて記号を割り当てているとうまくいかないので、そのとき
-	の変換規則をこの表で指定します。
+	(既定値: {})
+	かな入力中に大文字を入力すると、対応する小文字に変換して変換開始位置を
+	設定します。かなテーブルをカスタマイズして記号キーなどを割り当てている
+	場合、標準の小文字変換では意図通りに動作しないことがあるため、このテー
+	ブルで変換規則を指定します。
 >lua
-    -- AZIK で「っ」を打つための設定
+    -- AZIK で「っ」を入力するための設定例
     lowercaseMap = { ["+"] = ";", [":"] = ";" }
 <
 markerHenkan                                   *skkeleton-config-markerHenkan*
-	(既定: "▽")
-	変換の入力中を示す文字です。
+	(既定値: "▽")
+	変換の読みを入力中であることを示すマーカー文字列です。
 
 markerHenkanSelect                       *skkeleton-config-markerHenkanSelect*
-	(既定: "▼")
-	候補を選んでいる最中を示す文字です。
+	(既定値: "▼")
+	変換候補を選択中であることを示すマーカー文字列です。
 
 registerConvertResult                 *skkeleton-config-registerConvertResult*
-	(既定: false)
+	(既定値: false)
 	真にすると、カタカナ変換などの結果もユーザー辞書に登録します。
 
 selectCandidateKeys                     *skkeleton-config-selectCandidateKeys*
-	(既定: "asdfjkl")
-	候補を選ぶキーです。x 以外の半角英字 7 文字を指定します。
+	(既定値: "asdfjkl")
+	ポップアップ表示された変換候補を選択するためのキーです。`x` 以外の半角
+	英字 7 文字を指定します。
 
 setUndoPoint                                   *skkeleton-config-setUndoPoint*
-	(既定: true)
-	真にすると、変換と確定のときにアンドゥポイントを切ります。
+	(既定値: true)
+	真にすると、変換確定時にアンドゥポイント（|<C-g>u|）を設定します。
 
 showCandidatesCount                     *skkeleton-config-showCandidatesCount*
-	(既定: 4)
-	この数までの候補は、一覧を出さずに 1 つずつ表示して変換します。
+	(既定値: 4)
+	変換候補をポップアップ一覧で表示するまでに、インラインで 1 つずつ表示
+	する候補数です。
 
 skkServerHost                                 *skkeleton-config-skkServerHost*
 skkServerPort                                 *skkeleton-config-skkServerPort*
 skkServerReqEnc                             *skkeleton-config-skkServerReqEnc*
 skkServerResEnc                             *skkeleton-config-skkServerResEnc*
-	(既定: "127.0.0.1"、1178、"euc-jp"、"euc-jp")
-	v1 では使いません。skkeleton の設定をそのまま使えるように、値の確認
-	だけをします。
+	(既定値: "127.0.0.1"、1178、"euc-jp"、"euc-jp")
+	skkeleton との設定互換性のために用意されています。型の検証のみを行い、
+	実際の処理では使用しません。
 
 sources                                             *skkeleton-config-sources*
-	(既定: { "skk_dictionary" })
-	使う変換元の名前です。ユーザー辞書はこの指定によらず必ず使います。
+	(既定値: { "skk_dictionary" })
+	変換候補の取得元のリストです。ユーザー辞書はこの設定にかかわらず常に使
+	用されます。
 
 	"skk_dictionary":
-		|skkeleton-config-globalDictionaries| のグローバル辞書で変換しま
-		す。辞書は DB にして引きます。
+		|skkeleton-config-globalDictionaries| に指定されたグローバル
+		辞書を検索します。辞書は DB 化して高速に検索されます。
 	"deno_kv":
-		"skk_dictionary" と同じです。skkeleton の設定をそのまま使えるよう
-		に受け付けます。
+		`"skk_dictionary"` と同じものとして扱われます。skkeleton の設
+		定をそのまま引き継げるように受け付けています。
 	"skk_server"、"google_japanese_input":
-		v1 では使えません。指定すると警告を出して読み飛ばします。
+		対応していません。指定された場合は警告を表示して無視します。
 
 userDictionary                               *skkeleton-config-userDictionary*
-	(既定: "~/.skkeleton")
-	ユーザー辞書のパスです。エンコーディングは UTF-8 です。
+	(既定値: "~/.skkeleton")
+	ユーザー辞書のファイルパスです。文字コードは UTF-8 で保存されます。
 
 ==============================================================================
-かなテーブルとキーマップ                                    *skkeleton-kanatable*
+かなテーブルとキーマップ                                 *skkeleton-kanatable*
 
-                                              *skkeleton-kanatable-register*
+                                                *skkeleton-kanatable-register*
 register_kanatable({name}, {tbl} [, {create}])
-	かな入力のテーブルに規則を足します。{name} のテーブルに、{tbl} の
-	規則を登録します。{create} が真でないとき、無いテーブルの名前を指定
-	するとエラーになります。{tbl} の値には次のものを使えます。
-	- 文字列: |skkeleton-functions| の機能の名前。
-	- 1 つか 2 つの文字列の配列: かなの定義。1 つ目が入力するかな、2 つ目
-	  がそのあとに続けて入力する文字（省くと空）。「っ」を `tt` で入れ
-	  るときなどに使います。
-	- false: テーブルからその規則を消します。
+	{name} のかなテーブルに {tbl} の変換規則を登録します。未作成のテーブル
+	名を指定する場合は、{create} に `true` を渡す必要があります（省略時ま
+	たは `false` の場合はエラーになります）。{tbl} の各キー（入力文字列）
+	に対する値には以下を指定できます。
+	- 文字列: |skkeleton-functions| の機能名。
+	- 要素数 1 または 2 の文字列配列:
+	  `{ 確定するかな, 次の入力に残す文字 }` の組。第 2 要素を省略した場合
+	  は空文字列になります（`tt` で「っ」を入力し、次の入力用に `t` を残す
+	  場合などに使用します）。
+	- `false`: そのキーの規則をテーブルから削除します。
 >lua
     local skkeleton = require("skkeleton")
     skkeleton.register_kanatable("rom", {
@@ -434,39 +462,43 @@ register_kanatable({name}, {tbl} [, {create}])
       jj = "escape",
       ["z,"] = { "―" },
     })
-    -- 句読点を全角英字にする
+    -- カンマ・ピリオドを全角にする
     skkeleton.register_kanatable("rom", {
       [","] = { "，", "" },
       ["."] = { "．", "" },
     })
-    -- l で小文字を打てるようにする
+    -- l プレフィックスで小書き文字を入力できるようにする
     skkeleton.register_kanatable("rom", {
       l = false,
-      la = { "ぁ" }, li = { "ぃ" }, lu = { "ぅ" }, le = { "ぇ" }, lo = { "ぉ" },
+      la = { "ぁ" }, li = { "ぃ" }, lu = { "ぅ" },
+      le = { "ぇ" }, lo = { "ぉ" },
       lya = { "ゃ" }, lyu = { "ゅ" }, lyo = { "ょ" },
     })
 <
-                                              *skkeleton-kanatable-file*
+                                                    *skkeleton-kanatable-file*
 register_kanatable_file({name}, {path} [, {encoding} [, {create}]])
-	ファイルに書いたかなテーブルの規則を、{name} のテーブルに登録します。
-	{encoding} を省くと自動で判別します。
+	ファイルに定義されたかなテーブルの規則を読み込み、{name} のテーブルに
+	登録します。{encoding} を省略した場合は文字コードを自動判別します。
 
-                                              *skkeleton-kanatable-keymap*
+                                                  *skkeleton-kanatable-keymap*
 register_keymap({state}, {key}, {func})
-	状態ごとのキーマップを定義します。{state} は "input" か "henkan" で
-	す。{key} は |<>| の形のキーです。{func} は |skkeleton-functions| の
-	機能の名前、または Lua の関数です。空の文字列か false を渡すと、その
-	割り当てを消します。割り当てたいキーが奪われないときは、
-	|g:skkeleton#mapped_keys| に足してください。
+	状態（{state}）ごとのキーマップを登録します。{state} には `"input"` ま
+	たは `"henkan"` を指定します。{key} には |<>| 表記のキーを指定します。
+	{func} には |skkeleton-functions| の機能名、または Lua の関数を指定し
+	ます。空文字列（`""`）または `false` を渡すと、そのキーの割り当てを解
+	除します。
+	割り当てたいキーが既定でマッピング対象になっていない場合は、
+	|g:skkeleton#mapped_keys| に追加してください。
 >lua
-    -- 変換モードの x を <BS> に移す
+    -- 変換中の候補戻しを x から <BS> に変更する
     skkeleton.register_keymap("henkan", "<BS>", "henkanBackward")
     skkeleton.register_keymap("henkan", "x", "")
 <
 ==============================================================================
-フックと変数                                                   *skkeleton-hooks*
+フックと変数                                                 *skkeleton-hooks*
 
-|User| イベントで、処理の前後に自分の関数を呼べます。
+|User| 自動コマンドイベントを利用して、各処理の前後に任意の処理を実行できま
+す。
 >lua
     vim.api.nvim_create_autocmd("User", {
       pattern = "skkeleton-mode-changed",
@@ -474,60 +506,63 @@ register_keymap({state}, {key}, {func})
     })
 <
 skkeleton-initialize-pre                            *skkeleton-initialize-pre*
-	最初に使うときに、初期化の前に 1 度だけ実行します。
+	初回の初期化処理の直前に 1 度だけ実行されます。
 
 skkeleton-initialize-post                          *skkeleton-initialize-post*
-	最初に使うときに、初期化のあとに 1 度だけ実行します。
+	初回の初期化処理の直後に 1 度だけ実行されます。
 
 skkeleton-enable-pre                                    *skkeleton-enable-pre*
-	有効にする前に毎回実行します。
+	SKK を有効化する直前に毎回実行されます。
 
 skkeleton-enable-post                                  *skkeleton-enable-post*
-	有効にしたあとに毎回実行します。有効にするときにバッファローカルの
-	マッピングを退避して、無効にするときに戻しています。自分でマッピング
-	を足すときは、このイベントで足してください。
+	SKK を有効化した直後に毎回実行されます。skkeleton.nvim は有効化時に
+	バッファローカルなマッピングを退避し、無効化時に復元します。独自のバッ
+	ファローカルマッピングを追加したい場合は、このイベントで設定してくださ
+	い。
 
 skkeleton-disable-pre                                  *skkeleton-disable-pre*
-	無効にする前に毎回実行します。
+	SKK を無効化する直前に毎回実行されます。
 
 skkeleton-disable-post                                *skkeleton-disable-post*
-	無効にしたあとに毎回実行します。
+	SKK を無効化した直後に毎回実行されます。
 
 skkeleton-mode-changed                                *skkeleton-mode-changed*
-	モードが切り替わったときに実行します。実行の前に `g:skkeleton#mode`
-	を更新します。
+	入力モードが切り替わったときに実行されます。イベント発火前に
+	`g:skkeleton#mode` が更新されます。
 
 skkeleton-handled                                          *skkeleton-handled*
-	入力を処理したあとに実行します。実行の前に |g:skkeleton#state| を
-	更新します。
+	キー入力を処理したあとに毎回実行されます。イベント発火前に
+	|g:skkeleton#state| が更新されます。
 
-                                                          *g:skkeleton#enabled*
+                                                         *g:skkeleton#enabled*
 g:skkeleton#enabled
-	SKK が有効なら true です。
+	SKK が有効な間は `true`、無効な間は `false` になります。
 
-                                                             *g:skkeleton#mode*
+                                                            *g:skkeleton#mode*
 g:skkeleton#mode
-	今のモードの名前です。無効なときは空の文字列です。|skkeleton.mode()|
-	が返す値のうち、有効なときのものと同じです。
+	現在の入力モード名です。無効なときは空文字列（`""`）になります。
+	|skkeleton.mode()| の返り値と同じです。
 
-                                                            *g:skkeleton#state*
+                                                           *g:skkeleton#state*
 g:skkeleton#state
-	最後に処理したときの状態です。表で、次のキーがあります。
-	- phase: 入力の段階。"input"（直接入力）、"input:okurinasi"、
-	  "input:okuriari"、"henkan"、"escape" のどれか。
-	- henkanFeed: 変換ポイントから入力したかなの文字列。
+	直前のキー処理後の内部状態を表すテーブル（辞書）です。以下のキーを持ち
+	ます。
+	- `phase`: 入力段階。`"input"`（直接入力）、`"input:okurinasi"`、
+	  `"input:okuriari"`、`"henkan"`、`"escape"` のいずれか。
+	- `henkanFeed`: 変換開始位置から入力された読みの文字列。
 
-                                                             *g:skkeleton#debug*
+                                                           *g:skkeleton#debug*
 g:skkeleton#debug
-	真にしておくと、最初に使うときに |skkeleton-config-debug| を真にします。
+	真に設定しておくと、初回初期化時に |skkeleton-config-debug| が `true`
+	になります。
 
 ==============================================================================
-インジケータ                                                 *skkeleton-indicator*
+インジケータ                                             *skkeleton-indicator*
 
-入力モードをカーソルの近くの小さなウィンドウに表示します。skkeleton_
-indicator.nvim を元にして、skkeleton.nvim に内蔵しました。|skkeleton.setup()|
-の `indicator` に表を渡すと設定でき、`false` を渡すと使いません。何も渡さな
-いときは、既定の設定で使います。
+現在の入力モードをカーソル付近の小さなフローティングウィンドウに表示します。
+skkeleton_indicator.nvim をベースに、skkeleton.nvim に内蔵しています。
+|skkeleton.setup()| の `indicator` オプションにテーブルを渡すと設定を変更で
+き、`false` を渡すと無効になります。省略時は既定の設定で有効になります。
 >lua
     require("skkeleton").setup({
       indicator = {
@@ -536,120 +571,126 @@ indicator.nvim を元にして、skkeleton.nvim に内蔵しました。|skkelet
       },
     })
 <
-色を変えるときは、`setup()` を呼ぶ前に |skkeleton-highlight| のハイライトグ
-ループを定義するか、`HlName` のオプションで既存のグループの名前を指定しま
-す。起動後に変えたときは、`require("skkeleton.indicator").refresh()` で反映し
-ます。|cmdline-window| では表示できません。
+表示色を変更したい場合は、`setup()` を呼ぶ前に |skkeleton-highlight| のハイラ
+イトグループを定義するか、`*HlName` オプションで既存のハイライトグループ名を指
+定してください。起動後にハイライト定義を変更した場合は、
+`require("skkeleton.indicator").refresh()` を呼ぶと反映されます。なお、
+|cmdline-window| では表示されません。
 
-オプションは次のとおりです。各項目は「名前」「既定」「型」の順で、説明が続きます。
+設定可能なオプションは以下のとおりです。
 
-eijiHlName、hiraHlName、kataHlName、hankataHlName、zenkakuHlName、abbrevHlName ~
-	既定: "SkkeletonIndicatorEiji"、"SkkeletonIndicatorHira"、
+eijiHlName、hiraHlName、kataHlName、hankataHlName、zenkakuHlName、
+abbrevHlName ~
+	既定値: "SkkeletonIndicatorEiji"、"SkkeletonIndicatorHira"、
 	"SkkeletonIndicatorKata"、"SkkeletonIndicatorHankata"、
 	"SkkeletonIndicatorZenkaku"、"SkkeletonIndicatorAbbrev"
 	型: string
 	直接入力、ひらがな、カタカナ、半角カタカナ、全角英数、abbrev の各モー
-	ドで使うハイライトグループです。
+	ドで使用するハイライトグループ名です。
 
 eijiText、hiraText、kataText、hankataText、zenkakuText、abbrevText ~
-	既定: "英字"、"ひら"、"カタ"、"半ｶﾀ"、"全英"、"abbr"
+	既定値: "英字"、"ひら"、"カタ"、"半ｶﾀ"、"全英"、"abbr"
 	型: string
-	各モードで表示する文字列です。
+	各モードでインジケータに表示する文字列です。
 
 border ~
-	既定: nil
+	既定値: nil
 	型: 文字列、配列、または関数
-	指定すると枠線を付けます。値は |nvim_open_win()| の `border` と同じ
-	か、それを返す関数です。関数は `{ mode = "hira" }` のような表を受け
-	取り、モードごとに枠線を変えられます。nil を返すと枠線が消えます。
-	関数が nil を返したときは、枠線を指定しないときと違い、枠線の分の
-	空白が文字列の周りに残ります。
+	ウィンドウの枠線を指定します。|nvim_open_win()| の `border` と同じ形式
+	の値、またはそれを返す関数を指定できます。関数の場合は引数として
+	`{ mode = "hira" }` のようなテーブルを受け取るため、モードごとに枠線を
+	変えることができます。関数が `nil` を返すと枠線は非表示になりますが、
+	枠線分の余白（1 文字分）は文字列の周囲に残ります。
 
 row ~
-	既定: 1（border が nil、"none"、"shadow" 以外のときは 0）
+	既定値: 1（border が nil、"none"、"shadow" 以外のときは 0）
 	型: integer
-	カーソルを基準にした縦の位置です。
+	カーソル位置を基準とした縦方向のオフセット（行数）です。
 
 col ~
-	既定: 1
+	既定値: 1
 	型: integer
-	カーソルを基準にした横の位置です。
+	カーソル位置（pre-edit 表示中はその末尾）を基準とした横方向のオフセッ
+	ト（列数）です。
 
 zindex ~
-	既定: nil
+	既定値: nil
 	型: integer
-	他のウィンドウと重なるときの順序です。|nvim_open_win()| の同名のオプ
-	ションと同じです。
+	他のフローティングウィンドウと重なった際の表示優先度です。
+	|nvim_open_win()| の `zindex` オプションと同じです。
 
 alwaysShown ~
-	既定: true
+	既定値: true
 	型: boolean
-	真なら、挿入モードでは常に表示します。偽なら、SKK が有効なときだけ
-	表示します（直接入力の表示は出なくなります）。
+	真の場合は、挿入モード中に常にインジケータを表示します。偽の場合は、
+	SKK が有効なときのみ表示します（直接入力時の「英字」表示が出なくなりま
+	す）。
 
 fadeOutMs ~
-	既定: 3000
+	既定値: 3000
 	型: integer
-	表示が消えるまでの時間（ミリ秒）です。0 なら、挿入モードのあいだ
-	ずっと表示します。
+	インジケータが自動的に消えるまでの時間（ミリ秒）です。`0` を指定すると
+	フェードアウトせず、挿入モードの間常に表示し続けます。
 
 ignoreFt ~
-	既定: {}
+	既定値: {}
 	型: string[]
-	表示しないファイルタイプです。
+	インジケータを表示しないファイルタイプのリストです。
 
 bufFilter ~
-	既定: 常に true を返す関数
+	既定値: 常に true を返す関数
 	型: fun(bufnr: integer): boolean
-	バッファの番号を受け取り、true を返すと表示します。ignoreFt のあとに
-	評価します。
+	バッファ番号を受け取り、インジケータを表示するかどうかを boolean で返
+	す関数です。`ignoreFt` の判定のあとに評価されます。
 
 useDefaultHighlight ~
-	既定: true
+	既定値: true
 	型: boolean
-	Neovim の既定のカラースキームを使っているとき、自分で定義したハイラ
-	イトグループより既定の配色を優先するかどうかです。自分の配色を使い
-	たいときは false にします。
+	Neovim の既定カラースキーム使用時に、ユーザー定義のハイライトグループ
+	よりプラグイン既定の配色を優先するかどうかを指定します。独自のハイライ
+	ト定義を優先したい場合は `false` を指定してください。
 
 ==============================================================================
-ハイライトグループ                                           *skkeleton-highlight*
+ハイライトグループ                                       *skkeleton-highlight*
 
-SkkeletonPreedit                                          *hl-SkkeletonPreedit*
-	入力中の文字（pre-edit）の表示に使います。既定では何も指定していな
-	いので、周りの文字と同じ見た目になります。
+SkkeletonPreedit                                         *hl-SkkeletonPreedit*
+	変換確定前の文字列（pre-edit）の表示に使用します。既定では属性が未設定
+	のため、周囲のテキストと同じ見た目になります。
 >lua
     vim.api.nvim_set_hl(0, "SkkeletonPreedit", { underline = true })
 <
-SkkeletonIndicatorEiji                              *hl-SkkeletonIndicatorEiji*
-SkkeletonIndicatorHira                              *hl-SkkeletonIndicatorHira*
-SkkeletonIndicatorKata                              *hl-SkkeletonIndicatorKata*
-SkkeletonIndicatorHankata                        *hl-SkkeletonIndicatorHankata*
-SkkeletonIndicatorZenkaku                        *hl-SkkeletonIndicatorZenkaku*
-SkkeletonIndicatorAbbrev                          *hl-SkkeletonIndicatorAbbrev*
-	インジケータの各モードの表示に使います。自分で定義していないとき
-	は、'background' に合わせた既定の配色になります。たとえば Hira は、
-	dark では次の配色です。
+SkkeletonIndicatorEiji                             *hl-SkkeletonIndicatorEiji*
+SkkeletonIndicatorHira                             *hl-SkkeletonIndicatorHira*
+SkkeletonIndicatorKata                             *hl-SkkeletonIndicatorKata*
+SkkeletonIndicatorHankata                       *hl-SkkeletonIndicatorHankata*
+SkkeletonIndicatorZenkaku                       *hl-SkkeletonIndicatorZenkaku*
+SkkeletonIndicatorAbbrev                         *hl-SkkeletonIndicatorAbbrev*
+	インジケータの各モード表示に使用します。未定義の場合は、'background'
+	の値に応じた既定の配色が設定されます。たとえば
+	`SkkeletonIndicatorHira` の dark 背景での既定値は以下のとおりです。
 >lua
     { fg = "NvimDarkGrey2", bg = "NvimLightGreen",
       ctermfg = "black", ctermbg = "green", bold = true }
 <
-	Neovim の既定のカラースキームを使っているときは、自分の定義より
-	既定の配色を優先します。避けるには |skkeleton-indicator| の
-	`useDefaultHighlight` を false にします。
+	Neovim の既定カラースキームを使用している場合、既定ではユーザー定義よ
+	りプラグイン既定の配色が優先されます。ユーザー定義のハイライトを適用す
+	るには、|skkeleton-indicator| の `useDefaultHighlight` を `false` に設
+	定してください。
 
 ==============================================================================
-FAQ                                                              *skkeleton-faq*
+FAQ                                                            *skkeleton-faq*
 
 変換ができない~
 
-変換には SKK 辞書が要ります。https://skk-dev.github.io/dict/ の SKK-JISYO.L
-などを展開して、|skkeleton-config-globalDictionaries| にパスを書いてください。
+変換を行うには SKK 辞書が必要です。https://skk-dev.github.io/dict/ などから
+SKK-JISYO.L などの辞書を取得・展開し、|skkeleton-config-globalDictionaries| に
+パスを設定してください。
 
-初回の変換が遅い~
-                                                       *skkeleton-faq-initialize*
-辞書は最初に使うときに読み込みます。初めてのときは辞書の DB を作るため、その
-あいだ入力が止まります。Neovim を開いたあとで準備しておくには、
-|skkeleton.initialize()| を呼びます。
+初回の変換時に少し待たされる~
+                                                    *skkeleton-faq-initialize*
+辞書は初回使用時に読み込まれます。初回のみ辞書ファイルから検索用の DB ファイル
+を生成するため、その間だけ入力が待機状態になります。Neovim の起動直後にバック
+グラウンドで準備しておくには、|skkeleton.initialize()| を呼び出してください。
 >lua
     vim.api.nvim_create_autocmd("VimEnter", {
       callback = function()
@@ -657,32 +698,39 @@ FAQ                                                              *skkeleton-faq*
       end,
     })
 <
-DB は UI を止めないように小分けにして作ります。2 回目からは、できた DB を開く
-だけです。
+`initialize()` は DB 生成処理を細かく分割して進めるため、UI をブロックしませ
+ん。また、一度 DB が生成されれば、次回起動時からは既存の DB を開くだけで即座に
+利用できます。
 
-DB はどこにあり、どう作り直しますか~
-                                                          *skkeleton-faq-database*
-`stdpath("cache")/skkeleton`（|skkeleton-config-databasePath| を設定したとき
-はそのディレクトリ）に、辞書ごとの `<ハッシュ>.db` があります。辞書の大きさや
-更新時刻が変わると、次に使うときに自動で作り直します。すぐに作り直すには、
-|skkeleton.update_database()| に {force} を渡します。
+DB ファイルはどこに保存され、どのように再生成されますか~
+                                                      *skkeleton-faq-database*
+`stdpath("cache")/skkeleton`（|skkeleton-config-databasePath| を設定した場合は
+そのディレクトリ）に、辞書ごとの `<ハッシュ>.db` ファイルとして保存されます。
+元の辞書ファイルのサイズや更新日時が変化すると、次回使用時に自動的に再生成され
+ます。手動で強制的に再生成したい場合は、|skkeleton.update_database()| の第 3
+引数 {force} に `true` を渡して実行してください。
 >lua
-    require("skkeleton").update_database("~/.config/skk/SKK-JISYO.L", nil, true)
+    require("skkeleton").update_database(
+      "~/.config/skk/SKK-JISYO.L", nil, true
+    )
 <
-DB のファイルを消しても構いません。次に使うときに作り直します。
+あるいはキャッシュディレクトリ内の `.db` ファイルを直接削除しても構いません
+（次回使用時に再生成されます）。
 
-変換ポイントの描画が乱れる~
+変換マーカー（▽・▼）の描画が崩れる~
 
-▽ と ▼ は 'ambiwidth' の対象です。Neovim と端末やフォントの設定が合っていな
-いと、描画が乱れます。'ambiwidth' を変えるか、対象外の文字を指定してください。
+既定のマーカーである `▽` と `▼` は 'ambiwidth'（曖昧幅文字）の対象です。Neovim
+と端末エミュレータやフォントの設定が一致していないと、文字幅のズレにより表示が
+崩れることがあります。'ambiwidth' の設定を見直すか、曖昧幅ではない文字をマー
+カーに指定してください。
 >lua
     markerHenkan = "▿",
     markerHenkanSelect = "▾",
 <
-他のプラグインと干渉する~
+他の補完プラグインなどと干渉する~
 
-有効にするときと無効にするときのフックで、他のプラグインの機能を一時的に止め
-られます。
+有効化・無効化時の |User| イベントフックを使って、SKK の使用中のみ他のプラグイ
+ンの機能を一時的に無効化できます。
 >lua
     local group = vim.api.nvim_create_augroup("skkeleton-coc", {})
     vim.api.nvim_create_autocmd("User", {
@@ -696,50 +744,56 @@ DB のファイルを消しても構いません。次に使うときに作り�
       callback = function() vim.b.coc_suggest_disable = false end,
     })
 <
-sticky key の動きを eskk.vim に合わせたい~
+sticky key の挙動を eskk.vim に合わせたい~
 
-skkeleton は sticky key をかなテーブルに置いているので、「察し」を `;sass;si`
-と打ちます。eskk.vim のように `;sass;i` と打つには、次のようにします。
+かなテーブルに sticky key（`;`）を登録すると、促音の直後に変換開始位置を置く際
+に「察し」を `;sass;si` と入力する必要があります。eskk.vim のように `;sass;i`
+と入力したい場合は、かなテーブルではなくキーマップとして `henkanPoint` を登録
+してください。
 >lua
     require("skkeleton").register_keymap("input", ";", "henkanPoint")
 <
-端末モードで入力が崩れる~
+端末モードで入力表示が崩れる~
 
-端末バッファでは BS を送って消してから書き直す方法で入力しています。そのた
-め、マルチバイト文字の扱いが違うアプリケーションでは、入力が崩れることがあり
-ます。コマンドラインで SKK を使って、結果を送る方法もあります。
+端末バッファでは、未確定文字列の更新に `<BS>` を送出して書き直す方式をとってい
+ます。そのため、動作中のアプリケーション側のマルチバイト文字や文字幅の扱いに
+よっては表示が崩れることがあります。回避策として、コマンドラインで SKK 入力を
+行って確定文字列のみを端末へ送るマッピングも利用できます。
 >lua
     vim.keymap.set("t", "<C-y>", function()
       vim.api.nvim_feedkeys(vim.fn.input(""), "n", false)
     end)
 <
 ==============================================================================
-skkeleton からの移行                                         *skkeleton-migration*
+skkeleton からの移行                                     *skkeleton-migration*
 
-設定のキーは skkeleton のものをそのまま使えます。呼び出しは次のように変わり
-ます。
+設定のキー名は skkeleton のものをそのまま使用できます。関数などの呼び出し方は
+次のように変わります。
 
-	skkeleton#config({...})            -> require("skkeleton").setup({...})
-	skkeleton#register_kanatable       -> skkeleton.register_kanatable
-	skkeleton#register_kanatable_file  -> skkeleton.register_kanatable_file
-	skkeleton#register_keymap          -> skkeleton.register_keymap
-	skkeleton#initialize()             -> skkeleton.initialize()
-	skkeleton#update_database          -> skkeleton.update_database
-	skkeleton_indicator の setup({...}) -> setup({ indicator = {...} })
+	skkeleton#config({...})           -> require("skkeleton").setup({...})
+	skkeleton#register_kanatable      -> skkeleton.register_kanatable
+	skkeleton#register_kanatable_file -> skkeleton.register_kanatable_file
+	skkeleton#register_keymap         -> skkeleton.register_keymap
+	skkeleton#initialize()            -> skkeleton.initialize()
+	skkeleton#update_database         -> skkeleton.update_database
+	skkeleton_indicator の setup(...) -> setup({ indicator = {...} })
 
-違うところ~
-- |skkeleton-config-databasePath| はディレクトリです。skkeleton が作った DB
-  のファイルは使わず、新しく作ります。
-- `sources` の "deno_kv" は "skk_dictionary" と同じ扱いです。
-- skkServer*、completionRankFile は値の確認だけをして使いません。
+仕様の違い~
+- |skkeleton-config-databasePath| にはファイルではなくディレクトリを指定しま
+  す。skkeleton が生成した Deno KV の DB ファイルは使用せず、新しい形式で DB
+  を作成します。
+- `sources` の `"deno_kv"` は `"skk_dictionary"` と同じものとして扱われます。
+- `skkServer*` および `completionRankFile` は型の検証のみを行い、実際の処理で
+  は使用しません。
 
-v1 で使えないもの~
-- skkserv と Google 日本語入力（`sources` の "skk_server"、
-  "google_japanese_input"）
-- ddc の補完ソースと、補完の rank file
-- yaml と msgpack の辞書
+非対応の機能~
+- skkserv および Google 日本語入力（`sources` の `"skk_server"`、
+  `"google_japanese_input"`）
+- ddc.vim の補完ソースおよび `completionRankFile`
+- YAML 形式・MessagePack 形式の辞書（JSON 形式の辞書には対応しています）
 - `skkeleton#handle()`、`skkeleton#dangerously_clear_buffer_local_mappings()`
 
-同じ Neovim に skkeleton と skkeleton.nvim の両方を入れないでください。
+なお、同じ Neovim 環境で skkeleton と skkeleton.nvim を同時に有効にしないでく
+ださい。
 
 vim:tw=78:ts=8:noet:ft=help:norl
