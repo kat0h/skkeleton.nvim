@@ -64,10 +64,12 @@ function Mode.new(name)
     self.text = Mode.LEFT_CAP .. " " .. raw_text .. " " .. Mode.RIGHT_CAP
     self.cap_hl_name = self.hl_name .. "Cap"
     local resolved = vim.api.nvim_get_hl(0, { name = self.hl_name, link = false })
+    local normal = vim.api.nvim_get_hl(0, { name = "Normal", link = false })
     vim.api.nvim_set_hl(0, self.cap_hl_name, {
       fg = resolved.bg or hl.bg,
+      bg = normal.bg or "NONE",
       ctermfg = resolved.ctermbg or hl.ctermbg,
-      bg = "NONE",
+      ctermbg = normal.ctermbg or "NONE",
     })
   end
 

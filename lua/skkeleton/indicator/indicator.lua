@@ -133,10 +133,12 @@ end
 ---@param winid integer
 ---@param mode skkeleton.IndicatorMode
 function Indicator:border_highlight(winid, mode)
-  vim.wo[winid].winblend = config.winblend or 0
   if config.style == "pill" then
+    -- winblend > 0 にすると背景色(bg)だけブレンドされ半円グリフの前景色(fg)と色がズレるため 0 に固定する
+    vim.wo[winid].winblend = 0
     vim.wo[winid].winhighlight = "Normal:Normal,NormalFloat:Normal,FloatBorder:" .. mode.hl_name
   else
+    vim.wo[winid].winblend = config.winblend or 0
     vim.wo[winid].winhighlight = "FloatBorder:" .. mode.hl_name
   end
 end
