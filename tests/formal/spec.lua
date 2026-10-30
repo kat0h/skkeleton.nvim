@@ -199,13 +199,17 @@ M.state["indicator: insert では pre-edit の直後に 1 つ、normal では出
     return
   end
   -- 画面のカーソル（pre-edit の直後）から row 行下、col 桁右。枠があれば枠の分だけ中身がずれる。
-  -- 画面の端で押し戻されるときは、位置は確かめない（「float: 画面に収まる」で確かめる）
+  -- 画面に収まらないときや、カーソルを隠すときは隠さない側へ移すので、位置は確かめない
+  -- （「float: 画面に収まり、カーソルを隠さない」で確かめる）
   local ind = s.indicator[1]
   -- 位置は枠を含めた左上
   local b = ind.border and 1 or 0
   local expect = { s.screen.row - 1 + s.ind_cfg.row, s.screen.col - 1 + s.ind_cfg.col }
-  local fits = expect[2] + ind.width + 2 * b <= s.columns
-    and expect[1] + ind.height + 2 * b <= s.editor_lines - s.cmdheight
+  local ew, eh = ind.width + 2 * b, ind.height + 2 * b
+  local crow, ccol = s.screen.row - 1, s.screen.col - 1
+  local fits = expect[2] + ew <= s.columns
+    and expect[1] + eh <= s.editor_lines - s.cmdheight
+    and not (crow >= expect[1] and crow < expect[1] + eh and ccol >= expect[2] and ccol < expect[2] + ew)
   local got = ind.pos
   if fits and (got[1] ~= expect[1] or got[2] ~= expect[2]) then
     return ("インジケータ %s、期待 %s"):format(short(got), short(expect))
@@ -460,15 +464,6 @@ end
 -- 当てはまる違反は「既知」として出し、失敗にしない
 M.known = {}
 
--- 枠つきのインジケータは、画面の右端で左へ押し戻されてカーソルに重なる（#16。元の skkeleton_indicator.nvim も同じ）
-M.known[#M.known + 1] = {
-  property = "float: 画面に収まり、カーソルを隠さない",
-  match = function(_, msg)
-    return msg and msg:find("インジケータ（枠つき）", 1, true) and msg:find("隠す", 1, true)
-  end,
-  reason = "#16: 枠つきのインジケータが、画面の右端でカーソルと打った文字を隠す",
-}
-
 -- insert のまま cmdline に入って戻ると（<C-r>=）、インジケータが閉じたままになる（#17）
 M.known[#M.known + 1] = {
   property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
@@ -535,27 +530,6 @@ for _, property in ipairs({
     reason = "#20: ▽ の入力中に <C-r>= で式を入れると、pre-edit の表示だけが残る",
   }
 end
-
--- pre-edit が画面の次の行へ折り返すと、インジケータが前の行の右端に残る（#21）
-M.known[#M.known + 1] = {
-  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
-  match = function(_, msg)
-    -- インジケータの段がカーソルの段とずれている（折り返し）
-    local got, want = (msg or ""):match("インジケータ { (%d+), %d+ }、期待 { (%d+), %d+ }")
-    return got ~= nil and got ~= want
-  end,
-  reason = "#21: pre-edit が画面の次の行へ折り返すと、インジケータが前の行の右端に残る",
-}
-
--- カーソルの直後にタブがあると、インジケータがタブの後ろに出る（#23）
-M.known[#M.known + 1] = {
-  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
-  match = function(keys, msg)
-    local got, want = (msg or ""):match("インジケータ { (%d+), %d+ }、期待 { (%d+), %d+ }")
-    return got ~= nil and got == want and (vim.tbl_contains(keys, "<Tab>") or vim.tbl_contains(keys, "<S-Tab>"))
-  end,
-  reason = "#23: カーソルの直後にタブがあると、インジケータがタブの後ろに出る",
-}
 
 -- 有効にしても、無効のときに出ていた buffer の補完のメニューが残る（#24）
 M.known[#M.known + 1] = {

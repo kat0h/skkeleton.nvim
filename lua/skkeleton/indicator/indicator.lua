@@ -167,8 +167,9 @@ function Indicator:win_pos_config(mode, for_open)
       border = border,
     }
   end
-  local pre_w = require("skkeleton.render").preedit_width()
-  if for_open and pre_w == 0 then
+  local rect = self:insert_rect(mode, border)
+  if not rect then
+    -- 画面上の位置が分からないとき（ウィンドウが見えていないなど）
     return {
       relative = "cursor",
       row = config.row,
@@ -178,17 +179,101 @@ function Indicator:win_pos_config(mode, for_open)
       border = border,
     }
   end
-  local pos = vim.api.nvim_win_get_cursor(0)
   return {
-    relative = "win",
-    win = vim.api.nvim_get_current_win(),
-    bufpos = { pos[1] - 1, pos[2] },
-    row = config.row,
-    col = config.col + pre_w,
+    relative = "editor",
+    row = rect[1],
+    col = rect[2],
     width = mode.width,
     height = 1,
     border = border,
   }
+end
+
+-- 2 つの矩形 { 行, 列, 高さ, 幅 } が重なるか
+---@param a integer[]
+---@param b integer[]
+---@return boolean
+local function overlaps(a, b)
+  return a[1] < b[1] + b[3] and b[1] < a[1] + a[3] and a[2] < b[2] + b[4] and b[2] < a[2] + a[4]
+end
+
+-- insert モードで、インジケータ（枠を含む）の左上の画面上の位置 { 行, 列 }（0 起点）を決める。
+-- pre-edit の終わりの画面上の位置から row / col だけずらして置く。そこが画面に収まらないとき、
+-- またはカーソルや pre-edit を隠すときは、隠さない側（下、上、左）へ移す。
+-- relative = "cursor" は、カーソルがタブの上にあると最後のセルを基準にし、画面の端で押し戻され、
+-- pre-edit の折り返しも知らないので、screenpos() から自分で数える
+---@param mode skkeleton.IndicatorMode
+---@param border skkeleton.IndicatorBorder?
+---@return integer[]?
+function Indicator:insert_rect(mode, border)
+  local win = vim.api.nvim_get_current_win()
+  local cur = vim.api.nvim_win_get_cursor(win)
+  local line = vim.api.nvim_buf_get_lines(0, cur[1] - 1, cur[1], false)[1] or ""
+  local sp = vim.fn.screenpos(win, cur[1], math.min(cur[2], #line) + 1)
+  if sp.row == 0 then
+    return nil
+  end
+  local info = vim.fn.getwininfo(win)[1]
+  local text_left = info.wincol - 1 + info.textoff -- テキスト領域の左端（0 起点の画面の桁）
+  local text_w = info.width - info.textoff
+  local width = vim.fn.strdisplaywidth(require("skkeleton.render").preedit_text())
+  local row, rel = sp.row - 1, sp.col - 1 - text_left
+  -- pre-edit のセルの範囲 { 行, 列, 高さ, 幅 }。inline の virtual text は、全角文字も含めて
+  -- 1 桁ずつ次の画面の行へ折り返す（バッファの文字のように行末で詰めない）。
+  -- 行がちょうど右端まで埋まったとき、カーソルは次の画面の行の左端に出る
+  local occupied = {}
+  local left = width
+  local wrap = vim.wo[win].wrap
+  while left > 0 do
+    local n = wrap and math.min(left, text_w - rel) or left
+    occupied[#occupied + 1] = { row, text_left + rel, 1, n }
+    left = left - n
+    rel = rel + n
+    if wrap and rel >= text_w then
+      row, rel = row + 1, 0
+    end
+  end
+  -- カーソルのセル（pre-edit の直後）
+  local ccol = text_left + rel
+  local cursor_cell = { row, ccol, 1, 1 }
+  local first_row = occupied[1] and occupied[1][1] or row
+
+  local b = (border ~= nil and border ~= "none" and border ~= "shadow") and 1 or 0
+  local h, w = 1 + 2 * b, mode.width + 2 * b
+  local bottom = vim.o.lines - math.max(1, vim.o.cmdheight)
+  local want = { row + config.row, ccol + config.col }
+  local function ok(r, c)
+    if r < 0 or c < 0 or r + h > bottom or c + w > vim.o.columns then
+      return false
+    end
+    local rect = { r, c, h, w }
+    if overlaps(rect, cursor_cell) then
+      return false
+    end
+    for _, o in ipairs(occupied) do
+      if overlaps(rect, o) then
+        return false
+      end
+    end
+    return true
+  end
+  local max_col = vim.o.columns - w
+  -- 先に下と上（右端なら画面に収まるところまで左へ寄せる）を試し、打った文字を隠す左側は最後にする
+  local rows = { want[1], row + 1, first_row - h, row - h }
+  for _, r in ipairs(rows) do
+    for _, c in ipairs({ want[2], math.min(want[2], max_col) }) do
+      if ok(r, c) then
+        return { r, c }
+      end
+    end
+  end
+  for _, r in ipairs({ row, row + 1, first_row - h }) do
+    if ok(r, ccol - w) then
+      return { r, ccol - w }
+    end
+  end
+  -- どこも空いていないときは、画面に収まるところへ寄せる
+  return { math.max(0, math.min(want[1], bottom - h)), math.max(0, math.min(want[2], max_col)) }
 end
 
 local function redraw_if_cmdline()
@@ -264,7 +349,7 @@ end
 
 -- カーソルに追従させる。
 -- relative = "cursor" は画面上のカーソル位置を設定した時点で読むため、inline の pre-edit が
--- 描かれる前後で値が変わる。バッファ位置（bufpos）に固定し、pre-edit の表示幅を足して決める
+-- 描かれる前後で値が変わる。バッファ位置の画面上の位置に pre-edit の表示幅を足して決める
 function Indicator:move()
   if self:is_opened() then
     local mode = self.modes:detect()

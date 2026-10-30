@@ -343,20 +343,21 @@ end
 T["hooks"]["insert 中に input() へ入り抜けてもインジケーターが連動する"] = function()
   setup({ showInCmdline = true })
   child.type_keys("i")
-  eq(floats()[1].relative, "win")
+  local ins_row = floats()[1].row
+  eq(ins_row < 5, true)
 
-  -- Insert 中に Cmdline へ遷移したとき即座に relative=editor になる
+  -- Insert 中に Cmdline へ遷移したとき即座に cmdline の上の行へ移る
   child.type_keys("<C-r>=")
   local f_cmd = floats()
   eq(#f_cmd, 1)
-  eq(f_cmd[1].relative, "editor")
+  eq(f_cmd[1].row > ins_row, true)
 
   -- Cmdline を抜けて Insert に戻ると再びインジケーターが開く
   child.type_keys("<Esc>")
   wait(30)
   local f_ins = floats()
   eq(#f_ins, 1)
-  eq(f_ins[1].relative, "win")
+  eq(f_ins[1].row, ins_row)
 end
 
 T["hooks"]["indicator のバッファは閉じたときに wipe される"] = function()

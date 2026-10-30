@@ -183,21 +183,27 @@ local function draw(text, chunks, annot)
   mark = { buf = buf, id = id, annot_id = annot_id, row = row, col = col, line = cur_line }
 end
 
--- いま出している pre-edit の表示幅（カーソルがまだ指している行・列のときだけ。なければ 0）。
--- relative = "cursor" のウィンドウは inline の virtual text の幅を含まないので、インジケータが足す
----@return integer
-function M.preedit_width()
+-- いま出している pre-edit（注釈を含む）の文字列（カーソルがまだ指している行・列のときだけ。なければ ""）。
+-- inline の virtual text は relative = "cursor" や screenpos() の位置に入らないので、インジケータが足す
+---@return string
+function M.preedit_text()
   if not mark or current_text == "" or not vim.api.nvim_buf_is_valid(mark.buf) then
-    return 0
+    return ""
   end
   if mark.buf ~= vim.api.nvim_get_current_buf() then
-    return 0
+    return ""
   end
   local pos = vim.api.nvim_win_get_cursor(0)
   if pos[1] - 1 ~= mark.row or pos[2] ~= mark.col then
-    return 0
+    return ""
   end
-  return vim.fn.strdisplaywidth(current_text .. (current_annot or ""))
+  return current_text .. (current_annot or "")
+end
+
+-- 上の文字列の表示幅
+---@return integer
+function M.preedit_width()
+  return vim.fn.strdisplaywidth(M.preedit_text())
 end
 
 -- pre-edit が残っているのにバッファや cmdline がそれと合わなくなっているか
