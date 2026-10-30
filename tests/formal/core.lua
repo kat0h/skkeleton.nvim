@@ -31,6 +31,8 @@ do
       opts.seed, i = tonumber(v), i + 1
     elseif k == "--max-states" then
       opts.max_states, i = tonumber(v), i + 1
+    elseif k == "--metamorphic" then
+      opts.metamorphic, i = tonumber(v), i + 1
     elseif k == "--config" then
       opts.config, i = assert(loadstring("return " .. v))(), i + 1
     elseif k == "--keys" then
@@ -326,6 +328,116 @@ if opts.keys then
     end
   end
   vim.cmd("qall!")
+end
+
+-- 変身関係（metamorphic relation）の検査。正解を知らなくても、意味が同じになるはずの 2 つのキー列の結果を比べる
+if opts.metamorphic then
+  math.randomseed(opts.seed)
+  local hira_to_kata = require("skkeleton.kana.hira_kata").hira_to_kata
+  local LETTERS = vim.split("aiueokstnhmyrwgzdbpjfcv-", "")
+  -- 読み、ひらがな、候補の数
+  local READINGS = { { "kan", "かん", 7 }, { "kanji", "かんじ", 2 }, { "naka", "なか", 1 } }
+  local function romaji(n)
+    local t = {}
+    for i = 1, n do
+      t[i] = LETTERS[math.random(#LETTERS)]
+    end
+    return t
+  end
+  local function line_of(keys)
+    local run, at, msg = run_keys(keys)
+    return run, at and msg
+  end
+  local function concat(...)
+    local out = { "=" }
+    for _, list in ipairs({ ... }) do
+      vim.list_extend(out, list)
+    end
+    return out
+  end
+  local function fail(name, keys, detail)
+    local kind = name
+    if not found[kind] then
+      found[kind] = { keys = keys, msg = name .. ": " .. detail }
+    end
+  end
+  local checked = 0
+  for _ = 1, opts.metamorphic do
+    -- M1: カタカナで打った結果は、ひらがなで打った結果をカタカナにしたもの（最後に l で残りを確定する）
+    local word = romaji(math.random(1, 12))
+    local h_keys = concat(word, { "l" })
+    local k_keys = concat({ "q" }, word, { "l" })
+    local h, herr = line_of(h_keys)
+    local k, kerr = line_of(k_keys)
+    if herr or kerr then
+      fail("違反", herr and h_keys or k_keys, herr or kerr)
+    elseif k.line ~= hira_to_kata(h.line) then
+      fail(
+        "M1 カタカナ",
+        k_keys,
+        ("カタカナ %q、ひらがな %q をカタカナにすると %q"):format(
+          k.line,
+          h.line,
+          hira_to_kata(h.line)
+        )
+      )
+    end
+    -- M2: ▽ で打ってから <C-g> で取り消すと、確定済みの文字列は変わらない
+    local pre = romaji(math.random(0, 8))
+    local tail = romaji(math.random(1, 8))
+    -- 最後の確定は <c-j>（l だと直前の z とつながって zl の「→」になる）
+    -- 打ちかけ（pre の最後の k など）は K で捨てられるので、先に <c-j> で確定しておく
+    local a = line_of(concat(pre, { "<c-j>" }))
+    local b_keys = concat(pre, { "<c-j>", "K" }, tail, { "<c-g>", "<c-j>" })
+    local b, berr = line_of(b_keys)
+    if not berr and a.line ~= b.line then
+      fail("M2 ▽ の取り消し", b_keys, ("取り消したあと %q、▽ の前は %q"):format(b.line, a.line))
+    end
+    -- M3: 変換してから <C-g> で取り消すと ▽ と読みに戻る。M4: <Space> n 回のあと x は n−1 回と同じ候補
+    local r = READINGS[math.random(#READINGS)]
+    -- 候補一覧（showCandidatesCount を超えたところ）はページ単位で進むので、1 つずつ進む範囲で比べる
+    local n = math.random(2, math.max(2, math.min(r[3], config.options.showCandidatesCount)))
+    local spaces = {}
+    for i = 1, n do
+      spaces[i] = "<space>"
+    end
+    local head = { "K" }
+    for c in r[1]:sub(2):gmatch(".") do
+      head[#head + 1] = c
+    end
+    head[1] = r[1]:sub(1, 1):upper()
+    local c_keys = concat(head, { "<space>", "<c-g>" })
+    local c = line_of(c_keys)
+    -- immediatelyCancel（既定は true）なら ▼ ごと消す。false のときだけ ▽ に戻る（upstream の cancel と同じ）
+    if not config.options.immediatelyCancel and c.ctx:to_string() ~= "▽" .. r[2] then
+      fail(
+        "M3 ▼ の取り消し",
+        c_keys,
+        ("取り消したあと %q、期待 %q"):format(c.ctx:to_string(), "▽" .. r[2])
+      )
+    end
+    local x_keys = concat(head, spaces, { "x" })
+    local y_keys = concat(head, vim.list_slice(spaces, 1, n - 1))
+    local x = line_of(x_keys)
+    local y = line_of(y_keys)
+    if r[3] >= 2 and x.ctx:to_string() ~= y.ctx:to_string() then
+      fail(
+        "M4 前候補",
+        x_keys,
+        ("x のあと %q、<Space> %d 回なら %q"):format(x.ctx:to_string(), n - 1, y.ctx:to_string())
+      )
+    end
+    checked = checked + 1
+  end
+  print(("metamorphic: %d 組、%.1f 秒"):format(checked, (vim.uv.hrtime() - t0) / 1e9))
+  if vim.tbl_isempty(found) then
+    print("✓ 違反なし")
+    vim.cmd("qall!")
+  end
+  for _, f in pairs(found) do
+    print(("\n✗ 反例（%d キー）: %s\n    %s"):format(#f.keys, fmt(f.keys), f.msg))
+  end
+  vim.cmd("cquit 1")
 end
 
 local answers = { "=", "=語" }
