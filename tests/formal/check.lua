@@ -71,7 +71,8 @@ local MUTATIONS = {
 local opts = {
   profile = "default",
   depth = 3,
-  jobs = 8,
+  -- 2 コアは残す（ほかの作業が重くならないように）
+  jobs = math.max(1, #vim.uv.cpu_info() - 2),
   mutate = nil,
   random = nil,
   length = 12,
@@ -87,7 +88,7 @@ do
     if k == "--depth" then
       opts.depth, i = tonumber(v), i + 1
     elseif k == "--jobs" then
-      opts.jobs, i = tonumber(v), i + 1
+      opts.jobs, i = math.min(tonumber(v), math.max(1, #vim.uv.cpu_info() - 2)), i + 1
     elseif k == "--mutate" then
       opts.mutate, i = v, i + 1
     elseif k == "--random" then

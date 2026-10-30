@@ -533,10 +533,31 @@ end
 -- pre-edit が画面の次の行へ折り返すと、インジケータが前の行の右端に残る（#21）
 M.known[#M.known + 1] = {
   property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
-  match = function(keys)
-    return keys[1] == "#wide" or keys[1] == "#wrap1" or keys[1] == "#wrap2"
+  match = function(_, msg)
+    -- インジケータの段がカーソルの段とずれている（折り返し）
+    local got, want = (msg or ""):match("インジケータ { (%d+), %d+ }、期待 { (%d+), %d+ }")
+    return got ~= nil and got ~= want
   end,
   reason = "#21: pre-edit が画面の次の行へ折り返すと、インジケータが前の行の右端に残る",
+}
+
+-- カーソルの直後にタブがあると、インジケータがタブの後ろに出る（#23）
+M.known[#M.known + 1] = {
+  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
+  match = function(keys, msg)
+    local got, want = (msg or ""):match("インジケータ { (%d+), %d+ }、期待 { (%d+), %d+ }")
+    return got ~= nil and got == want and (vim.tbl_contains(keys, "<Tab>") or vim.tbl_contains(keys, "<S-Tab>"))
+  end,
+  reason = "#23: カーソルの直後にタブがあると、インジケータがタブの後ろに出る",
+}
+
+-- 有効にしても、無効のときに出ていた buffer の補完のメニューが残る（#24）
+M.known[#M.known + 1] = {
+  property = "blink: 有効なら、メニューは ▽ の入力中だけ",
+  match = function(keys)
+    return keys[#keys] == "<C-j>"
+  end,
+  reason = "#24: blink.cmp: 有効にしても、無効のときに出ていた buffer の補完のメニューが残る",
 }
 
 function M.is_known(name, keys, msg)

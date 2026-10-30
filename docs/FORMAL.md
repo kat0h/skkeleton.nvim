@@ -32,7 +32,7 @@ TLA+ の TLC のようなモデル検査を、仕様のモデルではなく実�
 ## 使い方
 
 ```sh
-make verify ARGS="--profile misc --depth 5 --jobs 8"     # 幅優先（深さ 5 で 30 秒〜1 分）
+make verify ARGS="--profile misc --depth 5"              # 幅優先。並列数の既定はコア数 − 2（深さ 5 で 30 秒〜1 分）
 make verify ARGS="--random 2000 --length 30"             # ランダムなキー列 2000 本（約 1 分）
 make verify ARGS="--keys '#eol,<C-j>,K,K,<Space>,<Esc>'" # 1 本を流して、キーごとの観測と違反を出す
 make verify ARGS="--list-profiles"
