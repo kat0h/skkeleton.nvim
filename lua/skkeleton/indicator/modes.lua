@@ -65,7 +65,7 @@ end
 
 ---@return boolean
 function Modes.is_insert()
-  return vim.api.nvim_get_mode().mode:find("i") ~= nil
+  return vim.api.nvim_get_mode().mode:sub(1, 1) == "i"
 end
 
 -- g:skkeleton#mode から今のモードを引く。空や未知の名前は英字にする

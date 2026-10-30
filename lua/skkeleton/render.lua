@@ -17,10 +17,15 @@ local mark
 -- finish で描く pre-edit と、そのときの vim_mode
 local current_text = ""
 local current_mode = "i"
+-- 流した確定文字列が入るのを待っているか（finish が走るまで）
+local pending = false
 
-local function termcodes(s)
-  return vim.api.nvim_replace_termcodes(s, true, true, true)
+-- 確定文字列の反映待ちか
+function M.is_pending()
+  return pending
 end
+
+local FINISH_CMD = vim.api.nvim_replace_termcodes("<Cmd>lua require('skkeleton.render').finish()<CR>", true, true, true)
 
 -- keys の K_SPECIAL (0x80) を逃がして流す。cmd があれば逃がさずにあとへ続ける。
 -- 「、」のように 0x80 を含む文字が、特殊キーの始まりと読まれないようにするため
@@ -31,6 +36,7 @@ end
 
 -- pre-edit の extmark を消す
 function M.clear()
+  pending = false
   if mark then
     if vim.api.nvim_buf_is_valid(mark.buf) then
       pcall(vim.api.nvim_buf_del_extmark, mark.buf, ns, mark.id)
@@ -45,15 +51,24 @@ local function draw(text)
     return
   end
   local buf = vim.api.nvim_get_current_buf()
-  local pos = vim.api.nvim_win_get_cursor(0)
+  if not vim.api.nvim_buf_is_valid(buf) then
+    return
+  end
+  local ok_pos, pos = pcall(vim.api.nvim_win_get_cursor, 0)
+  if not ok_pos or not pos then
+    return
+  end
   local row, col = pos[1] - 1, pos[2]
   -- 右側に文字が入っても動かない gravity にして、補完などで文字が増えたことを検出できるようにする
-  local id = vim.api.nvim_buf_set_extmark(buf, ns, row, col, {
+  local ok_mark, id = pcall(vim.api.nvim_buf_set_extmark, buf, ns, row, col, {
     virt_text = { { text, "SkkeletonPreedit" } },
     virt_text_pos = "inline",
     hl_mode = "combine",
     right_gravity = false,
   })
+  if not ok_mark then
+    return
+  end
   mark = { buf = buf, id = id, row = row, col = col, tick = vim.b[buf].changedtick }
 end
 
@@ -103,14 +118,20 @@ end
 
 -- 描画を終える。確定した文字列が入ったあとに呼ぶ
 function M.finish()
-  if current_mode == "i" and vim.api.nvim_get_mode().mode:sub(1, 1) == "i" then
+  pending = false
+  local vm = vim.api.nvim_get_mode().mode:sub(1, 1)
+  if current_mode == "i" and vm == "i" then
     draw(current_text)
+    popup.open()
+    -- pre-edit の幅が変わったので、インジケータを画面上のカーソルに寄せ直す
+    require("skkeleton.indicator").move()
+  elseif vm == "c" then
+    M.clear()
+    popup.open()
   else
     M.clear()
+    popup.close()
   end
-  popup.open()
-  -- pre-edit の幅が変わったので、インジケータを画面上のカーソルに寄せ直す
-  require("skkeleton.indicator").move()
   M.count = M.count + 1
   vim.api.nvim_exec_autocmds("User", { pattern = "skkeleton-handled", modeline = false })
 end
@@ -136,8 +157,9 @@ function M.update(ctx, prefix)
   end
   -- 流した文字が入ってから描く。Esc で抜けるときはその場で片付ける
   local deferred = keys ~= "" and not esc and (current_mode == "i" or popup.has_pending())
+  pending = keys ~= "" and deferred
   if keys ~= "" then
-    feed(keys, deferred and termcodes("<Cmd>lua require('skkeleton.render').finish()<CR>") or nil)
+    feed(keys, deferred and FINISH_CMD or nil)
   end
   if not deferred then
     M.finish()

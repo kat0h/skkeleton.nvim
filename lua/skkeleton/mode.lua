@@ -14,7 +14,7 @@ local M = {}
 function M.mode_change(ctx, mode)
   ctx.mode = mode
   host.mode_changed(mode)
-  if options.keepMode then
+  if options.keepMode and mode ~= "abbrev" then
     store.variables.last_mode = mode
   end
 end

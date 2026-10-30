@@ -280,6 +280,47 @@ T["hooks"]["background が変わると色を作り直す"] = function()
   eq(#floats(), 1)
 end
 
+T["hooks"]["indicator のバッファは閉じたときに wipe される"] = function()
+  setup({})
+  local before = child.lua_get("#vim.api.nvim_list_bufs()")
+  child.type_keys("i")
+  local during = child.lua_get("#vim.api.nvim_list_bufs()")
+  eq(during, before + 1)
+  child.type_keys("<Esc>")
+  wait(30)
+  local after = child.lua_get("#vim.api.nvim_list_bufs()")
+  eq(after, before)
+end
+
+T["hooks"]["Modes.is_insert は <C-o>（niI）で false を返す"] = function()
+  setup({})
+  child.type_keys("i")
+  eq(child.lua_get([[require("skkeleton.indicator.modes").is_insert()]]), true)
+  child.type_keys("<C-o>")
+  eq(child.lua_get([[require("skkeleton.indicator.modes").is_insert()]]), false)
+  child.type_keys("l")
+  eq(child.lua_get([[require("skkeleton.indicator.modes").is_insert()]]), true)
+  child.type_keys("<Esc>")
+end
+
+T["hooks"]["fade_epoch により古いタイマーコールバックが新しいインジケータを閉じない"] = function()
+  setup({ fadeOutMs = 100 })
+  child.type_keys("i")
+  wait(50)
+  -- タイマー発火前にモードを変更してインジケータを更新
+  child.g["skkeleton#mode"] = "hira"
+  child.lua("_G.fire('skkeleton-mode-changed')")
+  -- 最初の 100ms が経過するタイミング（開始から計 120ms）
+  wait(70)
+  -- fade_epoch が上がっているため、古いタイマーで閉じずにひらが出ている
+  local f = floats()
+  eq(#f, 1)
+  eq(f[1].text, "ひら")
+  -- 更新後の fadeOutMs が経過すると閉じる
+  wait(100)
+  eq(#floats(), 0)
+end
+
 T["config"] = MiniTest.new_set()
 
 T["config"]["row は border によって既定値が変わる"] = function()
@@ -312,6 +353,10 @@ T["strings"]["snake_case"] = function()
   eq(snake_case("abcdEfg"), "abcd_efg")
   eq(snake_case("aBcdEfg"), "a_bcd_efg")
   eq(snake_case("fadeOutMs"), "fade_out_ms")
+  eq(snake_case("ignoreFT"), "ignore_ft")
+  eq(snake_case("XMLParser"), "xml_parser")
+  eq(snake_case("HTML"), "html")
+  eq(snake_case("HTTPResponseCode"), "http_response_code")
 end
 
 T["strings"]["snake_case_dict"] = function()

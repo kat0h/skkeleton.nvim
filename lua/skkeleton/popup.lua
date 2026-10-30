@@ -20,7 +20,11 @@ function M.has_pending()
 end
 
 local function open_float(lines, cfg)
+  if #lines == 0 then
+    return
+  end
   local buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[buf].bufhidden = "wipe"
   vim.api.nvim_buf_set_lines(buf, 0, -1, true, lines)
   local width = 1
   for _, l in ipairs(lines) do
@@ -44,10 +48,17 @@ end
 
 -- cmdline では画面の下、cmdline のすぐ上に出す
 local function open_cmdline(lines)
+  if #lines == 0 then
+    return
+  end
+  local width = 1
+  for _, l in ipairs(lines) do
+    width = math.max(width, vim.fn.strdisplaywidth(l))
+  end
   local top = vim.o.lines - math.max(1, vim.o.cmdheight) - #lines
   open_float(lines, {
     relative = "editor",
-    col = math.max(0, vim.fn.getcmdscreenpos() - 1),
+    col = math.max(0, math.min(vim.fn.getcmdscreenpos() - 1, vim.o.columns - width)),
     row = math.max(0, top),
   })
   vim.cmd("redraw")

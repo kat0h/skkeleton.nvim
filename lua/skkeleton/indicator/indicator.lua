@@ -74,9 +74,19 @@ function Indicator:set_text(buf, mode)
   vim.api.nvim_buf_clear_namespace(buf, self.ns, 0, -1)
   vim.api.nvim_buf_set_extmark(buf, self.ns, 0, 0, { end_row = 0, end_col = #mode.text, hl_group = mode.hl_name })
   self.timer:stop()
+  self.fade_epoch = (self.fade_epoch or 0) + 1
+  local epoch = self.fade_epoch
   if config.fade_out_ms > 0 then
     -- タイマーは luv のコールバックなので、API を呼ぶ前に schedule する
-    self.timer:start(config.fade_out_ms, 0, vim.schedule_wrap(self:method("close")))
+    self.timer:start(
+      config.fade_out_ms,
+      0,
+      vim.schedule_wrap(function()
+        if self.fade_epoch == epoch then
+          self:close()
+        end
+      end)
+    )
   end
 end
 
@@ -102,6 +112,7 @@ function Indicator:open()
   end
   local mode = self.modes:detect()
   local buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[buf].bufhidden = "wipe"
   self:set_text(buf, mode)
   local winid = vim.api.nvim_open_win(buf, false, {
     style = "minimal",

@@ -201,4 +201,74 @@ E["<CR> while converting only confirms"] = function()
   eq(helpers.buffer(echild), { "缶" })
 end
 
+T["candidate popup scratch buffer is wiped on close"] = function()
+  start()
+  local bufs_before = child.lua_get([[
+    vim.tbl_filter(function(b) return vim.api.nvim_buf_is_valid(b) end, vim.api.nvim_list_bufs())
+  ]])
+  type("Kan<Space><Space><Space><Space><Space>")
+  eq(helpers.popup(child) ~= vim.NIL, true)
+  local bufs_during = child.lua_get([[
+    vim.tbl_filter(function(b) return vim.api.nvim_buf_is_valid(b) end, vim.api.nvim_list_bufs())
+  ]])
+  eq(#bufs_during, #bufs_before + 1)
+  -- Kakutei to close the popup
+  type("<C-j>")
+  eq(helpers.popup(child), vim.NIL)
+  local bufs_after = child.lua_get([[
+    vim.tbl_filter(function(b) return vim.api.nvim_buf_is_valid(b) end, vim.api.nvim_list_bufs())
+  ]])
+  eq(#bufs_after, #bufs_before)
+end
+
+T["popup scratch buffer is wiped when popup closes directly"] = function()
+  child.lua([[
+    local popup = require("skkeleton.popup")
+    _G.bufs_before = #vim.api.nvim_list_bufs()
+    popup.set({ "1: 候補1", "2: 候補2" })
+    popup.open()
+    _G.bufs_open = #vim.api.nvim_list_bufs()
+    popup.close()
+    _G.bufs_closed = #vim.api.nvim_list_bufs()
+  ]])
+  eq(child.lua_get("_G.bufs_open"), child.lua_get("_G.bufs_before") + 1)
+  eq(child.lua_get("_G.bufs_closed"), child.lua_get("_G.bufs_before"))
+end
+
+T["cmdline <Esc> and <C-g> are not left mapped on the buffer after host.input"] = function()
+  start()
+  child.lua([[
+    local orig_input = vim.fn.input
+    vim.fn.input = function() return "辞書登録語" end
+    require("skkeleton.host").input("単語: ")
+    vim.fn.input = orig_input
+  ]])
+  local c_maps = child.lua_get([[vim.api.nvim_buf_get_keymap(0, "c")]])
+  local leaked = {}
+  for _, m in ipairs(c_maps) do
+    if m.lhs == "<Esc>" or m.lhs == "<C-g>" or m.rhs == "__skkeleton_return__<CR>" then
+      table.insert(leaked, m.lhs)
+    end
+  end
+  eq(leaked, {})
+end
+
+T["cmdline mappings are cleaned up even if host.input errors or cancels"] = function()
+  start()
+  child.lua([[
+    local orig_input = vim.fn.input
+    vim.fn.input = function() error("cancelled") end
+    pcall(require("skkeleton.host").input, "単語: ")
+    vim.fn.input = orig_input
+  ]])
+  local c_maps = child.lua_get([[vim.api.nvim_buf_get_keymap(0, "c")]])
+  local leaked = {}
+  for _, m in ipairs(c_maps) do
+    if m.lhs == "<Esc>" or m.lhs == "<C-g>" or m.rhs == "__skkeleton_return__<CR>" then
+      table.insert(leaked, m.lhs)
+    end
+  end
+  eq(leaked, {})
+end
+
 return T

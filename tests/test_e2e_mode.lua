@@ -184,6 +184,52 @@ T["the former mappings come back after disabling"] = function()
   eq(helpers.buffer(child), { "かxy" })
 end
 
+T["pre-existing buffer-local keymap on unmapped key is preserved"] = function()
+  child.cmd([[inoremap <buffer> <F5> special_f5]])
+  enable()
+  type("ka")
+  eq(helpers.buffer(child), { "か" })
+  type("<Plug>(skkeleton-disable)")
+  local map = child.lua_get([[vim.fn.maparg("<F5>", "i", false, true)]])
+  eq(_G.type(map) == "table" and map.buffer == 1 and map.rhs == "special_f5", true)
+  type("<F5>")
+  eq(helpers.buffer(child), { "かspecial_f5" })
+end
+
+T["pre-existing buffer-local lua keymap with callback on unmapped key is preserved"] = function()
+  child.lua([[
+    _G.f6_pressed = 0
+    vim.keymap.set("i", "<F6>", function()
+      _G.f6_pressed = _G.f6_pressed + 1
+    end, { buffer = 0 })
+  ]])
+  enable()
+  type("ka")
+  type("<Plug>(skkeleton-disable)")
+  type("<F6>")
+  eq(child.lua_get("_G.f6_pressed"), 1)
+end
+
+T["iminsert is saved and restored across enable and disable"] = function()
+  child.bo.iminsert = 1
+  enable()
+  eq(child.bo.iminsert, 0)
+  type("<Plug>(skkeleton-disable)")
+  eq(child.bo.iminsert, 1)
+end
+
+T["leaving buffer disables"] = function()
+  enable()
+  type("Ka")
+  eq(helpers.preedit(child), "▽か")
+  child.lua([[
+    local b = vim.api.nvim_create_buf(true, false)
+    vim.api.nvim_set_current_buf(b)
+  ]])
+  eq(child.g["skkeleton#enabled"], false)
+  eq(helpers.preedit(child), "")
+end
+
 T["no mappings are left after disabling"] = function()
   local before = child.lua_get([[#vim.api.nvim_buf_get_keymap(0, "i")]])
   enable()
@@ -323,6 +369,29 @@ K["keeps the last mode"] = function()
   helpers.type(kchild, "i", "<Plug>(skkeleton-enable)", "q")
   eq(kchild.g["skkeleton#mode"], "kata")
   helpers.type(kchild, "<Plug>(skkeleton-disable)")
+  helpers.type(kchild, "<Plug>(skkeleton-enable)")
+  eq(kchild.g["skkeleton#mode"], "kata")
+end
+
+K["does not keep abbrev mode"] = function()
+  helpers.type(kchild, "i", "<Plug>(skkeleton-enable)")
+  eq(kchild.g["skkeleton#mode"], "hira")
+  helpers.type(kchild, "/word<Space>")
+  eq(kchild.g["skkeleton#mode"], "abbrev")
+  helpers.type(kchild, "<Plug>(skkeleton-disable)")
+  eq(kchild.g["skkeleton#mode"], "")
+  helpers.type(kchild, "<Plug>(skkeleton-enable)")
+  eq(kchild.g["skkeleton#mode"], "hira")
+end
+
+K["preserves previous mode after abbrev mode and re-enable"] = function()
+  helpers.type(kchild, "i", "<Plug>(skkeleton-enable)")
+  helpers.type(kchild, "q")
+  eq(kchild.g["skkeleton#mode"], "kata")
+  helpers.type(kchild, "/word<Space>")
+  eq(kchild.g["skkeleton#mode"], "abbrev")
+  helpers.type(kchild, "<Plug>(skkeleton-disable)")
+  eq(kchild.g["skkeleton#mode"], "")
   helpers.type(kchild, "<Plug>(skkeleton-enable)")
   eq(kchild.g["skkeleton#mode"], "kata")
 end

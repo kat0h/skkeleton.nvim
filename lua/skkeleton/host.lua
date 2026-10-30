@@ -66,6 +66,10 @@ function M.input(prompt)
     return vim.fn.input(prompt)
   end)
 
+  pcall(vim.api.nvim_buf_del_keymap, buf, "c", "<Esc>")
+  pcall(vim.api.nvim_buf_del_keymap, buf, "c", "<C-g>")
+  map.restore_mode(buf, "c")
+
   doautocmd("skkeleton-enable-pre")
   -- skkeleton のモードに戻す
   map.map()

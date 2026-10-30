@@ -6,10 +6,9 @@
 ---@param str string
 ---@return string
 local function snake_case(str)
-  local converted = str:gsub("[A-Z]?[a-z]+", function(part)
-    return part:match("^[A-Z]") and "_" .. part:lower() or part:lower()
-  end)
-  return converted
+  local s = str:gsub("(%u+)(%u%l)", "%1_%2")
+  s = s:gsub("([%l%d])(%u)", "%1_%2")
+  return s:lower()
 end
 
 -- キーをすべて snake_case にした新しいテーブルを返す
