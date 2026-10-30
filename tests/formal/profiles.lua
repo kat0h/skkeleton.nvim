@@ -515,6 +515,34 @@ M.macro = {
   dict = dict,
 }
 
+-- undo と redo（upstream #41: 辞書登録で undo の区切りが切られていない）
+M.undo = {
+  doc = "undo（u）と redo（<C-r>）で、入力の途中の状態に戻らないか",
+  config = {},
+  alphabet = {
+    "<C-j>",
+    "Kan",
+    "a",
+    "k",
+    "<Space>",
+    "<CR>",
+    "<BS>",
+    "<C-g>",
+    "<Esc>",
+    "A",
+    "i",
+    "u",
+    "<C-r>",
+    "Kanji<Space>",
+    "KaN",
+    "<C-g>u",
+  },
+  inits = {
+    ["#mid"] = { lines = { "ab cd", "ef" }, cursor = { 1, 2 }, keys = "i" },
+  },
+  dict = dict,
+}
+
 -- インジケータを切ったもの（ちらつきなどの原因がインジケータかを切り分けるため）
 M.noindicator = {
   doc = "インジケータを切った既定の設定（原因の切り分け用）",

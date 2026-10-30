@@ -384,10 +384,17 @@ local SETUP = [[
     vim.keymap.set("i", "<C-g>", "<Nop>", { buffer = true, desc = "user-sentinel" })
     vim.b.formal_sentinel = true
   end
-  vim.api.nvim_buf_set_lines(0, 0, -1, false, init.lines)
+  -- 初期状態の行は undo の対象にしない（undolevels=-1 のあいだに入れると履歴が消える）
+  local function set_lines(lines)
+    local ul = vim.bo.undolevels
+    vim.bo.undolevels = -1
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+    vim.bo.undolevels = ul
+  end
+  set_lines(init.lines)
   sentinel()
   vim.cmd("botright new")
-  vim.api.nvim_buf_set_lines(0, 0, -1, false, { "xy" })
+  set_lines({ "xy" })
   sentinel()
   vim.cmd("wincmd p")
   vim.api.nvim_win_set_cursor(0, init.cursor)

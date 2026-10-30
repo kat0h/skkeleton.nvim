@@ -385,6 +385,12 @@ end
 -- 2 手以上をまたぐ性質のための履歴。各キーのあとに呼ぶ
 -- hist.before_register: 辞書登録の input() に入る直前の観測
 function M.observe(hist, prev, s)
+  -- これまでに観測したバッファの状態（undo の性質で使う）
+  hist.texts = hist.texts or {}
+  if prev then
+    hist.texts[(prev.buf or 0) .. ":" .. table.concat(prev.lines, "\n")] = true
+  end
+  hist.texts[(s.buf or 0) .. ":" .. table.concat(s.lines, "\n")] = true
   -- insert から normal へ抜けたときの、有効かとモード（keepState / keepMode の確かめに使う）
   if prev and insert_mode(prev) and s.vim_mode == "n" then
     hist.left_insert = { enabled = prev.enabled, mode = prev.skk_mode, buf = prev.buf, by_esc = s.key == "<Esc>" }
@@ -401,6 +407,18 @@ function M.observe(hist, prev, s)
 end
 
 M.action = {}
+
+-- upstream #41 の型: normal の u と <C-r> は、これまでに観測したバッファの状態のどれかに戻る
+-- （入力の途中の、存在しなかった状態にはならない）
+M.action["undo: u と <C-r> は観測したことのある状態に戻る"] = function(p, key, s, hist)
+  if (key ~= "u" and key ~= "<C-r>") or p.vim_mode ~= "n" or not hist or not hist.texts then
+    return
+  end
+  local text = (s.buf or 0) .. ":" .. table.concat(s.lines, "\n")
+  if not hist.texts[text] then
+    return ("%s のあとのバッファ %s は、これまでに無かった状態"):format(key, short(s.lines))
+  end
+end
 
 local function count(s, name)
   return (s.events or {})[name] or 0
