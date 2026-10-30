@@ -368,7 +368,7 @@ local function run(keys)
     end
     local rec = opts.record and Recorder.new(opts.record, rec_keys)
     if rec then
-      rec:frame(sess, "（初期状態）", nil, 1.2, 0)
+      rec:frame(sess, "（初期状態）", nil, 1.5, 0)
     end
     local base = snapshot(sess)
     local prev = base
@@ -433,8 +433,8 @@ local function run(keys)
           if note and vim.fn.strdisplaywidth(note) > 74 then
             note = vim.fn.strcharpart(note, 0, 36) .. "…"
           end
-          -- 違反が出たコマは 1 秒ほど長く止める
-          rec:frame(sess, key, note, note and 1.8 or 0.7, init_name and i - 1 or i)
+          -- 普通のコマは 1.5 秒、違反が出たコマは 3 秒（最後のコマは agg の --last-frame-duration で 5 秒）
+          rec:frame(sess, key, note, note and 3 or 1.5, init_name and i - 1 or i)
           result.violations = {}
         elseif #result.violations > 0 then
           result.steps = i
