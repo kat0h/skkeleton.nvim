@@ -342,10 +342,18 @@ function Indicator:on_cmdline_leave()
   end)
 end
 
--- <C-c> で insert を抜けたときなど InsertLeave が来ない場合も閉じる
+-- <C-c> で insert を抜けたときなど InsertLeave が来ない場合も閉じる。
+-- また、<Insert> で置換モードを経由して insert に戻ったときなど InsertEnter が
+-- 来ない場合にも開き直す (#38)
 function Indicator:on_mode_changed()
-  if not Modes.is_active() and self:is_opened() then
-    self:close()
+  if not Modes.is_active() then
+    if self:is_opened() then
+      self:close()
+    end
+  else
+    if not self:is_opened() and not self:is_disabled() then
+      self:open()
+    end
   end
 end
 
