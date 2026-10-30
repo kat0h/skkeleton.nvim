@@ -31,9 +31,11 @@ local ALIASES = {
   utf8 = "utf-8",
   eucjp = "euc-jp",
   euc_jp = "euc-jp",
+  ["euc-jp-1990"] = "euc-jp",
+  ["euc-japan"] = "euc-jp",
 }
 
-local function normalize_encoding(name)
+function M.normalize_encoding(name)
   name = name:lower()
   return ALIASES[name] or name
 end
@@ -80,15 +82,15 @@ end
 ---@return string
 function M.detect_encoding(data, encoding)
   if encoding and encoding ~= "" then
-    return normalize_encoding(encoding)
+    return M.normalize_encoding(encoding)
   end
-  for line in data:sub(1, 512):gmatch("[^\n]+") do
+  for line in data:sub(1, 4096):gmatch("[^\n]+") do
     if line:byte(1) ~= 59 then -- ';'
       break
     end
     local c = line:lower():match("coding:%s*([%w_%-]+)")
     if c then
-      return normalize_encoding(c)
+      return M.normalize_encoding(c)
     end
   end
   return looks_like_utf8(data) and "utf-8" or "euc-jp"
@@ -110,13 +112,34 @@ function M.decode(data, encoding)
   return text
 end
 
--- "/a/b/" を { "a", "b" } にする
+-- "/a/[b/c]/d/" を { "a", "[b/c]", "d" } に分ける（ブロックは中に "/" があっても 1 つにする）。
+-- 最後の "/" のあとの空文字や空白のみのトークンは無視する
 ---@param value string
 ---@return string[]
 function M.split_candidates(value)
   local out = {}
-  for c in value:gmatch("[^/]+") do
-    out[#out + 1] = c
+  local i = 1
+  local len = #value
+  while i <= len do
+    if value:byte(i) == 47 then -- '/'
+      i = i + 1
+      if value:sub(i):match("^%s*$") then
+        break
+      end
+    else
+      local a, b = value:find("^%[[^%]]+%]", i)
+      if not a then
+        a, b = value:find("^[^/]+", i)
+      end
+      if not a then
+        break
+      end
+      local tok = value:sub(a, b)
+      if b < len or not tok:match("^%s*$") then
+        out[#out + 1] = tok
+      end
+      i = b + 1
+    end
   end
   return out
 end
@@ -147,7 +170,7 @@ function M.parse(text, tick)
       if sp and sp > 1 then
         local key = line:sub(1, sp - 1)
         if cur[key] == nil then
-          cur[key] = line:sub(sp + 1)
+          cur[key] = line:sub(sp + 1):gsub("%s+$", "")
         end
       end
     end
@@ -249,18 +272,24 @@ function M.load_json(path)
   if not ok or type(jisyo) ~= "table" then
     error(("invalid JSON dictionary: %s"):format(path), 0)
   end
+  if jisyo.okuri_ari == nil and jisyo.okuri_nasi == nil then
+    error(("invalid JSON dictionary (both okuri_ari and okuri_nasi are missing): %s"):format(path), 0)
+  end
   local maps = {}
   for json_key, kind in pairs({ okuri_ari = "okuriari", okuri_nasi = "okurinasi" }) do
     local entries = jisyo[json_key]
-    if type(entries) ~= "table" then
-      error(("invalid JSON dictionary (%s is missing): %s"):format(json_key, path), 0)
-    end
-    maps[kind] = {}
-    for k, v in pairs(entries) do
-      if type(v) ~= "table" then
-        error(("invalid JSON dictionary (%s.%s is not an array): %s"):format(json_key, k, path), 0)
+    if entries == nil then
+      maps[kind] = {}
+    elseif type(entries) ~= "table" then
+      error(("invalid JSON dictionary (%s is not an object): %s"):format(json_key, path), 0)
+    else
+      maps[kind] = {}
+      for k, v in pairs(entries) do
+        if type(v) ~= "table" then
+          error(("invalid JSON dictionary (%s.%s is not an array): %s"):format(json_key, k, path), 0)
+        end
+        maps[kind][k] = v
       end
-      maps[kind][k] = v
     end
   end
   return Memory.new(maps)

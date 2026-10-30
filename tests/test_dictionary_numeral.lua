@@ -51,6 +51,11 @@ T["to_kanji_classic leaves a number that is too large as digits"] = function()
   eq(N.to_kanji_classic(big), big)
 end
 
+T["to_kanji_classic returns non-digits as-is"] = function()
+  eq(N.to_kanji_classic("abc"), "abc")
+  eq(N.to_kanji_classic("12a34"), "12a34")
+end
+
 T["to_kanji_modern, to_zenkaku"] = function()
   eq(N.to_kanji_modern("101"), "一〇一")
   eq(N.to_kanji_modern("0"), "〇")
@@ -105,7 +110,6 @@ end
 
 T["convert_number"] = function()
   local cases = {
-    { "#番", "101ばん", "101番" },
     { "#0番", "101ばん", "101番" },
     { "#1番", "101ばん", "１０１番" },
     { "#2番", "101ばん", "一〇一番" },
@@ -122,8 +126,13 @@ T["convert_number"] = function()
     { "#3月#1日", "12がつ25にち", "十二月２５日" },
     -- 数字を含まない候補はそのまま
     { "東京", "101ばん", "東京" },
-    -- 数字より "#" が多いと、余りは捨てる
-    { "#0と#0", "5と", "5と" },
+    -- リテラル '#'（数字が続かないもの）は置換されない
+    { "C#", "101", "C#" },
+    { "#番", "101ばん", "101番" },
+    -- 注釈つきテンプレート・残りのセグメントを切り詰めない
+    { "#0;#3の注釈", "101", "101;#3の注釈" },
+    { "#1番;#0", "101", "１０１番;#0" },
+    { "#0と#0", "5と", "5と#0" },
   }
   for _, c in ipairs(cases) do
     eq({ c[1], c[2], N.convert_number(c[1], c[2]) }, c)
@@ -137,7 +146,7 @@ local function memory(maps)
 end
 
 T["wrap"]["converts numbers (upstream: get num candidates)"] = function()
-  local d = N.wrap(memory({ okurinasi = { ["#ばん"] = "/#番/#1番/#2番/#3番/#8番/#5番/" } }))
+  local d = N.wrap(memory({ okurinasi = { ["#ばん"] = "/#0番/#1番/#2番/#3番/#8番/#5番/" } }))
   eq(
     d:get_henkan_result("okurinasi", "101ばん"),
     { "101番", "１０１番", "一〇一番", "百一番", "CI番", "佰壱番" }
@@ -158,15 +167,15 @@ T["wrap"]["puts exact matches of words that include numbers first"] = function()
 end
 
 T["wrap"]["puts exact matches before the numeric pattern"] = function()
-  local d = N.wrap(memory({ okurinasi = { ["#ばん"] = "/#番/", ["1ばん"] = "/一番/" } }))
+  local d = N.wrap(memory({ okurinasi = { ["#ばん"] = "/#0番/", ["1ばん"] = "/一番/" } }))
   eq(d:get_henkan_result("okurinasi", "1ばん"), { "一番", "1番" })
 end
 
 T["wrap"]["does not change the inner dictionary"] = function()
-  local inner = memory({ okurinasi = { ["#ばん"] = { "#番" } } })
+  local inner = memory({ okurinasi = { ["#ばん"] = { "#0番" } } })
   local d = N.wrap(inner)
   d:get_henkan_result("okurinasi", "5ばん")
-  eq(inner.maps.okurinasi["#ばん"], { "#番" })
+  eq(inner.maps.okurinasi["#ばん"], { "#0番" })
 end
 
 return T

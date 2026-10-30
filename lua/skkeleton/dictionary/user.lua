@@ -37,26 +37,6 @@ local function filter(candidates)
   return out
 end
 
--- "/a/[b/c]/d/" を { "a", "[b/c]", "d" } に分ける（ブロックは中に "/" があっても 1 つにする）
----@param value string
-local function split_with_blocks(value)
-  local out = {}
-  local i = 1
-  while i <= #value do
-    if value:byte(i) == 47 then -- '/'
-      i = i + 1
-    else
-      local a, b = value:find("^%[[^%]]+%]", i)
-      if not a then
-        a, b = value:find("^[^/]+", i)
-      end
-      out[#out + 1] = value:sub(a, b)
-      i = b + 1
-    end
-  end
-  return out
-end
-
 ---@param kind "okuriari"|"okurinasi"
 ---@param word string
 ---@return string[]
@@ -137,7 +117,7 @@ function User:read_file(path)
     elseif cur then
       local sp = line:find(" ", 1, true)
       if sp and sp > 1 then
-        cur[line:sub(1, sp - 1)] = split_with_blocks(line:sub(sp + 1))
+        cur[line:sub(1, sp - 1)] = skk.split_candidates(line:sub(sp + 1))
       end
     end
   end
@@ -163,8 +143,10 @@ function User:load(opts)
   if not time or time == self.load_time then
     return
   end
-  self.load_time = time
-  pcall(self.read_file, self, self.path)
+  local ok = pcall(self.read_file, self, self.path)
+  if ok then
+    self.load_time = time
+  end
 end
 
 local function sorted_lines(map, descending)
@@ -194,12 +176,14 @@ function User:save()
   -- 書いている途中で落ちても辞書が欠けないよう、同じディレクトリの一時ファイルに書いてから rename する。
   -- シンボリックリンクはリンク先を書き換える（リンクそのものは残す）
   local target = uv.fs_realpath(self.path) or self.path
+  vim.fn.mkdir(vim.fs.dirname(target), "p")
   local stat = uv.fs_stat(target)
   local tmp = ("%s.%d.tmp"):format(target, uv.os_getpid())
   local ok = false
+  local content = table.concat(lines, "\n")
   local fd = uv.fs_open(tmp, "w", stat and bit.band(stat.mode, 511) or 420)
   if fd then
-    ok = uv.fs_write(fd, table.concat(lines, "\n"), 0) ~= nil
+    ok = uv.fs_write(fd, content, 0) == #content
     ok = uv.fs_fsync(fd) ~= nil and ok
     uv.fs_close(fd)
     ok = ok and uv.fs_rename(tmp, target) ~= nil

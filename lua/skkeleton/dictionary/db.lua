@@ -52,14 +52,19 @@ end
 function M.cache_dir(database_path)
   if database_path and database_path ~= "" then
     local p = util.expand_home(database_path)
+    local is_dir_sep = p:sub(-1) == "/" or p:sub(-1) == "\\"
+    if is_dir_sep then
+      p = p:sub(1, -2)
+    end
+    p = vim.fs.normalize(p)
     local st = uv.fs_stat(p)
     if st then
-      return st.type == "directory" and p or vim.fs.dirname(vim.fs.normalize(p))
+      return st.type == "directory" and p or vim.fs.dirname(p)
     end
-    if p:sub(-1) == "/" or not vim.fs.basename(p):find(".", 2, true) then
-      return vim.fs.normalize(p)
+    if is_dir_sep or not vim.fs.basename(p):find(".", 2, true) then
+      return p
     end
-    return vim.fs.dirname(vim.fs.normalize(p))
+    return vim.fs.dirname(p)
   end
   return vim.fs.joinpath(vim.fn.stdpath("cache"), "skkeleton")
 end
@@ -72,7 +77,7 @@ end
 function M.path_for(src, dir, encoding)
   local key = vim.fs.normalize(vim.fn.fnamemodify(src, ":p"))
   if encoding and encoding ~= "" then
-    key = key .. "\0" .. encoding:lower()
+    key = key .. "\0" .. skk.normalize_encoding(encoding)
   end
   return vim.fs.joinpath(dir, vim.fn.sha256(key):sub(1, 16) .. ".db")
 end
@@ -164,11 +169,12 @@ function M.build(src, dst, encoding, tick)
   if not fd then
     error(("cannot write %s (%s)"):format(tmp, err), 0)
   end
-  local ok, werr = uv.fs_write(fd, { header, index, body }, 0)
+  local expected = #header + #index + #body
+  local written, werr = uv.fs_write(fd, { header, index, body }, 0)
   uv.fs_close(fd)
-  if not ok then
+  if not written or written ~= expected then
     uv.fs_unlink(tmp)
-    error(("cannot write %s (%s)"):format(tmp, werr), 0)
+    error(("cannot write %s (%s)"):format(tmp, werr or ("short write: %d of %d"):format(written or 0, expected)), 0)
   end
   local renamed, rerr = uv.fs_rename(tmp, dst)
   if not renamed then
@@ -216,6 +222,8 @@ local function resolve(src, opts)
   return src, M.path_for(src, opts.dir or M.cache_dir(), opts.encoding), opts
 end
 
+local building = {} ---@type table<string, fun(dst?: string, err?: string)[]>
+
 -- 新しい DB があればそのパスを返し、無ければその場で作る
 ---@param src string
 ---@param opts? skkeleton.DbOpts
@@ -224,12 +232,17 @@ function M.ensure(src, opts)
   local dst
   src, dst, opts = resolve(src, opts)
   if opts.force or not M.is_fresh(src, dst) then
+    local cbs = building[dst]
+    building[dst] = nil
     M.build(src, dst, opts.encoding)
+    if cbs then
+      for _, f in ipairs(cbs) do
+        f(dst)
+      end
+    end
   end
   return dst
 end
-
-local building = {} ---@type table<string, fun(dst?: string, err?: string)[]>
 
 -- ensure の非同期版。UI を止めないよう、作るのを小分けにして、間にイベントループを回しながら進める。
 -- 終わったら cb(dst) か cb(nil, err)。同じ DB を作っている最中の呼び出しは、その完了を待つ
@@ -252,6 +265,9 @@ function M.ensure_async(src, opts, cb)
   end, function(ok, err)
     local cbs = building[dst]
     building[dst] = nil
+    if not cbs then
+      return
+    end
     for _, f in ipairs(cbs) do
       if ok then
         f(dst)
@@ -335,11 +351,22 @@ end
 function Dict:line(t, i)
   local j = t.base + i - 1
   local off = off_at(self.idx, j)
-  return uv.fs_read(self.fd, off_at(self.idx, j + 1) - off, off)
+  local next_off = off_at(self.idx, j + 1)
+  if not off or not next_off or next_off <= off then
+    return nil
+  end
+  return uv.fs_read(self.fd, next_off - off, off)
 end
 
 local function key_of(line)
-  return line:sub(1, line:find(" ", 1, true) - 1)
+  if not line then
+    return ""
+  end
+  local sp = line:find(" ", 1, true)
+  if not sp then
+    return ""
+  end
+  return line:sub(1, sp - 1)
 end
 
 -- key 以上になる最初の行の番号
@@ -367,7 +394,7 @@ function Dict:get_raw(kind, key)
     return nil
   end
   local line = self:line(t, i)
-  if key_of(line) ~= key then
+  if not line or key_of(line) ~= key then
     return nil
   end
   return line:sub(#key + 2, -2)
@@ -393,6 +420,9 @@ function Dict:get_prefix(kind, prefix, limit)
   local i = lower_bound(self, t, prefix)
   while i <= t.n and #hits < limit do
     local line = self:line(t, i)
+    if not line then
+      break
+    end
     local k = key_of(line)
     if k:sub(1, n) ~= prefix then
       break

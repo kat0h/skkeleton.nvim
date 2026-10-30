@@ -156,7 +156,7 @@ T["memory dictionary"]["rejects invalid JSON and unsupported formats"] = functio
   eq(
     run([[
       local out = {}
-      out[1] = select(2, pcall(skk.load_memory, write("bad.json", '{"okuri_ari": {}}')))
+      out[1] = select(2, pcall(skk.load_memory, write("bad.json", '{"bad": 123}')))
       out[2] = select(2, pcall(skk.load_memory, TD .. "/newJisyo.yaml"))
       out[3] = select(2, pcall(skk.load_memory, TMP .. "/x.mpk"))
       return vim.tbl_map(function(s) return s:match("invalid JSON") or s:match("unsupported") end, out)
@@ -382,11 +382,54 @@ T["db"]["cache_dir"] = function()
         db.cache_dir(file) == TMP .. "/old",
         db.cache_dir(TMP .. "/not/yet") == TMP .. "/not/yet",
         db.cache_dir(TMP .. "/not/yet/") == TMP .. "/not/yet",
+        db.cache_dir(TMP .. "/not/yet\\") == TMP .. "/not/yet",
         db.cache_dir(nil) == vim.fs.joinpath(vim.fn.stdpath("cache"), "skkeleton"),
         db.cache_dir("") == vim.fs.joinpath(vim.fn.stdpath("cache"), "skkeleton"),
       }
     ]]),
-    { true, true, true, true, true, true }
+    { true, true, true, true, true, true, true }
+  )
+end
+
+T["db"]["path_for normalizes encoding"] = function()
+  eq(
+    run([[
+      local dir = TMP .. "/db"
+      local p1 = db.path_for("dict", dir, "eucjp")
+      local p2 = db.path_for("dict", dir, "euc-jp")
+      local p3 = db.path_for("dict", dir, "euc-japan")
+      return { p1 == p2, p1 == p3 }
+    ]]),
+    { true, true }
+  )
+end
+
+T["db"]["ensure cleans up in-flight ensure_async on same dst"] = function()
+  eq(
+    run([[
+      local src = write("s_ensure", ";; coding: utf-8\n;; okuri-nasi entries.\nあ /亜/\n")
+      local opts = { dir = TMP .. "/db", force = true }
+      local async_res
+      db.ensure_async(src, opts, function(dst, err) async_res = { dst, err } end)
+      local sync_dst = db.ensure(src, opts)
+      vim.wait(1000, function() return async_res ~= nil end)
+      return { sync_dst == async_res[1], async_res[2] == nil }
+    ]]),
+    { true, true }
+  )
+end
+
+T["db"]["Dict handles corrupt line without throwing arithmetic error"] = function()
+  eq(
+    run([[
+      local corrupt = write("corrupt.db", "SKKDB 1 0 1 10 100 0\n" .. (" "):rep(128 - 21) .. "\0\0\0\0\0\0\0\0corruptline")
+      local ok, d = pcall(db.open, corrupt)
+      if not ok then return true end
+      local ok2 = pcall(function() return d:get_henkan_result("okurinasi", "foo") end)
+      d:close()
+      return ok2
+    ]]),
+    true
   )
 end
 

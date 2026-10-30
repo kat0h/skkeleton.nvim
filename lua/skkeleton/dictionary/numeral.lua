@@ -68,6 +68,9 @@ end
 ---@param digits string
 function M.to_kanji_classic(digits)
   local s = strip(digits)
+  if not s:match("^%d+$") then
+    return digits
+  end
   if s == "0" then
     return "〇"
   end
@@ -174,20 +177,58 @@ local CONVERTERS = {
   ["#5"] = M.to_daiji,
 }
 
+-- 候補 pattern のプレースホルダ（#[0-9] または英数字直後でない '#'）と地の文に分ける
+---@param pattern string
+---@return string[]
+local function split_pattern(pattern)
+  local out = {}
+  local pos = 1
+  local len = #pattern
+  local last_pos = 1
+  while pos <= len do
+    local hash = pattern:find("#", pos, true)
+    if not hash then
+      break
+    end
+    local next_ch = pattern:sub(hash + 1, hash + 1)
+    local is_digit = next_ch:match("^[0-9]$") ~= nil
+    local prev_ch = hash > 1 and pattern:sub(hash - 1, hash - 1) or ""
+    local is_alphanumeric = prev_ch:match("^%w$") ~= nil
+
+    if is_digit then
+      out[#out + 1] = pattern:sub(last_pos, hash - 1)
+      out[#out + 1] = pattern:sub(hash, hash + 1)
+      pos = hash + 2
+      last_pos = pos
+    elseif not is_alphanumeric then
+      out[#out + 1] = pattern:sub(last_pos, hash - 1)
+      out[#out + 1] = "#"
+      pos = hash + 1
+      last_pos = pos
+    else
+      -- "C#" などのリテラル '#'
+      pos = hash + 1
+    end
+  end
+  out[#out + 1] = pattern:sub(last_pos)
+  return out
+end
+
 -- 候補 pattern の "#N" を、見出し語 entry の数字で置き換える
 ---@param pattern string  例: "#3番"
 ---@param entry string  例: "101ばん"
 ---@return string
 function M.convert_number(pattern, entry)
-  local p = split_with_captures(pattern, "#[0-9]?")
+  local p = split_pattern(pattern)
   local e = split_with_captures(entry, "[0-9]+")
   local out = {}
-  for i = 1, math.min(#p, #e) do
-    local k, v = p[i], e[i]
+  for i = 1, #p do
+    local k = p[i]
+    local v = e[i]
     local conv = CONVERTERS[k]
-    if conv and v:match("^[0-9]+$") then
+    if conv and v and v:match("^[0-9]+$") then
       out[i] = conv(v)
-    elseif k == "#" or k == "#0" or k == "#4" or k == "#6" or k == "#7" then
+    elseif v and (k == "#" or k == "#0" or k == "#4" or k == "#6" or k == "#7") then
       out[i] = v
     else
       out[i] = k

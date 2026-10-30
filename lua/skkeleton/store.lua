@@ -41,6 +41,9 @@ end
 
 -- Library の差し替え（テスト用）
 function M.set_library(lib)
+  if current_library and current_library ~= lib and current_library.close then
+    current_library:close()
+  end
   current_library = lib
 end
 

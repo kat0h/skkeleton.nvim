@@ -203,6 +203,20 @@ T["load of a missing file keeps working, and save creates it"] = function()
   )
 end
 
+T["save creates parent directory if it does not exist"] = function()
+  eq(
+    run([[
+      local path = TMP .. "/deep/nested/sub/user_dict"
+      local u = User.new()
+      u:load({ path = path })
+      u:register_henkan_result("okurinasi", "あ", "亜")
+      u:save()
+      return { vim.uv.fs_stat(path) ~= nil, read(path):find("あ /亜/", 1, true) ~= nil }
+    ]]),
+    { true, true }
+  )
+end
+
 T["save without a path does nothing, and save to an unwritable path warns"] = function()
   eq(
     run([[
@@ -210,11 +224,33 @@ T["save without a path does nothing, and save to an unwritable path warns"] = fu
       vim.notify = function(m) msgs[#msgs + 1] = m end
       local u = User.new()
       u:save()
-      u:load({ path = TMP .. "/no/such/dir/file" })
+      local unwrite_dir = TMP .. "/unwritable"
+      vim.fn.mkdir(unwrite_dir, "p")
+      vim.uv.fs_chmod(unwrite_dir, 320) -- 0500: r-x, no write
+      u:load({ path = unwrite_dir .. "/file" })
       u:save()
+      vim.uv.fs_chmod(unwrite_dir, 511)
       return { #msgs, msgs[1] and msgs[1]:find("can't write", 1, true) ~= nil }
     ]]),
     { 1, true }
+  )
+end
+
+T["load only sets load_time on successful read"] = function()
+  eq(
+    run([[
+      local path = write("bad_perm_dict", ";; okuri-nasi entries.\nあ /亜/\n")
+      local u = User.new()
+      local old_read = u.read_file
+      u.read_file = function() error("read error") end
+      u:load({ path = path })
+      local time_after_fail = u.load_time
+      u.read_file = old_read
+      u:load({ path = path })
+      local time_after_success = u.load_time
+      return { time_after_fail == "", time_after_success ~= "" }
+    ]]),
+    { true, true }
   )
 end
 
