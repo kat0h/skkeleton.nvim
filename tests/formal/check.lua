@@ -266,6 +266,12 @@ local function settle(child)
   if not settle_once(child) then
     return false
   end
+  -- 問い合わせを止めて少し待ち、SafeState や vim.schedule で動く処理（normal に戻ったあとの片付けなど）を走らせる。
+  -- RPC で問い合わせ続けていると、Neovim が入力待ちにならず SafeState が来ない
+  vim.uv.sleep(20)
+  if not settle_once(child) then
+    return false
+  end
   -- 非同期に描くもの（blink.cmp のメニューなど）を待つ
   if profile.wait_ms then
     vim.uv.sleep(profile.wait_ms)

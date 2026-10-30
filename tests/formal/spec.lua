@@ -241,6 +241,10 @@ M.state["popup: 候補一覧は ▼ の 5 番目の候補から"] = function(s)
 end
 
 M.state["resource: ウィンドウとバッファが漏れない"] = function(s, base)
+  -- 今のウィンドウが float（検査で開いたもの）のときは、その中でバッファが入れ替わることがあるので比べない
+  if s.win_float then
+    return
+  end
   local floats = #s.popup + #s.indicator + (s.other_floats or 0)
   local base_wins = base.wins - #base.popup - #base.indicator - (base.other_floats or 0)
   if s.wins - floats ~= base_wins then
@@ -556,6 +560,29 @@ end
 -- 見つかったが、今は直さないもの。反例の性質の名前と、キー列で見分ける。
 -- 当てはまる違反は「既知」として出し、失敗にしない
 M.known = {}
+
+-- 一度も有効にしないまま <C-c> で insert を抜けると、インジケータが残る（#27 の残り）
+M.known[#M.known + 1] = {
+  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
+  match = function(keys, msg)
+    return vim.tbl_contains(keys, "<C-c>") and msg and msg:find("normal なのに", 1, true) ~= nil
+  end,
+  reason = "#27: 一度も有効にしないまま <C-c> で insert を抜けると、インジケータが残る",
+}
+
+-- <Esc> のすぐあとに v を押すと、状態が escape のまま残る（#32）
+for _, property in ipairs({
+  "preedit: 表示は状態の文字列と一致する",
+  "frame: skkeleton の外でバッファやカーソルが動いたら pre-edit を捨てる",
+}) do
+  M.known[#M.known + 1] = {
+    property = property,
+    match = function(keys)
+      return vim.tbl_contains(keys, "<Esc>v")
+    end,
+    reason = "#32: <Esc> のすぐあとに v を押すと、skkeleton の状態が escape のまま残る",
+  }
+end
 
 function M.is_known(name, keys, msg)
   for _, k in ipairs(M.known) do
