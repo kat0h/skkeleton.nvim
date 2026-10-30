@@ -1,0 +1,220 @@
+-- Ported from skkeleton (denops/skkeleton/main.ts)
+-- Copyright (c) 2021 kuuote, zlib license (see LICENSES/skkeleton.txt)
+-- Modified for skkeleton.nvim: rewritten in Lua.
+-- enable / disable / toggle / handle と、使い終わった state を片付ける autocmd。
+local config = require("skkeleton.config")
+local host = require("skkeleton.host")
+local kana = require("skkeleton.kana")
+local keymap = require("skkeleton.keymap")
+local map = require("skkeleton.map")
+local mode_mod = require("skkeleton.mode")
+local notation = require("skkeleton.notation")
+local popup = require("skkeleton.popup")
+local render = require("skkeleton.render")
+local store = require("skkeleton.store")
+local util = require("skkeleton.util")
+
+local functions = util.lazy("skkeleton.function")
+local disable_func = util.lazy("skkeleton.function.disable")
+
+local options = config.options
+
+local M = {}
+
+local initialized = false
+
+local function doautocmd(name)
+  -- 利用者の autocmd のエラーで止まらないようにする
+  local ok, err = pcall(vim.api.nvim_exec_autocmds, "User", { pattern = name, modeline = false })
+  if not ok then
+    vim.notify(tostring(err), vim.log.levels.ERROR)
+  end
+end
+
+-- Context を作り直す（使い終わった state の片付け）
+local function reset()
+  store.init_context()
+end
+
+-- 最初に使うときに一度だけ呼ぶ。autocmd を作り、skkeleton-initialize-pre/post を発火する
+---@param force? boolean
+function M.init(force)
+  if force then
+    initialized = false
+  end
+  if initialized then
+    return
+  end
+  initialized = true
+  if vim.g["skkeleton#debug"] then
+    options.debug = true
+  end
+  doautocmd("skkeleton-initialize-pre")
+
+  local group = vim.api.nvim_create_augroup("skkeleton-internal", { clear = true })
+  -- 使い終わった state を片付ける。CmdlineEnter にすると辞書登録の呼び出しで壊れる。
+  -- 挿入モードの <C-o>（niI）などで解除されないよう ModeChanged の :n にする。
+  -- SafeState を挟むのは、プラグインによる ModeChanged の呼び出しで解除されるのを防ぐため。
+  -- このイベントは利用者の操作を受け付けるときに呼ばれるので、そこで normal なら改めて処理する
+  vim.api.nvim_create_autocmd("ModeChanged", {
+    group = group,
+    pattern = "*:n",
+    callback = function()
+      vim.api.nvim_create_autocmd("SafeState", {
+        group = group,
+        once = true,
+        callback = function()
+          if vim.fn.mode() == "n" then
+            reset()
+            host.disable()
+          end
+        end,
+      })
+    end,
+  })
+  -- insert のままウィンドウを切り替えても残らないようにする
+  vim.api.nvim_create_autocmd("WinLeave", {
+    group = group,
+    callback = function()
+      reset()
+      host.disable()
+    end,
+  })
+  doautocmd("skkeleton-initialize-post")
+end
+
+---@param keys string[]
+---@return string[]
+local function normalize_keys(keys)
+  local ret = {}
+  for i, k in ipairs(keys or {}) do
+    ret[i] = notation.normalize(k)
+  end
+  return ret
+end
+
+-- キーを state に流す。補完の確定など、先に流すキーがあれば返す
+---@param opts table
+---@param vim_mode string
+---@return string?
+local function handle_keys(opts, vim_mode)
+  local ctx = store.context()
+  ctx.vim_mode = vim_mode:sub(1, 1)
+  local keys = normalize_keys(opts.key)
+
+  -- 補完の pum が出ているときの <CR>。native の pum だけ対応する
+  if vim.fn.pumvisible() == 1 and table.concat(keys) == "<cr>" and options.eggLikeNewline then
+    local ok, info = pcall(vim.fn.complete_info, { "selected" })
+    if ok and info.selected >= 0 then
+      mode_mod.initialize_state_with_abbrev(ctx, { "converter" })
+      ctx.preedit:output("")
+      return "\25"
+    end
+  end
+
+  local func = opts["function"]
+  for _, key in ipairs(keys) do
+    if func then
+      functions.functions[func](ctx, key)
+    else
+      keymap.handle_key(ctx, key)
+    end
+  end
+end
+
+---@param opts table
+---@param vim_mode string
+---@return string?
+local function enable(opts, vim_mode)
+  local old = store.context()
+  if vim_mode:sub(1, 1) == "R" then
+    vim.notify("skkeleton doesn't allowed in replace mode")
+    return
+  end
+  if (old.state.type ~= "input" or old.state.mode ~= "direct") and opts.key then
+    return handle_keys(opts, vim_mode)
+  end
+  -- Context を作り直す前に設定する
+  kana.set_current(options.kanaTable)
+  local ctx = store.init_context()
+  ctx.vim_mode = vim_mode:sub(1, 1)
+
+  doautocmd("skkeleton-enable-pre")
+  map.save_options()
+  map.map()
+  vim.g["skkeleton#enabled"] = true
+  local mode_function = functions.mode_functions[store.variables.last_mode]
+  if mode_function then
+    mode_function(ctx, "")
+  end
+  doautocmd("skkeleton-enable-post")
+end
+
+---@param opts table
+---@param vim_mode string
+---@return string?
+local function disable(opts, vim_mode)
+  local ctx = store.context()
+  local st = ctx.state
+  -- <Plug>(skkeleton-disable) は key を持たないので、ここでは素通しにしない
+  if (st.type ~= "input" or st.mode ~= "direct") and opts.key then
+    return handle_keys(opts, vim_mode)
+  end
+  ctx.vim_mode = vim_mode:sub(1, 1)
+  disable_func.disable(ctx)
+end
+
+-- g:skkeleton#state を更新する（補完ソースなどが読む）
+local function update_state_variable()
+  local st = store.context().state
+  local phase
+  if st.type == "input" then
+    phase = st.mode == "okurinasi" and "input:okurinasi" or st.mode == "okuriari" and "input:okuriari" or "input"
+  else
+    phase = st.type
+  end
+  vim.g["skkeleton#state"] = { phase = phase, henkanFeed = st.henkan_feed or "" }
+end
+
+-- func: "handleKey" | "enable" | "disable" | "toggle" | "setState"
+---@param func string
+---@param opts? table
+function M.handle(func, opts)
+  M.init()
+  opts = opts or {}
+  local vim_mode = vim.api.nvim_get_mode().mode
+  local short = vim_mode:sub(1, 1)
+  popup.close()
+
+  local ctx = store.context()
+  -- 補完の後など pre-edit とバッファが合わなくなったときはリセットする
+  if render.is_stale(ctx, short) then
+    mode_mod.initialize_state_with_abbrev(ctx, { "converter" })
+    ctx.preedit:output("")
+    render.clear()
+  end
+
+  local prefix
+  if func == "handleKey" then
+    prefix = handle_keys(opts, vim_mode)
+  elseif func == "enable" or func == "setState" then
+    prefix = enable(opts, vim_mode)
+  elseif func == "disable" then
+    prefix = disable(opts, vim_mode)
+  elseif func == "toggle" then
+    local disabled = vim.g["skkeleton#mode"] == "" or not vim.g["skkeleton#enabled"]
+    if disabled then
+      prefix = enable(opts, vim_mode)
+    else
+      prefix = disable(opts, vim_mode)
+    end
+  else
+    error("Unsupported function: " .. tostring(func), 0)
+  end
+  ctx = store.context()
+  ctx.vim_mode = ctx.vim_mode ~= "" and ctx.vim_mode or short
+  update_state_variable()
+  render.update(ctx, prefix)
+end
+
+return M
