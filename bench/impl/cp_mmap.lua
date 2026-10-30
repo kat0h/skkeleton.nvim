@@ -3,14 +3,17 @@ local cache = require("lib.cache")
 local ffi = require("ffi")
 local bit = require("bit")
 
-pcall(ffi.cdef, [[
+pcall(
+  ffi.cdef,
+  [[
   int open(const char *path, int flags, ...);
   int close(int fd);
   void *mmap(void *addr, size_t len, int prot, int flags, int fd, long off);
   int munmap(void *addr, size_t len);
   int memcmp(const void *a, const void *b, size_t n);
   void *memchr(const void *s, int c, size_t n);
-]])
+]]
+)
 local C = ffi.C
 local PROT_READ, MAP_PRIVATE = 1, 2
 

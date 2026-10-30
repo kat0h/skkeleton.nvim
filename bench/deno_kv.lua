@@ -49,7 +49,6 @@ vim.defer_fn(function()
   finish(1)
 end, 600000)
 
-
 vim.api.nvim_create_autocmd("User", {
   pattern = "DenopsPluginPost:skkeleton",
   once = true,

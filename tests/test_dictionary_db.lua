@@ -38,7 +38,10 @@ T["skk.parse"]["splits the okuri-ari and okuri-nasi sections"] = function()
       }, "\n"))
       return m
     ]]),
-    { okuriari = { ["わるs"] = "/悪/" }, okurinasi = { ["あかね"] = "/茜/", ["てすと"] = "/テスト/test/" } }
+    {
+      okuriari = { ["わるs"] = "/悪/" },
+      okurinasi = { ["あかね"] = "/茜/", ["てすと"] = "/テスト/test/" },
+    }
   )
 end
 

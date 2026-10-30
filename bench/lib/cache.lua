@@ -15,7 +15,12 @@ M.HEADER_SIZE = 128
 M.VERSION = 1
 
 local function u32(n)
-  return string.char(bit.band(n, 0xff), bit.band(bit.rshift(n, 8), 0xff), bit.band(bit.rshift(n, 16), 0xff), bit.rshift(n, 24))
+  return string.char(
+    bit.band(n, 0xff),
+    bit.band(bit.rshift(n, 8), 0xff),
+    bit.band(bit.rshift(n, 16), 0xff),
+    bit.rshift(n, 24)
+  )
 end
 
 function M.parse_header(s)
@@ -49,7 +54,14 @@ function M.build(src, dst, encoding)
     idx[#idx + 1] = u32(pos) -- 終端
   end
   assert(pos < 2 ^ 32, "dictionary too large")
-  local header = ("SKKDB %d %d %d %d %d %d\n"):format(M.VERSION, nari, nnasi, stat.size, stat.mtime.sec, stat.mtime.nsec)
+  local header = ("SKKDB %d %d %d %d %d %d\n"):format(
+    M.VERSION,
+    nari,
+    nnasi,
+    stat.size,
+    stat.mtime.sec,
+    stat.mtime.nsec
+  )
   header = header .. (" "):rep(M.HEADER_SIZE - #header)
   vim.fn.mkdir(vim.fs.dirname(dst), "p")
   local tmp = dst .. ".tmp"

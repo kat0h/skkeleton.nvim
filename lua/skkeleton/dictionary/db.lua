@@ -143,8 +143,14 @@ function M.build(src, dst, encoding, tick)
   end
   maps = nil
   assert(pos < 2 ^ 32, "dictionary too large")
-  local header =
-    ("SKKDB %d %d %d %d %d %d\n"):format(M.VERSION, nari, nnasi, stat.size, stat.mtime.sec, stat.mtime.nsec)
+  local header = ("SKKDB %d %d %d %d %d %d\n"):format(
+    M.VERSION,
+    nari,
+    nnasi,
+    stat.size,
+    stat.mtime.sec,
+    stat.mtime.nsec
+  )
   header = header .. (" "):rep(M.HEADER_SIZE - #header)
   local index = table.concat(idx)
   tick()

@@ -190,11 +190,7 @@ function M.prefix(ctx, key)
   end
 
   local state = ctx.state
-  if
-    not state.direct_input
-    and state.henkan_feed ~= ""
-    and (state.mode == "okurinasi" or state.mode == "okuriari")
-  then
+  if not state.direct_input and state.henkan_feed ~= "" and (state.mode == "okurinasi" or state.mode == "okuriari") then
     M.accept_result(ctx, { ">", "" }, "")
     ctx.state.affix = "prefix"
     henkan.henkan_first(ctx, key)
