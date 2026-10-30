@@ -96,3 +96,8 @@
 ## 確認の方法（Phase 0/1）
 - Phase 0: `git -C ~/ghq/github.com/kat0h/skkeleton.nvim log --oneline` で計画のコミットが 1 つあること
 - Phase 1: `nvim --headless -u NONE -l bench/verify.lua` がすべての実装で 0 件不一致になること、`bench/run.lua` の結果の表が目標と並べて `bench/results/` に保存されていること。その表を使ってユーザーに報告する
+
+## Phase 2 の進め方（2026-10-30）
+- モジュールの担当とインターフェースは [docs/ARCHITECTURE.md](ARCHITECTURE.md) に決めた。実装はサブエージェントに分けて渡し、タスクは GitHub の issue で管理する
+- 計画からの変更: 確定した文字列は `nvim_buf_set_text` ではなく、upstream と同じく `feedkeys` で流す。autoindent（upstream の「new line」のテスト）、`<C-g>u` の undo point、`.` のリピート、略語の展開を保つため。pre-edit を extmark で表示する点は変えない
+- upstream のこの版には kakuteiUndo が無いので、v1 の範囲から外す
