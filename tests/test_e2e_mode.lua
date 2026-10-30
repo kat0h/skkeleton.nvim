@@ -294,6 +294,29 @@ T["setup rejects unknown options"] = function()
   eq(ok, false)
 end
 
+T["initialize prepares the dictionary without blocking"] = function()
+  log_events({ "skkeleton-initialize-pre", "skkeleton-initialize-post" })
+  child.lua([[require("skkeleton").initialize()]])
+  eq(child.lua_get("#_G.log"), 2)
+  local ready = child.lua_get([[vim.wait(5000, function()
+    return #vim.fn.glob(_G.dir .. "/db/**", false, true) > 0
+  end, 20)]])
+  eq(ready, true)
+  -- 準備した辞書で変換できる
+  enable()
+  type("Nihon<Space>")
+  eq(helpers.preedit(child), "▼日本")
+  -- 二度目の initialize で User イベントはもう発火しない
+  child.lua([[require("skkeleton").initialize()]])
+  eq(child.lua_get("#_G.log"), 2)
+end
+
+T["update_database builds the cache"] = function()
+  child.lua([[require("skkeleton").update_database(_G.dir .. "/dict", "utf-8", true)]])
+  eq(#child.lua_get([[vim.fn.glob(_G.dir .. "/db/**", false, true)]]) > 0, true)
+  eq(child.lua_get([[vim.fn.execute("messages"):find("updated database", 1, true) ~= nil]]), true)
+end
+
 local K, kchild = helpers.e2e_set({ config = { keepMode = true } })
 T["keepMode"] = K
 K["keeps the last mode"] = function()

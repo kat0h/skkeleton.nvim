@@ -25,7 +25,7 @@ Phase 2 の実装を複数の担当に分けて進めるための取り決め。
 | `lua/skkeleton/function/{init,common,input,henkan,mode,disable,dictionary}.lua` | K | upstream の `function/*.ts` |
 | `lua/skkeleton/dictionary/{init,skk,db,user,numeral}.lua` | D | 辞書（Library、SKK 辞書、DB キャッシュ、ユーザー辞書、数値変換） |
 | `lua/skkeleton/indicator/{init,modes}.lua` | I | skkeleton_indicator.nvim の移植 |
-| `lua/skkeleton/{init,render,popup,map}.lua`、`plugin/skkeleton.lua`、`host.lua` の UI 部分 | U | Neovim との結合（第 2 波） |
+| `lua/skkeleton/{init,main,render,popup,map}.lua`、`plugin/skkeleton.lua`、`autoload/skkeleton.vim`、`host.lua` の UI 部分 | U | Neovim との結合（第 2 波）。`main.lua` が enable/disable/toggle/handle と autocmd、`render.lua` が表示、`popup.lua` が候補の popup、`map.lua` がマッピングとオプションの退避 |
 | `tests/helpers.lua` のキー入力ドライバ、E2E テスト | U | 第 2 波 |
 
 担当は自分のファイルだけを作る・変える。他の担当のモジュールが要るときは、下のインターフェースだけを使い、テストでは差し替える。
@@ -124,7 +124,17 @@ require("skkeleton.indicator").setup(opts)  -- opts は skkeleton_indicator と�
 - User イベント: `skkeleton-initialize-pre/post`、`skkeleton-enable-pre/post`、`skkeleton-disable-pre/post`、`skkeleton-mode-changed`、`skkeleton-handled`
 - `<Plug>(skkeleton-enable)`、`<Plug>(skkeleton-disable)`、`<Plug>(skkeleton-toggle)`（i/c/t）
 - Lua API: `require("skkeleton").setup(opts)`、`.enable()`、`.disable()`、`.toggle()`、`.mode()`、`.is_enabled()`、`.register_keymap(state, key, func)`、`.register_kanatable(name, tbl, create)`、`.register_kanatable_file(...)`、`.get_config()`、`.initialize()`、`.update_database(path, encoding, force)`
-- pre-edit の extmark の namespace は `skkeleton-preedit`
+- pre-edit の extmark の namespace は `skkeleton-preedit`、ハイライトグループは `SkkeletonPreedit`（既定は何も指定しない）
+- `g:skkeleton#state`（`{ phase, henkanFeed }`）は handle のたびに更新する
+- `autoload/skkeleton.vim` には `skkeleton#mode()` と `skkeleton#is_enabled()` だけを置く
+
+### 表示の流れ（render）
+- insert モード: 確定した文字列は `nvim_feedkeys(…, "nit")` で流し、そのあとに `<Cmd>lua require('skkeleton.render').finish()<CR>` を続ける。`finish` が extmark を置き直し、候補の popup を開き、`User skkeleton-handled` を発火する。確定が無いときは `finish` をその場で呼ぶ
+- 流す文字列の 0x80（「、」など）は `0x80 0xfe 'X'` に逃がす。`<Cmd>` だけを `nvim_replace_termcodes` して続ける
+- pre-edit が残っているのにカーソルの位置か `changedtick` が描いたときと違えば、次の handle の最初で state を捨てる（extmark は `right_gravity = false`）
+- cmdline と terminal は `ctx.preedit:output(ctx:to_string())` を流す
+- モードだけが変わった（出力が無い）ときも `finish` を呼ぶので、upstream の `" \x08"` に当たる再描画は要らない
+- `virtualedit` は変えない（pre-edit をバッファに書かないので）。`textwidth` だけ 0 にする
 
 ## テスト
 - mini.test。`make test`（全部）、`make test FILE=tests/test_kana.lua`（1 ファイル）

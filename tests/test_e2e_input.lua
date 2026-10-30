@@ -160,4 +160,39 @@ T["indent is kept by a newline"] = function()
   eq(helpers.buffer(child), { "\tほげ", "\tほげほげ", "" })
 end
 
+local E, echild = helpers.e2e_set({ config = { eggLikeNewline = true } })
+T["eggLikeNewline"] = E
+
+E["<CR> after selecting from the completion menu is passed on as <C-y>"] = function()
+  -- UI の無い子では pum が出ないので、pum が出ている状態を作る。
+  -- メニューが無いときの <C-y> は上の行の文字を写すので、それで <C-y> が流れたことが分かる
+  echild.api.nvim_buf_set_lines(0, 0, -1, false, { "foobar", "" })
+  echild.api.nvim_win_set_cursor(0, { 2, 0 })
+  helpers.type(echild, "i", "<Plug>(skkeleton-enable)")
+  echild.lua([[
+    vim.fn.pumvisible = function() return 1 end
+    vim.fn.complete_info = function() return { selected = 0 } end
+  ]])
+  helpers.type(echild, "<CR>")
+  eq(helpers.buffer(echild), { "foobar", "f" })
+end
+
+E["<CR> with a pum but nothing selected is a newline"] = function()
+  echild.api.nvim_buf_set_lines(0, 0, -1, false, { "foobar", "" })
+  echild.api.nvim_win_set_cursor(0, { 2, 0 })
+  helpers.type(echild, "i", "<Plug>(skkeleton-enable)")
+  echild.lua([[
+    vim.fn.pumvisible = function() return 1 end
+    vim.fn.complete_info = function() return { selected = -1 } end
+  ]])
+  helpers.type(echild, "<CR>")
+  eq(helpers.buffer(echild), { "foobar", "", "" })
+end
+
+E["<CR> while converting only confirms"] = function()
+  helpers.type(echild, "i", "<Plug>(skkeleton-enable)")
+  helpers.type(echild, "Kan<Space><CR>")
+  eq(helpers.buffer(echild), { "缶" })
+end
+
 return T
