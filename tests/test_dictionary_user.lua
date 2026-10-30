@@ -350,4 +350,44 @@ T["save_ranks creates parent directories"] = function()
   )
 end
 
+T["escapes candidates with slashes using (concat ...) on save and restores them on load"] = function()
+  eq(
+    run([[
+      local path = TMP .. "/user_concat"
+      local u = User.new()
+      u:load({ path = path })
+      u:register_henkan_result("okurinasi", "ab", "a/b")
+      u:register_henkan_result("okurinasi", "kmh", "km/h;時速")
+      u:register_henkan_result("okurinasi", "half", "1/2;1/2の注釈")
+      u:register_henkan_result("okurinasi", "gpl", "GPL;http://www.gnu.org/licenses/gpl.ja.html")
+      u:save()
+
+      local content = read(path)
+      local v = User.new()
+      v:load({ path = path })
+
+      return {
+        content:find('ab /(concat "a\\057b")/', 1, true) ~= nil,
+        content:find('kmh /(concat "km\\057h");時速/', 1, true) ~= nil,
+        content:find('half /(concat "1\\0572");(concat "1\\0572の注釈")/', 1, true) ~= nil,
+        content:find('gpl /GPL;(concat "http:\\057\\057www.gnu.org\\057licenses\\057gpl.ja.html")/', 1, true) ~= nil,
+        v:get_henkan_result("okurinasi", "ab"),
+        v:get_henkan_result("okurinasi", "kmh"),
+        v:get_henkan_result("okurinasi", "half"),
+        v:get_henkan_result("okurinasi", "gpl"),
+      }
+    ]]),
+    {
+      true,
+      true,
+      true,
+      true,
+      { "a/b" },
+      { "km/h;時速" },
+      { "1/2;1/2の注釈" },
+      { "GPL;http://www.gnu.org/licenses/gpl.ja.html" },
+    }
+  )
+end
+
 return T

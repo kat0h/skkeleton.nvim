@@ -246,6 +246,46 @@ function User:load(opts)
   end
 end
 
+local function escape_candidate_part(s)
+  local escaped = s:gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("/", "\\057"):gsub(";", "\\073")
+  return ('(concat "%s")'):format(escaped)
+end
+
+-- 候補に "/" が含まれている場合、SKK 辞書のフォーマットが壊れないよう (concat "...") 形式にエンコードする
+---@param cand string
+---@return string
+local function encode_candidate(cand)
+  if cand:sub(1, 1) == "[" and cand:sub(-1) == "]" then
+    return cand
+  end
+  if not cand:find("/", 1, true) then
+    return cand
+  end
+  local word, note = cand:match("^([^;]*)(;.*)$")
+  if not word then
+    word = cand
+    note = nil
+  end
+
+  local new_word = word
+  if word:find("/", 1, true) then
+    new_word = escape_candidate_part(word)
+  end
+
+  local new_note = ""
+  if note then
+    if note:find("/", 1, true) then
+      new_note = ";" .. escape_candidate_part(note:sub(2))
+    else
+      new_note = note
+    end
+  end
+
+  return new_word .. new_note
+end
+
+User.encode_candidate = encode_candidate
+
 local function sorted_lines(map, descending)
   local keys = skk.sorted_keys(map)
   local out = {}
@@ -255,7 +295,12 @@ local function sorted_lines(map, descending)
     first, last, step = #keys, 1, -1
   end
   for i = first, last, step do
-    out[#out + 1] = ("%s /%s/"):format(keys[i], table.concat(map[keys[i]], "/"))
+    local cands = map[keys[i]]
+    local encoded = {}
+    for j = 1, #cands do
+      encoded[j] = encode_candidate(cands[j])
+    end
+    out[#out + 1] = ("%s /%s/"):format(keys[i], table.concat(encoded, "/"))
   end
   return out
 end
