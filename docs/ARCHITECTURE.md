@@ -1,15 +1,15 @@
 # skkeleton.nvim の構成と取り決め
 
-Phase 2 の実装を複数の担当に分けて進めるための取り決め。ここに書いたインターフェースは、担当をまたいで使うものなので、変えるときはこのファイルも直す。
+Phase 2 の実装を複数の担当に分けて進めるための取り決め。ここに書いたインターフェースは担当をまたいで使うので、変えるときはこのファイルも直す。
 
 移植元は `~/.local/share/nvim/lazy/skkeleton/`（以下 upstream）と `~/.local/share/nvim/lazy/skkeleton_indicator.nvim/`。upstream の `denops/skkeleton/*.ts` と関数を 1 対 1 で対応させる。挙動に迷ったら upstream に合わせる。
 
 ## 全体の方針
 - Neovim 専用、純粋な Lua（LuaJIT）。FFI と外部コマンドは使わない
 - denops 版にあった非同期（`await`）はすべて同期の呼び出しにする
-- **入力エンジン（core）は Neovim の UI に触らない。** UI が要る処理（モードの通知、無効化、候補の popup、`input()`、`confirm()`）は `skkeleton.host` を通して呼ぶ。テストでは host の関数を差し替えられる
+- **入力エンジン（core）は Neovim の UI に触らない**。UI が要る処理（モードの通知、無効化、候補の popup、`input()`、`confirm()`）は `skkeleton.host` を通して呼ぶ。テストでは host の関数を差し替えられる
 - 表示: pre-edit（`▽かん` など）は**バッファに書かず**、`virt_text_pos = "inline"` の extmark で表示する。確定した文字列は upstream と同じく `nvim_feedkeys(str, "nit")` で流す（`\n` で autoindent、`\x07u` で undo point、`\b` で削除が効くようにするため）。cmdline と terminal だけは upstream と同じく BS で消して書き直す
-- 設定のキーは upstream と同じ camelCase（`markerHenkan` など）。移行しやすくするため
+- 設定のキーは upstream から移行しやすいように同じ camelCase（`markerHenkan` など）にする
 - state などのテーブルのフィールドは snake_case。関数の登録名（キーマップやかなテーブルで文字列で指すもの）は upstream と同じ camelCase（`henkanFirst` など）
 
 ## モジュールと担当
@@ -130,7 +130,7 @@ require("skkeleton.indicator").setup(opts)  -- opts は skkeleton_indicator と�
 - mini.test。`make test`（全部）、`make test FILE=tests/test_kana.lua`（1 ファイル）
 - ファイルは `tests/test_<領域>.lua`。モジュールの状態（config やかなテーブル）を持つものは `require("helpers").child_set()` で子の nvim を使い、ケースごとに作り直す
 - 辞書のテストデータは `tests/testdata/`（upstream の testdata の写し。EUC-JP のものがある）
-- upstream の `*_test.ts` の入出力は、できるだけそのまま表にして移す
+- upstream の `*_test.ts` の入出力はできるだけそのまま表にして移す
 
 ## ライセンス
 - 詳しくは `LICENSES/README.md`。upstream（skkeleton、skkeleton_indicator.nvim）はどちらも zlib
