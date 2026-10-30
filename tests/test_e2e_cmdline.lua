@@ -116,4 +116,16 @@ T["terminal"] = function()
   eq(found, true)
 end
 
+T["visual から入った cmdline で有効にして抜けると無効になる (#28)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "ab cd" })
+  child.type_keys("v/")
+  type("<Plug>(skkeleton-enable)")
+  eq(child.g["skkeleton#enabled"], true)
+  child.type_keys("<Esc>")
+  helpers.settle(child)
+  eq(child.fn.mode(), "v")
+  eq(child.g["skkeleton#enabled"], false)
+  eq(child.g["skkeleton#state"].phase, "input")
+end
+
 return T

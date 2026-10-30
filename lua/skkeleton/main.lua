@@ -120,6 +120,29 @@ function M.init(force)
       })
     end,
   })
+  -- visual・select・operator-pending から入った cmdline を抜けて戻ったときも片付ける。
+  -- insert・cmdline・terminal に移るときは使い続けるので触らない（insert の <C-o> は niI のまま）
+  vim.api.nvim_create_autocmd("ModeChanged", {
+    group = group,
+    pattern = "c:*",
+    callback = function()
+      local new_mode = vim.v.event.new_mode:sub(1, 1)
+      if new_mode == "i" or new_mode == "c" or new_mode == "t" or new_mode == "n" then
+        return
+      end
+      vim.api.nvim_create_autocmd("SafeState", {
+        group = group,
+        once = true,
+        callback = function()
+          local m = vim.fn.mode():sub(1, 1)
+          if m ~= "i" and m ~= "c" and m ~= "t" and not host.is_in_input() then
+            reset()
+            host.disable()
+          end
+        end,
+      })
+    end,
+  })
   -- insert のままウィンドウやバッファを切り替えても残らないようにする
   -- （辞書登録の input() の最中は元の状態を壊さないようスキップする）
   vim.api.nvim_create_autocmd({ "WinLeave", "BufLeave" }, {
