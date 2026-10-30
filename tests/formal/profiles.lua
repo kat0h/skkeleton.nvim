@@ -29,6 +29,7 @@ local base = {
   "<CR>",
   "<BS>",
   "<C-g>",
+  "<C-c>", -- insert・cmdline・辞書登録を <C-c> で抜ける（InsertLeave が来ない）
   "<C-u>",
   "<C-w>",
   "<Left>",
@@ -78,6 +79,7 @@ M.modes = {
     "<CR>",
     "<BS>",
     "<C-g>",
+    "<C-c>", -- insert・cmdline・辞書登録を <C-c> で抜ける（InsertLeave が来ない）
     "<Esc>",
     "i",
     "<Left>",
@@ -123,6 +125,7 @@ M.edge = {
     "<CR>",
     "<BS>",
     "<C-g>",
+    "<C-c>", -- insert・cmdline・辞書登録を <C-c> で抜ける（InsertLeave が来ない）
     "<Esc>",
     "A",
     "a",
@@ -165,6 +168,7 @@ M.cmdline = {
     "<CR>",
     "<BS>",
     "<C-g>",
+    "<C-c>", -- insert・cmdline・辞書登録を <C-c> で抜ける（InsertLeave が来ない）
     "<C-w>",
     "<C-u>",
     "<Left>",
@@ -218,6 +222,7 @@ M.misc = {
     "<Space>",
     "<CR>",
     "<C-g>",
+    "<C-c>", -- insert・cmdline・辞書登録を <C-c> で抜ける（InsertLeave が来ない）
     "<Esc>",
     "<C-o>l",
     "<C-o>:<Esc>",
@@ -251,6 +256,7 @@ M.terminal = {
     "<CR>",
     "<BS>",
     "<C-g>",
+    "<C-c>", -- insert・cmdline・辞書登録を <C-c> で抜ける（InsertLeave が来ない）
     "Kan",
     "<C-\\><C-n>",
     "i",
@@ -312,6 +318,7 @@ M.blink = {
     "<Space>",
     "<BS>",
     "<C-g>",
+    "<C-c>", -- insert・cmdline・辞書登録を <C-c> で抜ける（InsertLeave が来ない）
     "<Esc>",
     "<Left>",
     "<C-w>",
@@ -333,6 +340,7 @@ M.wrap = {
     "<CR>",
     "<BS>",
     "<C-g>",
+    "<C-c>", -- insert・cmdline・辞書登録を <C-c> で抜ける（InsertLeave が来ない）
     "<Esc>",
     "A",
     "a",
@@ -372,6 +380,7 @@ M.okuri = {
     "<CR>",
     "<BS>",
     "<C-g>",
+    "<C-c>", -- insert・cmdline・辞書登録を <C-c> で抜ける（InsertLeave が来ない）
     "<Esc>",
     ">",
     "<Left>",

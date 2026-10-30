@@ -608,6 +608,20 @@ M.known[#M.known + 1] = {
   reason = "#26: ウィンドウの最後の行で折り返した pre-edit を片付けると、▽ と @ が画面に残る",
 }
 
+-- insert を <C-c> で抜けると、インジケータが normal モードで残る（#27。skkeleton_indicator.nvim も同じ）
+for _, property in ipairs({
+  "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
+  "indicator: 表示は今のモードの文字列",
+}) do
+  M.known[#M.known + 1] = {
+    property = property,
+    match = function(keys)
+      return vim.tbl_contains(keys, "<C-c>")
+    end,
+    reason = "#27: insert を <C-c> で抜けると、インジケータが normal モードで残る",
+  }
+end
+
 function M.is_known(name, keys, msg)
   for _, k in ipairs(M.known) do
     if k.property == name and k.match(keys, msg) then
