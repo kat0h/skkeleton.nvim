@@ -7,6 +7,7 @@ local host = require("skkeleton.host")
 local kana = require("skkeleton.kana")
 local keymap = require("skkeleton.keymap")
 local map = require("skkeleton.map")
+local candidate = require("skkeleton.candidate")
 local mode_mod = require("skkeleton.mode")
 local notation = require("skkeleton.notation")
 local popup = require("skkeleton.popup")
@@ -34,6 +35,44 @@ end
 -- Context を作り直す（使い終わった state の片付け）
 local function reset()
   store.init_context()
+end
+
+-- g:skkeleton#state を更新する（補完ソースなどが読む）
+local function update_state_variable()
+  local st = store.context().state
+  local phase
+  if st.type == "input" then
+    phase = st.mode == "okurinasi" and "input:okurinasi" or st.mode == "okuriari" and "input:okuriari" or "input"
+  else
+    phase = st.type
+  end
+  vim.g["skkeleton#state"] = { phase = phase, henkanFeed = st.henkan_feed or "" }
+end
+
+-- handle の実行中か（辞書登録の input() などで誤って初期化しない）
+local handling_depth = 0
+
+-- pre-edit が出ているのにバッファやカーソルがずれたら、すぐ状態を初期化して表示を片付ける
+local function check_stale()
+  if
+    not vim.g["skkeleton#enabled"]
+    or handling_depth > 0
+    or render.is_pending()
+    or vim.api.nvim_get_mode().mode:sub(1, 1) ~= "i"
+  then
+    return
+  end
+  local ctx = store.context()
+  if not render.is_stale(ctx, "i") then
+    return
+  end
+  mode_mod.initialize_state_with_abbrev(ctx, { "converter" })
+  ctx.preedit:output("")
+  render.clear()
+  popup.close()
+  update_state_variable()
+  doautocmd("skkeleton-handled")
+  require("skkeleton.indicator").move()
 end
 
 -- 最初に使うときに一度だけ呼ぶ。autocmd を作り、skkeleton-initialize-pre/post を発火する
@@ -72,13 +111,18 @@ function M.init(force)
       })
     end,
   })
-  -- insert のままウィンドウを切り替えても残らないようにする
-  vim.api.nvim_create_autocmd("WinLeave", {
+  -- insert のままウィンドウやバッファを切り替えても残らないようにする
+  vim.api.nvim_create_autocmd({ "WinLeave", "BufLeave" }, {
     group = group,
     callback = function()
       reset()
       host.disable()
     end,
+  })
+  -- upstream ではバッファの文字だった pre-edit が <C-u> や矢印キーで消える動きに合わせる
+  vim.api.nvim_create_autocmd({ "TextChangedI", "TextChangedP", "CursorMovedI" }, {
+    group = group,
+    callback = check_stale,
   })
   doautocmd("skkeleton-initialize-post")
 end
@@ -110,6 +154,11 @@ local function handle_keys(opts, vim_mode)
       ctx.preedit:output("")
       return "\25"
     end
+  end
+
+  -- blink.cmp のメニューで項目を選んでいるときの <CR>。選んだ項目で確定する（確定は completion の execute が行う）
+  if table.concat(keys) == "<cr>" and options.eggLikeNewline and require("skkeleton.completion").accept_selected() then
+    return
   end
 
   local func = opts["function"]
@@ -164,26 +213,26 @@ local function disable(opts, vim_mode)
   disable_func.disable(ctx)
 end
 
--- g:skkeleton#state を更新する（補完ソースなどが読む）
-local function update_state_variable()
-  local st = store.context().state
-  local phase
-  if st.type == "input" then
-    phase = st.mode == "okurinasi" and "input:okurinasi" or st.mode == "okuriari" and "input:okuriari" or "input"
-  else
-    phase = st.type
-  end
-  vim.g["skkeleton#state"] = { phase = phase, henkanFeed = st.henkan_feed or "" }
-end
-
 -- func: "handleKey" | "enable" | "disable" | "toggle" | "setState"
 ---@param func string
 ---@param opts? table
 function M.handle(func, opts)
+  handling_depth = handling_depth + 1
+  local ok, err = pcall(M.handle_inner, func, opts)
+  handling_depth = handling_depth - 1
+  if not ok then
+    error(err, 0)
+  end
+end
+
+function M.handle_inner(func, opts)
   M.init()
   opts = opts or {}
   local vim_mode = vim.api.nvim_get_mode().mode
   local short = vim_mode:sub(1, 1)
+  if short == "i" and render.is_pending() then
+    render.clear()
+  end
   popup.close()
 
   local ctx = store.context()
@@ -215,6 +264,42 @@ function M.handle(func, opts)
   ctx.vim_mode = ctx.vim_mode ~= "" and ctx.vim_mode or short
   update_state_variable()
   render.update(ctx, prefix)
+end
+
+-- 補完で語を選んだとき。pre-edit を捨てて語を確定し、ユーザー辞書に登録する。
+-- kana は読み、word は辞書の候補（注釈つきでもよい）、kind は変換の種類（既定は "okurinasi"）
+---@param kana string
+---@param word string
+---@param kind? skkeleton.HenkanType
+function M.complete(kana, word, kind)
+  handling_depth = handling_depth + 1
+  local ok, err = pcall(function()
+    M.init()
+    popup.close()
+    local ctx = store.context()
+    local vim_mode = vim.api.nvim_get_mode().mode
+    ctx.vim_mode = vim_mode:sub(1, 1)
+    -- 変換中の状態は捨てる。モード（ひらがななど）は変えない
+    mode_mod.initialize_state_with_abbrev(ctx, { "converter", "table" })
+    M.complete_callback(kana, word, kind)
+    ctx:kakutei_with_undo_point(candidate.modify(word))
+    update_state_variable()
+    render.update(ctx)
+  end)
+  handling_depth = handling_depth - 1
+  if not ok then
+    error(err, 0)
+  end
+end
+
+-- 補完で選んだ語をユーザー辞書に登録して、直前の候補にする
+---@param kana string
+---@param word string
+---@param kind? skkeleton.HenkanType
+function M.complete_callback(kana, word, kind)
+  kind = kind or "okurinasi"
+  store.library():register_henkan_result(kind, kana, word)
+  store.context().last_candidate = { type = kind, word = kana, candidate = word }
 end
 
 return M

@@ -2,12 +2,16 @@
 -- 設定やキーマップの登録は upstream の skkeleton#config などに対応する。
 local M = {}
 
--- 設定する。opts.indicator はインジケータの設定（nil なら既定で有効、false なら無効）
+-- 設定する。opts.indicator はインジケータの設定（nil なら既定で有効、false なら無効）、
+-- opts.completion は blink.cmp 補完の設定（{ enabled, minLength }）
 ---@param opts? table
 function M.setup(opts)
   opts = vim.deepcopy(opts or {})
   local indicator = opts.indicator
   opts.indicator = nil
+  local completion = opts.completion
+  opts.completion = nil
+  require("skkeleton.completion").setup(completion)
   require("skkeleton.config").set(opts)
   if indicator == nil or indicator == true then
     indicator = {}
@@ -77,6 +81,50 @@ function M.initialize(force)
   require("skkeleton.dictionary").prepare(require("skkeleton.config").options, function(lib)
     store.set_library(lib)
   end)
+end
+
+-- 以下は補完 source が使う。upstream の dispatcher の getPrefix などに当たる
+
+-- 今の読み（▽ のあとの、かなになった部分）。入力中でなければ ""
+---@return string
+function M.get_prefix()
+  local st = require("skkeleton.store").context().state
+  if st.type ~= "input" then
+    return ""
+  end
+  return st.henkan_feed
+end
+
+-- 今の pre-edit の文字列（▽かんj など）
+---@return string
+function M.get_preedit()
+  return require("skkeleton.store").context():to_string()
+end
+
+-- 今の読みと feed に合う補完の候補。{ { 読み, 候補の配列 }, ... }
+---@return { [1]: string, [2]: string[] }[]
+function M.get_completion_result()
+  local st = require("skkeleton.store").context().state
+  if st.type ~= "input" then
+    return {}
+  end
+  return require("skkeleton.store").library():get_completion_result(st.henkan_feed, st.feed)
+end
+
+-- 補完で選んだ語をユーザー辞書に登録する（pre-edit はそのまま）
+---@param kana string
+---@param word string
+---@param kind? "okuriari"|"okurinasi"
+function M.complete_callback(kana, word, kind)
+  require("skkeleton.main").complete_callback(kana, word, kind)
+end
+
+-- 補完で語を選んだとき。pre-edit を捨てて word を確定し、ユーザー辞書に登録する
+---@param kana string
+---@param word string
+---@param kind? "okuriari"|"okurinasi"
+function M.complete(kana, word, kind)
+  require("skkeleton.main").complete(kana, word, kind)
 end
 
 -- 辞書の DB を作り直す（force が偽なら、古いときだけ）

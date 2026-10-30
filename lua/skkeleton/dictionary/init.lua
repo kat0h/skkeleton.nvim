@@ -55,6 +55,97 @@ function Library:get_henkan_result(kind, word)
   return merged
 end
 
+-- 補完で返す読みの数の上限の既定
+M.COMPLETION_LIMIT = 100
+
+-- feed から始まるかなテーブルのキーのうち、かなに変わるもの（{ かな, 次の feed }）の「かな」を足した読みの一覧。
+-- 例: prefix "か"、feed "k" なら "かか"、"かき"、... 重複は 1 つにして、バイト順に並べる
+---@param prefix string
+---@param feed string
+---@return string[]
+local function feed_prefixes(prefix, feed)
+  local tbl = require("skkeleton.kana").get_table()
+  local seen, out = {}, {}
+  for key, result in pairs(tbl.map) do
+    if type(result) == "table" and #result > 1 and vim.startswith(key, feed) then
+      local p = prefix .. result[1]
+      if not seen[p] then
+        seen[p] = true
+        out[#out + 1] = p
+      end
+    end
+  end
+  table.sort(out)
+  return out
+end
+
+-- 読みごとの候補を、重複なしで集める
+---@param order string[]
+---@param map table<string, string[]>
+---@param seen table<string, table<string, boolean>>
+---@param kana string
+---@param cands string[]
+local function gather(order, map, seen, kana, cands)
+  if not map[kana] then
+    map[kana] = {}
+    seen[kana] = {}
+    order[#order + 1] = kana
+  end
+  for _, c in ipairs(cands) do
+    if not seen[kana][c] then
+      seen[kana][c] = true
+      table.insert(map[kana], c)
+    end
+  end
+end
+
+-- 補完の候補。{ { 読み, 候補の配列 }, ... } を、ユーザー辞書、グローバル辞書の順に、辞書ごとに読みのバイト順で返す。
+-- prefix が 1 文字なら送りなしの完全一致だけ、2 文字以上なら前方一致。
+-- feed が空でなければ、かなテーブルで feed から始まるキーのかなを足した読みで前方一致する。
+-- 読みの数は limit（既定 M.COMPLETION_LIMIT）まで
+---@param prefix string
+---@param feed? string
+---@param limit? integer
+---@return { [1]: string, [2]: string[] }[]
+function Library:get_completion_result(prefix, feed, limit)
+  feed = feed or ""
+  limit = limit or M.COMPLETION_LIMIT
+  if self.immediately_rw then
+    self:load()
+  end
+  if prefix == "" then
+    return {}
+  end
+  local order, map, seen = {}, {}, {}
+  local exact_match = feed == "" and #util.chars(prefix) == 1
+  local prefixes = feed ~= "" and feed_prefixes(prefix, feed) or { prefix }
+  for _, dic in ipairs(self.dicts) do
+    if exact_match then
+      gather(order, map, seen, prefix, dic:get_henkan_result("okurinasi", prefix))
+    else
+      for _, p in ipairs(prefixes) do
+        if #order >= limit then
+          break
+        end
+        for _, e in ipairs(dic:get_prefix("okurinasi", p, limit)) do
+          gather(order, map, seen, e[1], e[2])
+        end
+      end
+    end
+    if #order >= limit then
+      break
+    end
+  end
+  local out = {}
+  for i = 1, math.min(#order, limit) do
+    local k = order[i]
+    if #map[k] > 0 then
+      out[#out + 1] = { k, map[k] }
+    end
+  end
+  return out
+end
+
 ---@param kind "okuriari"|"okurinasi"
 ---@param word string
 ---@param candidate string
