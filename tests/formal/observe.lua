@@ -135,6 +135,8 @@ function M.snapshot()
     pending = render.is_pending(),
     handled = render.count,
     win = win,
+    -- 今のウィンドウが float か（LSP の hover などに入ったとき）
+    win_float = vim.api.nvim_win_get_config(win).relative ~= "",
     wins = #vim.api.nvim_tabpage_list_wins(0),
     buf = buf,
     -- blink.cmp は閉じたメニューのバッファを使い回すので数えない

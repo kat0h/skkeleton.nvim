@@ -55,6 +55,14 @@ local TMUX_KEYS = {
   ["<Left>"] = "Left",
   ["<Right>"] = "Right",
   ["<Tab>"] = "Tab",
+  ["<Insert>"] = "IC",
+  ["<Home>"] = "Home",
+  ["<End>"] = "End",
+  ["<PageDown>"] = "NPage",
+  ["<Up>"] = "Up",
+  ["<Down>"] = "Down",
+  ["<S-Left>"] = "S-Left",
+  ["<C-[>"] = "C-[",
 }
 
 local function tokenize(keys)

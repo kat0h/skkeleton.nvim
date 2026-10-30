@@ -217,6 +217,10 @@ M.state["indicator: insert では pre-edit の直後に 1 つ、normal では出
   -- 位置は枠を含めた左上
   local b = ind.border and 1 or 0
   local expect = { s.screen.row - 1 + s.ind_cfg.row, s.screen.col - 1 + s.ind_cfg.col }
+  -- float の中では headless の screenrow()/screencol() が正しい値を返さないので、位置は確かめない
+  if s.win_float then
+    return
+  end
   local fits = expect[2] + ind.width + 2 * b <= s.columns
     and expect[1] + ind.height + 2 * b <= s.editor_lines - s.cmdheight
   local got = ind.pos
@@ -650,6 +654,22 @@ for _, property in ipairs({
       return false
     end,
     reason = "#28: visual から入った cmdline で有効にして抜けると、skkeleton が無効にならない",
+  }
+end
+
+-- 有効のまま <Insert> で置換モードに移ると、pre-edit が残ったり見えなくなったりする（#29）
+for _, property in ipairs({
+  "preedit: extmark は insert モードの今のバッファのカーソル位置にある",
+  "preedit: 表示は状態の文字列と一致する",
+  "indicator: 表示は今のモードの文字列",
+  "frame: skkeleton の外でバッファやカーソルが動いたら pre-edit を捨てる",
+}) do
+  M.known[#M.known + 1] = {
+    property = property,
+    match = function(keys)
+      return vim.tbl_contains(keys, "<Insert>")
+    end,
+    reason = "#29: 有効のまま <Insert> で置換モードに移ると、pre-edit が残ったり見えなくなったりする",
   }
 end
 

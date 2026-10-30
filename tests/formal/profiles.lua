@@ -444,7 +444,7 @@ M.steal = {
     later("vim.api.nvim_buf_set_lines(0, 0, 0, false, { 'ext' })"),
     later("vim.cmd('wincmd w')"),
     later(
-      "local b = vim.api.nvim_create_buf(false, true) "
+      "local b = vim.api.nvim_create_buf(false, true) vim.bo[b].bufhidden = 'wipe' "
         .. "vim.api.nvim_open_win(b, true, { relative = 'editor', row = 3, col = 3, width = 10, height = 2 })"
     ),
     "<Cmd>lua for _, w in ipairs(vim.api.nvim_list_wins()) do if vim.api.nvim_win_get_config(w).focusable and vim.api.nvim_win_get_config(w).relative ~= '' then pcall(vim.api.nvim_win_close, w, true) end end<CR>",
