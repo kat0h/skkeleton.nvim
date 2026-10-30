@@ -29,6 +29,7 @@ for consonant, kanas in pairs({
   y = "やゆよ",
   r = "らりるれろ",
   w = "わを",
+  v = "ゔ",
 }) do
   for _, ch in ipairs(util.chars(kanas)) do
     okuri_table[ch] = consonant

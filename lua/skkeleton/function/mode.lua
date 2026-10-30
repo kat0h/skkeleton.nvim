@@ -41,10 +41,7 @@ function M.hirakana(ctx)
     common.kakutei(ctx)
   end
   kana.set_current(options.kanaTable)
-  if st.type == "input" then
-    st.converter = nil
-  end
-  state.initialize(st, { "converter" })
+  state.initialize(st)
   mode.mode_change(ctx, "hira")
 end
 
@@ -80,12 +77,16 @@ function M.katakana(ctx)
       st.converter = nil
       mode.mode_change(ctx, "hira")
     else
+      if kana.current_name == "zen" then
+        kana.set_current(options.kanaTable)
+        st.table = kana.get_table()
+      end
       st.converter = hira_to_kata
       mode.mode_change(ctx, "kata")
     end
     return
   end
-  convert_and_kakutei(ctx, hira_to_kata, st.converter ~= nil)
+  convert_and_kakutei(ctx, hira_to_kata, st.converter == hira_to_kata)
 end
 
 ---@param ctx skkeleton.Context

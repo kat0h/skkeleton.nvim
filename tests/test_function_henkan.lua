@@ -132,6 +132,30 @@ T["select candidate with keys on popup"] = function()
   eq(child.lua_get([[ctx.last_candidate.candidate]]), "候補7")
 end
 
+T["select candidate with multibyte selectCandidateKeys"] = function()
+  init()
+  child.lua([[
+    config = require("skkeleton.config")
+    config.set({ selectCandidateKeys = "１２３４５６７" })
+    for i = 10, 1, -1 do
+      lib:register_henkan_result("okurinasi", "あ", "候補" .. i)
+    end
+    ctx = Context.new()
+    H.dispatch(ctx, ";a     ")
+  ]])
+  eq(child.lua_get([[ctx:to_string()]]), "▼候補5")
+  eq(child.lua_get([[H.called("show_candidates")[1][2] ]]), {
+    "１: 候補5",
+    "２: 候補6",
+    "３: 候補7",
+    "４: 候補8",
+    "５: 候補9",
+    "６: 候補10",
+  })
+  child.lua([[henkan.henkan_input(ctx, "３")]])
+  eq(child.lua_get([[ctx.preedit:output("")]]), "候補7")
+end
+
 T["henkan_input confirms and handles the key"] = function()
   init()
   child.lua([[

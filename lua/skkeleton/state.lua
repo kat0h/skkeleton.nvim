@@ -77,6 +77,9 @@ function M.initialize(st, ignore)
   for key, value in pairs(ignored) do
     st[key] = value
   end
+  st.word = nil
+  st.candidates = nil
+  st.candidate_index = nil
   return st
 end
 
@@ -88,6 +91,9 @@ local function input_state_to_string(st)
   end
   if st.mode == "okuriari" then
     if st.previous_feed then
+      if st.converter then
+        ret = st.converter(ret)
+      end
       return ret .. st.feed .. "*"
     end
     ret = ret .. "*" .. st.okuri_feed

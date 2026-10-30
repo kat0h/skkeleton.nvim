@@ -205,7 +205,9 @@ function M.set(new_config)
     options[k] = v
   end
   normalize(options)
-  require("skkeleton.kana").load_files(options.globalKanaTableFiles)
+  if staged.globalKanaTableFiles ~= nil then
+    require("skkeleton.kana").load_files(options.globalKanaTableFiles)
+  end
 end
 
 -- 既定値に戻す（テスト用）

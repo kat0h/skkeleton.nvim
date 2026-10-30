@@ -182,4 +182,26 @@ T["purge_candidate with nothing to purge"] = function()
   eq(child.lua_get([[#H.called("confirm")]]), 0)
 end
 
+T["purge_candidate with nil or empty candidate does not crash"] = function()
+  init()
+  child.lua([[
+    ctx = Context.new()
+    ctx.last_candidate = { type = "okurinasi", word = "test", candidate = nil }
+    common.purge_candidate(ctx)
+  ]])
+  eq(child.lua_get([[#H.called("confirm")]]), 0)
+
+  child.lua([[
+    ctx.state = {
+      type = "henkan",
+      mode = "okurinasi",
+      word = "test",
+      candidates = {},
+      candidate_index = 0,
+    }
+    common.purge_candidate(ctx)
+  ]])
+  eq(child.lua_get([[#H.called("confirm")]]), 0)
+end
+
 return T

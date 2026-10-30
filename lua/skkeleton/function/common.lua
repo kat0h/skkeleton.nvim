@@ -100,7 +100,7 @@ function M.purge_candidate(ctx)
     vim.notify("purgeCandidate: reach illegal state", vim.log.levels.WARN)
     return
   end
-  if word == "" then
+  if word == "" or not cand or cand == "" then
     return
   end
   local msg = ("Really purge? %s /%s/"):format(word, cand)

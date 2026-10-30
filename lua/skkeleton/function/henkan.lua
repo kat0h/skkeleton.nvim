@@ -77,12 +77,13 @@ end
 local function show_candidates(state)
   local idx = state.candidate_index
   local lines = {}
+  local keys = util.chars(options.selectCandidateKeys)
   for i = 0, 6 do
     local c = state.candidates[idx + i + 1]
     if c == nil then
       break
     end
-    local key = options.selectCandidateKeys:sub(i + 1, i + 1)
+    local key = keys[i + 1] or ""
     lines[#lines + 1] = ("%s: %s"):format(key, candidate.modify(c, state.affix))
   end
   host.show_candidates(lines)
@@ -139,7 +140,14 @@ end
 function M.henkan_input(ctx, key)
   local state = ctx.state
   if state.candidate_index >= options.showCandidatesCount then
-    local pos = options.selectCandidateKeys:find(key, 1, true)
+    local keys = util.chars(options.selectCandidateKeys)
+    local pos = nil
+    for idx, k in ipairs(keys) do
+      if k == key then
+        pos = idx
+        break
+      end
+    end
     if pos then
       local cand_idx = pos - 1
       if state.candidate_index + cand_idx < #state.candidates then

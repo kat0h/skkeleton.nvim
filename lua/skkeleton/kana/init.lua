@@ -130,6 +130,8 @@ local function as_kana_result(result)
       error("function not found: " .. result, 0)
     end
     return fn
+  elseif t == "function" then
+    return result
   elseif t == "table" and #result >= 1 then
     for _, v in ipairs(result) do
       if type(v) ~= "string" then
@@ -181,9 +183,8 @@ function M.register(name, raw, create)
   end
   local entries = {}
   for kana, result in pairs(raw) do
-    local lower = kana:lower()
-    if kana ~= lower then
-      kana = "<s-" .. lower .. ">"
+    if #kana == 1 and kana:match("^[A-Z]$") then
+      kana = "<s-" .. kana:lower() .. ">"
     end
     entries[#entries + 1] = { kana, as_kana_result(result) }
   end
@@ -238,8 +239,23 @@ local function parse_file(path, encoding)
   local entries = {}
   for line in (read_file(path, encoding) .. "\n"):gmatch("(.-)\r?\n") do
     if line:sub(1, 1) ~= "#" and not line:match("^%s*$") then
-      local from, result = line:match("^([^,]*),?([^,]*)")
-      entries[#entries + 1] = { from, { result, "" } }
+      local from, result, feed
+      if line:sub(1, 1) == "," then
+        from = ","
+        local rest = line:sub(2)
+        if rest:sub(1, 1) == "," then
+          rest = rest:sub(2)
+        end
+        local parts = vim.split(rest, ",", { plain = true })
+        result = parts[1] or ""
+        feed = parts[2] or ""
+      else
+        local parts = vim.split(line, ",", { plain = true })
+        from = parts[1] or ""
+        result = parts[2] or ""
+        feed = parts[3] or ""
+      end
+      entries[#entries + 1] = { from, { result, feed } }
     end
   end
   return entries

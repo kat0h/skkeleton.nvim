@@ -35,6 +35,12 @@ T["state.initialize keeps ignored keys"] = function()
   eq(child.lua_get([[st.converter == conv]]), true)
   child.lua([[state.initialize(st)]])
   eq(child.lua_get([[st.converter]]), vim.NIL)
+
+  child.lua([[
+    st = { type = "henkan", word = "hoge", candidates = { "a" }, candidate_index = 0 }
+    state.initialize(st)
+  ]])
+  eq(child.lua_get([[{ st.word, st.candidates, st.candidate_index }]]), {})
 end
 
 T["state.to_string"] = function()
@@ -52,6 +58,10 @@ T["state.to_string"] = function()
     { [[{ mode = "okurinasi", henkan_feed = "かん", feed = "j" }]], "▽かんj" },
     { [[{ mode = "okuriari", henkan_feed = "か", okuri_feed = "ん", feed = "j" }]], "▽か*んj" },
     { [[{ mode = "okuriari", henkan_feed = "や", feed = "t", previous_feed = true }]], "▽やt*" },
+    {
+      [[{ mode = "okuriari", henkan_feed = "や", feed = "t", previous_feed = true, converter = require("skkeleton.kana.hira_kata").hira_to_kata }]],
+      "▽ヤt*",
+    },
     {
       [[{ mode = "okurinasi", henkan_feed = "ほげ", converter = require("skkeleton.kana.hira_kata").hira_to_kata }]],
       "▽ホゲ",
@@ -111,6 +121,7 @@ T["okuri.get_okuri_str"] = function()
     { "あ", "じ", "あj" },
     { "あ", "を", "あw" },
     { "あ", "ゆ", "あy" },
+    { "あ", "ゔ", "あv" },
   }
   for _, c in ipairs(cases) do
     eq(okuri.get_okuri_str(c[1], c[2]), c[3])

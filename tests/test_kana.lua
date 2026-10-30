@@ -156,4 +156,44 @@ T["hira_to_kata / hira_to_hankata"] = function()
   end
 end
 
+T["multi-char uppercase keys are not converted to <s-...>"] = function()
+  init()
+  child.lua([[kana.register("rom", { zL = { "伸", "" }, ["<C-j>"] = "kakutei" })]])
+  eq(child.lua_get([[kana.get_table():find("zL")]]), { "伸", "" })
+  eq(child.lua_get([[kana.get_table():find("<s-zl>") ]]), vim.NIL)
+  eq(child.lua_get([[kana.get_table():find("<C-j>") == require("skkeleton.function").functions.kakutei]]), true)
+end
+
+T["custom lua function in register"] = function()
+  init()
+  child.lua([[
+    custom_called = false
+    local custom_fn = function(ctx, feed)
+      custom_called = true
+      ctx.state.feed = ""
+    end
+    kana.register("rom", { myfn = custom_fn })
+    ctx = require("skkeleton.context").new()
+    H.dispatch(ctx, "myfn")
+  ]])
+  eq(child.lua_get([[custom_called]]), true)
+end
+
+T["load_file supports 3 columns and comma key"] = function()
+  init()
+  child.lua([[
+    path = vim.fn.tempname()
+    vim.fn.writefile({
+      "bb,っ,b",
+      ",,、",
+      "ka,か",
+    }, path)
+    kana.load_file("rom", path, "utf-8", false)
+  ]])
+  eq(child.lua_get([[kana.get_table():find("bb")]]), { "っ", "b" })
+  eq(child.lua_get([[kana.get_table():find(",")]]), { "、", "" })
+  eq(child.lua_get([[kana.get_table():find("ka")]]), { "か", "" })
+  eq(child.lua_get([[H.output("bba")]]), "っば")
+end
+
 return T

@@ -60,6 +60,14 @@ T["register with a function"] = function()
   eq(child.lua_get([[called]]), { "\20" })
 end
 
+T["register normalizes key notation"] = function()
+  init()
+  child.lua([[
+    keymap.register("henkan", "<BS>", "henkanBackward")
+  ]])
+  eq(child.lua_get([[shown({ "A", " ", "<bs>" })]]), "▽あ")
+end
+
 T["register errors"] = function()
   init()
   eq(child.lua_get([[select(2, pcall(keymap.register, "nothing", "a", "cancel"))]]), "unknown state: nothing")

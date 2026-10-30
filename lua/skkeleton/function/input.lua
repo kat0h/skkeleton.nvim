@@ -165,11 +165,15 @@ function M.delete_char(ctx)
   local state = ctx.state
   if state.feed ~= "" then
     state.feed = util.drop_last_char(state.feed)
+    if state.feed == "" then
+      state.previous_feed = false
+    end
   elseif state.mode == "okuriari" then
     if state.okuri_feed ~= "" then
       state.okuri_feed = util.drop_last_char(state.okuri_feed)
     else
       state.mode = "okurinasi"
+      state.previous_feed = false
     end
   elseif state.mode == "okurinasi" then
     if state.henkan_feed ~= "" then
@@ -191,6 +195,7 @@ function M.prefix(ctx, key)
 
   local state = ctx.state
   if not state.direct_input and state.henkan_feed ~= "" and (state.mode == "okurinasi" or state.mode == "okuriari") then
+    M.kakutei_feed(ctx)
     M.accept_result(ctx, { ">", "" }, "")
     ctx.state.affix = "prefix"
     henkan.henkan_first(ctx, key)

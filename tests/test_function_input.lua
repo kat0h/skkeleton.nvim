@@ -181,7 +181,7 @@ T["katakana input"] = function()
       return out
     end)()
   ]])
-  eq(r, { "ア", "あ", "▽n", "ン", "ホゲ", "ほげ", "ほげ" })
+  eq(r, { "ア", "あ", "▽n", "ン", "ホゲ", "ホゲ", "ほげ" })
 end
 
 T["hankatakana input"] = function()
@@ -257,6 +257,56 @@ T["prefix and suffix"] = function()
       end)()
     ]]),
     ">"
+  )
+end
+
+T["prefix flushes pending romaji feed"] = function()
+  init()
+  child.lua([[
+    H.setup_library():register_henkan_result("okurinasi", "おん>", "音>")
+  ]])
+  eq(
+    child.lua_get([[
+      (function()
+        local ctx = Context.new()
+        H.dispatch(ctx, ";on")
+        input.prefix(ctx, ">")
+        return { ctx.state.type, ctx.state.affix, ctx:to_string() }
+      end)()
+    ]]),
+    { "henkan", "prefix", "▼音" }
+  )
+end
+
+T["delete_char clears previous_feed when feed or okuri_feed is emptied"] = function()
+  init()
+  eq(
+    child.lua_get([[
+      (function()
+        local ctx = Context.new()
+        H.dispatch(ctx, ";sas;")
+        local before = { ctx.state.mode, ctx.state.feed, ctx.state.previous_feed }
+        input.delete_char(ctx)
+        local after_drop_feed = { ctx.state.mode, ctx.state.feed, ctx.state.previous_feed }
+        return { before, after_drop_feed }
+      end)()
+    ]]),
+    { { "okuriari", "s", true }, { "okuriari", "", false } }
+  )
+
+  eq(
+    child.lua_get([[
+      (function()
+        local ctx = Context.new()
+        H.dispatch(ctx, ";sas;")
+        ctx.state.feed = ""
+        ctx.state.previous_feed = true
+        ctx.state.okuri_feed = ""
+        input.delete_char(ctx)
+        return { ctx.state.mode, ctx.state.previous_feed }
+      end)()
+    ]]),
+    { "okurinasi", false }
   )
 end
 

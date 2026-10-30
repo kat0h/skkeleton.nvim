@@ -177,4 +177,11 @@ T["hankatakana from zenkaku goes back to the configured table"] = function()
   eq(child.lua_get([[kana.current_name]]), "rom")
 end
 
+T["katakana from zenkaku goes back to the configured table"] = function()
+  init()
+  child.lua([[ctx = Context.new(); mode.zenkaku(ctx); mode.katakana(ctx); H.dispatch(ctx, "a")]])
+  eq(child.lua_get([[ctx.preedit:output("")]]), "ア")
+  eq(child.lua_get([[kana.current_name]]), "rom")
+end
+
 return T

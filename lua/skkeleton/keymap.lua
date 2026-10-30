@@ -74,6 +74,7 @@ function M.register(state, key, func)
   if not keymap then
     error("unknown state: " .. tostring(state), 0)
   end
+  key = notation.normalize(key)
   if not func or func == "" then
     keymap.map[key] = nil
     return
