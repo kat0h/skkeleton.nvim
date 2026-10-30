@@ -35,27 +35,27 @@ function source:get_completions(ctx, callback)
     local row, col = ctx.cursor[1] - 1, ctx.cursor[2]
     -- 何も挿入しない編集にして、auto_insert の試し挿入でバッファが変わらないようにする。確定は execute が行う
     local range = { start = { line = row, character = col }, ["end"] = { line = row, character = col } }
-    local n = 0
-    for _, entry in ipairs(result) do
-      local kana = entry[1]
-      for _, cand in ipairs(entry[2]) do
-        n = n + 1
-        local word, annotation = cand:match("^([^;]*);(.*)$")
-        word = word or cand
-        local item = {
-          label = word,
-          labelDetails = { description = kana },
-          kind = TEXT_KIND,
-          filterText = keyword,
-          sortText = ("%06d"):format(n),
-          textEdit = { newText = "", range = range },
-          data = { skkeleton = true, kana = kana, word = cand },
-        }
-        if annotation and annotation ~= "" then
-          item.documentation = { kind = "plaintext", value = annotation }
-        end
-        items[#items + 1] = item
+    local skkeleton = require("skkeleton")
+    local sort = require("skkeleton.completion.sort")
+    local sorted = sort.sort_completions(result, skkeleton.get_completion_ranks())
+    for idx, entry in ipairs(sorted) do
+      local kana = entry.kana
+      local cand = entry.word
+      local word, annotation = cand:match("^([^;]*);(.*)$")
+      word = word or cand
+      local item = {
+        label = word,
+        labelDetails = { description = kana },
+        kind = TEXT_KIND,
+        filterText = keyword,
+        sortText = ("%06d"):format(idx),
+        textEdit = { newText = "", range = range },
+        data = { skkeleton = true, kana = kana, word = cand },
+      }
+      if annotation and annotation ~= "" then
+        item.documentation = { kind = "plaintext", value = annotation }
       end
+      items[#items + 1] = item
     end
   end
   -- 絞り込みは skkeleton が済ませているので、blink には毎回取り直させる

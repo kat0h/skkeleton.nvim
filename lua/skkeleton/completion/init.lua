@@ -24,6 +24,58 @@ local validators = {
   end,
 }
 
+-- blink.cmp が入っていないことを一度確かめたら、setup() まで require を繰り返さない
+local blink_missing = false
+local cmp_missing = false
+local cmp_registered = false
+
+-- blink.cmp。入っていなければ nil
+---@return table?
+local function get_blink()
+  local loaded = package.loaded["blink.cmp"]
+  if loaded then
+    return loaded
+  end
+  if blink_missing then
+    return nil
+  end
+  local ok, blink = pcall(require, "blink.cmp")
+  if not ok then
+    blink_missing = true
+    return nil
+  end
+  return blink
+end
+
+-- nvim-cmp。入っていなければ nil
+---@return table?
+local function get_cmp()
+  local loaded = package.loaded["cmp"]
+  if loaded then
+    return loaded
+  end
+  if cmp_missing then
+    return nil
+  end
+  local ok, cmp = pcall(require, "cmp")
+  if not ok or not cmp then
+    cmp_missing = true
+    return nil
+  end
+  return cmp
+end
+
+local function ensure_cmp_registered()
+  if cmp_registered then
+    return
+  end
+  local cmp = get_cmp()
+  if cmp and cmp.register_source then
+    pcall(cmp.register_source, "skkeleton", require("skkeleton.completion.cmp").new())
+    cmp_registered = true
+  end
+end
+
 -- 設定する。未知のキーや型が違う値があれば、何も反映せずにエラーにする
 ---@param opts? table
 function M.setup(opts)
@@ -40,6 +92,9 @@ function M.setup(opts)
   end
   M.options = vim.tbl_extend("force", defaults(), opts)
   blink_missing = false
+  cmp_missing = false
+  ensure_cmp_registered()
+  require("skkeleton.completion.native").setup()
 
   local group = vim.api.nvim_create_augroup("skkeleton-completion", { clear = true })
   vim.api.nvim_create_autocmd("User", {
@@ -60,27 +115,6 @@ function M.is_pending()
   local store = require("skkeleton.store")
   local st = store.context().state
   return st.type == "input" and st.mode == "okurinasi" and st.henkan_feed ~= ""
-end
-
--- blink.cmp が入っていないことを一度確かめたら、setup() まで require を繰り返さない
-local blink_missing = false
-
--- blink.cmp。入っていなければ nil
----@return table?
-local function get_blink()
-  local loaded = package.loaded["blink.cmp"]
-  if loaded then
-    return loaded
-  end
-  if blink_missing then
-    return nil
-  end
-  local ok, blink = pcall(require, "blink.cmp")
-  if not ok then
-    blink_missing = true
-    return nil
-  end
-  return blink
 end
 
 -- 利用者が providers に書いた skkeleton の source の id。書いていなければ nil
@@ -107,6 +141,10 @@ local shown = false
 
 local function hide()
   last_key = nil
+  local cmp = get_cmp()
+  if cmp then
+    pcall(cmp.close)
+  end
   if not shown then
     return
   end
@@ -121,7 +159,7 @@ end
 function M.refresh()
   local opts = M.options
   if not opts.enabled then
-    return
+    return hide()
   end
   if not M.is_pending() then
     return hide()
@@ -130,6 +168,13 @@ function M.refresh()
   if #require("skkeleton.util").chars(st.henkan_feed) < opts.minLength then
     return hide()
   end
+
+  local cmp = get_cmp()
+  if cmp then
+    ensure_cmp_registered()
+    pcall(cmp.complete)
+  end
+
   local key = st.henkan_feed .. "\0" .. st.feed
   if key == last_key then
     return
@@ -183,6 +228,13 @@ function M.accept_selected()
   end
   local res = blink.accept and blink.accept()
   return res ~= false
+end
+
+---@param findstart 1|0|string
+---@param base string
+---@return integer|table[]
+function M.completefunc(findstart, base)
+  return require("skkeleton.completion.native").completefunc(findstart, base)
 end
 
 return M

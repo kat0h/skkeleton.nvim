@@ -291,4 +291,63 @@ T["save keeps a symlink, the file mode and leaves no temporary file"] = function
   )
 end
 
+T["load_ranks and save_ranks"] = function()
+  eq(
+    run([[
+      local path = TMP .. "/ranks.json"
+      local u = User.new()
+      u:register_henkan_result("okurinasi", "かんじ", "感じ")
+      u:register_henkan_result("okurinasi", "かんじ", "漢字")
+      u:save_ranks(path)
+
+      local content = read(path)
+      local decoded = vim.json.decode(content)
+
+      local u2 = User.new()
+      u2:load_ranks(path)
+
+      return {
+        decoded,
+        u2:get_ranks(),
+        u2.rank_counter,
+      }
+    ]]),
+    {
+      { "感じ", "漢字" },
+      { ["感じ"] = 1, ["漢字"] = 2 },
+      2,
+    }
+  )
+end
+
+T["load_ranks handles missing or invalid file gracefully"] = function()
+  eq(
+    run([[
+      local u = User.new()
+      u:load_ranks("")
+      u:load_ranks(nil)
+      u:load_ranks(TMP .. "/nonexistent_ranks.json")
+
+      local bad_path = write("bad_rank.json", "{ not a valid json")
+      u:load_ranks(bad_path)
+
+      return { u:get_ranks(), u.rank_counter }
+    ]]),
+    { {}, 0 }
+  )
+end
+
+T["save_ranks creates parent directories"] = function()
+  eq(
+    run([[
+      local deep_path = TMP .. "/deep/nested/ranks/rank.json"
+      local u = User.new()
+      u:register_henkan_result("okurinasi", "あ", "亜")
+      u:save_ranks(deep_path)
+      return { vim.uv.fs_stat(deep_path) ~= nil, vim.json.decode(read(deep_path)) }
+    ]]),
+    { true, { "亜" } }
+  )
+end
+
 return T

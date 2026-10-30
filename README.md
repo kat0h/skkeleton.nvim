@@ -52,6 +52,75 @@ require("skkeleton").setup({ indicator = false })
 
 設定可能なオプションとハイライトグループの詳細は `:help skkeleton-indicator` を参照してください。オプション名やハイライトグループ名は skkeleton_indicator.nvim と同じです。
 
+## 補完
+
+送りなし入力中に以下の補完プラグインまたは Neovim 組み込み機能を利用できます。
+
+補完候補は、**読みの長さ（短い順）** → **選択履歴ランク（頻度順）** → **辞書の出現順** の 3 段階でソートされます。
+
+### blink.cmp
+
+[blink.cmp](https://github.com/saghen/blink.cmp) の providers に `skkeleton` を追加します。
+
+```lua
+require("blink.cmp").setup({
+  sources = {
+    default = { "lsp", "path", "snippets", "buffer", "skkeleton" },
+    providers = {
+      skkeleton = {
+        name = "skkeleton",
+        module = "skkeleton.completion.blink",
+      },
+    },
+  },
+})
+```
+
+`eggLikeNewline = true` を設定すると、補完候補選択中の `<CR>` で候補を直接確定できます。
+
+### nvim-cmp
+
+[nvim-cmp](https://github.com/hrsh7th/nvim-cmp) の sources に `"skkeleton"` を指定します。`skkeleton.setup()` 時にソースが自動登録されます。
+
+```lua
+local cmp = require("cmp")
+cmp.setup({
+  sources = cmp.config.sources({
+    { name = "skkeleton" },
+    { name = "buffer" },
+  }),
+})
+```
+
+### 組み込み completefunc
+
+Neovim 組み込みの `completefunc`（`<C-x><C-u>`）を使用する場合：
+
+```lua
+vim.bo.completefunc = "v:lua.require'skkeleton.completion'.completefunc"
+```
+
+### 補完ランクの永続化 (`completionRankFile`)
+
+候補の選択履歴を保存して次回の補完順位に反映させるには、`completionRankFile` を指定します。
+
+```lua
+require("skkeleton").setup({
+  completionRankFile = "~/.config/skk/rank.json",
+})
+```
+
+### 補完 Lua API
+
+外部の補完プラグインやスクリプトから利用できる API を提供しています。
+
+- `require("skkeleton").get_prefix()`: 現在の読み（かな）を取得
+- `require("skkeleton").get_pre_edit()` (`get_preedit()`): 現在の pre-edit 文字列を取得
+- `require("skkeleton").get_completions()` (`get_completion_result()`): 補完候補一覧を取得
+- `require("skkeleton").get_completion_ranks()`: 候補のランクテーブルを取得
+- `require("skkeleton").complete_callback(kana, word)`: 選択した候補を辞書とランクに登録
+- `require("skkeleton").complete(kana, word)`: 候補を確定してバッファに挿入
+
 ## skkeleton からの移行
 
 skkeleton.nvim は skkeleton を置き換えるプラグインです。同じ Neovim に両方を導入せず、どちらか一方のみを有効にしてください。
@@ -73,10 +142,10 @@ skkeleton.nvim は skkeleton を置き換えるプラグインです。同じ Ne
 
 - `databasePath` にはファイルではなくディレクトリを指定します。指定したディレクトリ内に、辞書ごとの `<ハッシュ>.db` ファイルが生成されます（skkeleton が作成した DB ファイルは使用せず、新しく作成します）。既存のファイルパスや `skk.db` のような拡張子付きのパスが指定された場合は、その親ディレクトリを使用します。省略時（`""`）の保存先は `stdpath("cache")/skkeleton` です。
 - `sources` の `"deno_kv"` は `"skk_dictionary"` と同じものとして扱われます。どちらを指定しても辞書は DB 化して検索されるため、DB を使うために `databasePath` を設定する必要はありません。
-- `skkServer*` と `completionRankFile` は互換性のために型の検証のみ行い、実際の処理では使用しません。
+- `skkServer*` は互換性のために型の検証のみ行い、実際の処理では使用しません。
 - 以下の機能には対応していません。
   - `sources` の `"skk_server"` および `"google_japanese_input"`
-  - ddc.vim の補完ソースおよび `completionRankFile`
+  - ddc.vim の補完ソース（blink.cmp、nvim-cmp、組み込み completefunc に対応しています）
   - YAML 形式・MessagePack 形式の辞書（JSON 形式の辞書には対応しています）
   - `skkeleton#handle()`、`skkeleton#dangerously_clear_buffer_local_mappings()`
 

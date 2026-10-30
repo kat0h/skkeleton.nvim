@@ -146,6 +146,14 @@ function Library:get_completion_result(prefix, feed, limit)
   return out
 end
 
+---@return table<string, integer>
+function Library:get_ranks()
+  if self.user_dict then
+    return self.user_dict:get_ranks()
+  end
+  return {}
+end
+
 ---@param kind "okuriari"|"okurinasi"
 ---@param word string
 ---@param candidate string
@@ -156,6 +164,11 @@ function Library:register_henkan_result(kind, word, candidate)
   self.user_dict:register_henkan_result(kind, word, candidate)
   if self.immediately_rw then
     self.user_dict:save()
+    local config = require("skkeleton.config")
+    local rank_file = config.options and config.options.completionRankFile
+    if rank_file and rank_file ~= "" then
+      self.user_dict:save_ranks(rank_file)
+    end
   end
 end
 
@@ -169,6 +182,11 @@ function Library:purge_candidate(kind, word, candidate)
   self.user_dict:purge_candidate(kind, word, candidate)
   if self.immediately_rw then
     self.user_dict:save()
+    local config = require("skkeleton.config")
+    local rank_file = config.options and config.options.completionRankFile
+    if rank_file and rank_file ~= "" then
+      self.user_dict:save_ranks(rank_file)
+    end
   end
 end
 
@@ -181,6 +199,11 @@ end
 function Library:save()
   if self.user_dict then
     self.user_dict:save()
+    local config = require("skkeleton.config")
+    local rank_file = config.options and config.options.completionRankFile
+    if rank_file and rank_file ~= "" then
+      self.user_dict:save_ranks(rank_file)
+    end
   end
 end
 
@@ -262,6 +285,11 @@ function M.load(cfg)
     user_path = DEFAULT_USER_DICTIONARY
   end
   user:load({ path = user_path })
+  local config = require("skkeleton.config")
+  local rank_file = cfg.completionRankFile or config.options.completionRankFile
+  if rank_file and rank_file ~= "" then
+    user:load_ranks(rank_file)
+  end
 
   local dicts = {}
   local globals_done = false

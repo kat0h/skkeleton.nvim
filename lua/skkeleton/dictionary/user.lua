@@ -1,6 +1,6 @@
 -- Ported from skkeleton (denops/skkeleton/sources/user_dictionary.ts)
 -- Copyright (c) 2021 kuuote, zlib license (see LICENSES/skkeleton.txt)
--- Modified for skkeleton.nvim: rewritten in Lua. The rank file is not supported.
+-- Modified for skkeleton.nvim: rewritten in Lua.
 --
 -- ユーザー辞書。メモリに読み、登録と削除をして、SKK 形式で書き戻す。
 local skk = require("skkeleton.dictionary.skk")
@@ -13,6 +13,8 @@ local bit = require("bit")
 ---@field path string
 ---@field load_time string
 ---@field maps table<string, table<string, string[]>>
+---@field ranks table<string, integer>
+---@field rank_counter integer
 local User = {}
 User.__index = User
 
@@ -22,6 +24,8 @@ function User.new()
     maps = { okuriari = {}, okurinasi = {} },
     path = "",
     load_time = "",
+    ranks = {},
+    rank_counter = 0,
   }, User)
 end
 
@@ -66,6 +70,11 @@ function User:get_prefix(kind, prefix, limit)
   return out
 end
 
+---@return table<string, integer>
+function User:get_ranks()
+  return self.ranks or {}
+end
+
 -- 登録した候補を先頭にする（重複は取り除く）
 ---@param kind "okuriari"|"okurinasi"
 ---@param word string
@@ -81,6 +90,8 @@ function User:register_henkan_result(kind, word, candidate)
     end
   end
   self.maps[kind][word] = merged
+  self.rank_counter = (self.rank_counter or 0) + 1
+  self.ranks[candidate] = self.rank_counter
 end
 
 ---@param kind "okuriari"|"okurinasi"
@@ -94,6 +105,92 @@ function User:purge_candidate(kind, word, candidate)
     end
   end
   self.maps[kind][word] = #rest > 0 and rest or nil
+  if self.ranks then
+    self.ranks[candidate] = nil
+  end
+end
+
+---@param path string
+function User:load_ranks(path)
+  if not path or path == "" then
+    return
+  end
+  local expanded = vim.fn.expand(path)
+  if expanded == "" or not uv.fs_stat(expanded) then
+    return
+  end
+  local fd = uv.fs_open(expanded, "r", 420)
+  if not fd then
+    return
+  end
+  local stat = uv.fs_fstat(fd)
+  local content = ""
+  if stat and stat.size > 0 then
+    content = uv.fs_read(fd, stat.size, 0) or ""
+  end
+  uv.fs_close(fd)
+  if content == "" then
+    return
+  end
+  local ok, data = pcall(vim.json.decode, content)
+  if not ok or type(data) ~= "table" then
+    return
+  end
+  self.ranks = {}
+  self.rank_counter = 0
+  for _, word in ipairs(data) do
+    if type(word) == "string" then
+      self.rank_counter = self.rank_counter + 1
+      self.ranks[word] = self.rank_counter
+    end
+  end
+end
+
+---@param path string
+function User:save_ranks(path)
+  if not path or path == "" then
+    return
+  end
+  local expanded = vim.fn.expand(path)
+  if expanded == "" then
+    return
+  end
+  vim.fn.mkdir(vim.fn.fnamemodify(expanded, ":h"), "p")
+  local entries = {}
+  for w, r in pairs(self.ranks or {}) do
+    entries[#entries + 1] = { word = w, rank = r }
+  end
+  table.sort(entries, function(a, b)
+    return a.rank < b.rank
+  end)
+  local list = {}
+  for _, e in ipairs(entries) do
+    list[#list + 1] = e.word
+  end
+  local ok, content = pcall(vim.json.encode, list)
+  if not ok or not content then
+    return
+  end
+  local target = uv.fs_realpath(expanded) or expanded
+  local tmp = ("%s.%d.tmp"):format(target, uv.os_getpid())
+  local fd = uv.fs_open(tmp, "w", 420)
+  local wrote = false
+  if fd then
+    wrote = uv.fs_write(fd, content, 0) == #content
+    wrote = uv.fs_fsync(fd) ~= nil and wrote
+    uv.fs_close(fd)
+    wrote = wrote and uv.fs_rename(tmp, target) ~= nil
+    if not wrote then
+      uv.fs_unlink(tmp)
+    end
+  end
+  if not wrote then
+    local direct_fd = uv.fs_open(target, "w", 420)
+    if direct_fd then
+      uv.fs_write(direct_fd, content, 0)
+      uv.fs_close(direct_fd)
+    end
+  end
 end
 
 local function mtime_of(path)

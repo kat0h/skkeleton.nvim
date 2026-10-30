@@ -124,6 +124,13 @@ function M.init(force)
     group = group,
     callback = check_stale,
   })
+  -- 終了時にユーザー辞書と補完ランクを保存する
+  vim.api.nvim_create_autocmd("VimLeavePre", {
+    group = group,
+    callback = function()
+      require("skkeleton").save_user_dict()
+    end,
+  })
   doautocmd("skkeleton-initialize-post")
 end
 
@@ -279,10 +286,15 @@ function M.complete(kana, word, kind)
     local ctx = store.context()
     local vim_mode = vim.api.nvim_get_mode().mode
     ctx.vim_mode = vim_mode:sub(1, 1)
+    local conv = ctx.state.converter
     -- 変換中の状態は捨てる。モード（ひらがななど）は変えない
     mode_mod.initialize_state_with_abbrev(ctx, { "converter", "table" })
     M.complete_callback(kana, word, kind)
-    ctx:kakutei_with_undo_point(candidate.modify(word))
+    local text = candidate.modify(word or kana or "") or ""
+    if conv then
+      text = conv(text)
+    end
+    ctx:kakutei_with_undo_point(text)
     update_state_variable()
     render.update(ctx)
   end)

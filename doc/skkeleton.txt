@@ -19,6 +19,7 @@ LICENSES/ ディレクトリにあります。
   マッピング .......................... |skkeleton-keymappings|
   機能一覧 ............................ |skkeleton-functions|
   設定 ................................ |skkeleton-config|
+  補完 ................................ |skkeleton-completion|
   かなテーブルとキーマップ ............ |skkeleton-kanatable|
   フックと変数 ........................ |skkeleton-hooks|
   インジケータ ........................ |skkeleton-indicator|
@@ -133,6 +134,48 @@ register_kanatable({name}, {tbl} [, {create}])
                                          *skkeleton.register_kanatable_file()*
 register_kanatable_file({name}, {path} [, {encoding} [, {create}]])
 	|skkeleton-kanatable-file| を参照してください。
+
+                                                     *skkeleton.get_prefix()*
+get_prefix()
+	現在の読み（▽ のあとのかな文字列）を返します。入力中でなければ空
+	文字列（`""`）を返します。
+
+                                                   *skkeleton.get_pre_edit()*
+                                                     *skkeleton.get_preedit()*
+get_pre_edit()
+get_preedit()
+	現在の pre-edit 文字列（例: `"▽かんj"`）を返します。未入力時は空文字
+	列（`""`）を返します。
+
+                                                *skkeleton.get_completions()*
+                                          *skkeleton.get_completion_result()*
+get_completions()
+get_completion_result()
+	現在の読みと未変換入力に合致する補完候補の一覧を返します。返り値は
+	`{ { 読み, 候補の配列 }, ... }` 形式の配列です。
+
+                                           *skkeleton.get_completion_ranks()*
+get_completion_ranks()
+	ユーザー辞書および |skkeleton-config-completionRankFile| に保存され
+	ている候補のランクテーブル（`table<string, integer>`）を返します。
+
+                                              *skkeleton.complete_callback()*
+complete_callback({kana}, {word} [, {kind}])
+	補完で選んだ候補をユーザー辞書に登録し、選択履歴のランクを更新しま
+	す（pre-edit の消去やバッファへの挿入は行いません）。{kind} は省略時
+	`"okurinasi"` です。
+
+                                                        *skkeleton.complete()*
+complete({kana}, {word} [, {kind}])
+	補完候補で確定します。pre-edit を破棄して {word} をバッファに挿入・
+	確定し、ユーザー辞書への登録とランク更新を行います。入力モードの変
+	換関数（converter）が設定されている場合は適用されます。
+
+                                                  *skkeleton.save_user_dict()*
+save_user_dict()
+	メモリ上のユーザー辞書と補完ランクファイルを手動で保存します。通常
+	は Neovim 終了時や |skkeleton-config-immediatelyDictionaryRW| により
+	自動で保存されます。
 
 なお、ステータスラインなどから呼び出せるよう、Vim script 関数として
 `skkeleton#is_enabled()` と `skkeleton#mode()` も提供しています。
@@ -303,8 +346,10 @@ acceptIllegalResult                     *skkeleton-config-acceptIllegalResult*
 
 completionRankFile                       *skkeleton-config-completionRankFile*
 	(既定値: "")
-	skkeleton との設定互換性のために用意されています。型の検証のみを行い、
-	実際の処理では使用しません。
+	補完候補の選択順位（ランク）を保存・復元する JSON ファイルのパス
+	を指定します。指定した場合、候補確定時の順位が記録され、以後の補
+	完候補の並び替え（3 段階ソート）に反映されます。空文字列の場合は
+	ファイルへの永続化を行いません。
 
 databasePath                                   *skkeleton-config-databasePath*
 	(既定値: "")
@@ -439,6 +484,80 @@ sources                                             *skkeleton-config-sources*
 userDictionary                               *skkeleton-config-userDictionary*
 	(既定値: "~/.skkeleton")
 	ユーザー辞書のファイルパスです。文字コードは UTF-8 で保存されます。
+
+==============================================================================
+補完                                                    *skkeleton-completion*
+
+skkeleton.nvim は、送りなし変換の入力中に 3 種類の補完方式（blink.cmp、
+nvim-cmp、Neovim 組み込みの completefunc）に対応しています。
+
+補完候補は以下の 3 段階でソートされます。
+1. 読みの長さ（短い読みが優先）
+2. 選択履歴のランク（|skkeleton-config-completionRankFile| の頻度が高い順）
+3. 辞書内の定義順
+
+------------------------------------------------------------------------------
+blink.cmp の設定                                 *skkeleton-completion-blink*
+
+blink.cmp を使用する場合は、sources の providers に設定を追加します。
+>lua
+    require("blink.cmp").setup({
+      sources = {
+        default = { "lsp", "path", "snippets", "buffer", "skkeleton" },
+        providers = {
+          skkeleton = {
+            name = "skkeleton",
+            module = "skkeleton.completion.blink",
+          },
+        },
+      },
+    })
+<
+|skkeleton-config-eggLikeNewline| を有効にすると、補完メニューが表示されて
+いる状態で <CR> を押した際に候補が確定されます。
+
+------------------------------------------------------------------------------
+nvim-cmp の設定                                    *skkeleton-completion-cmp*
+
+nvim-cmp を使用する場合は、sources に `"skkeleton"` を指定します。
+>lua
+    local cmp = require("cmp")
+    cmp.setup({
+      sources = cmp.config.sources({
+        { name = "skkeleton" },
+      }, {
+        { name = "buffer" },
+      }),
+    })
+<
+|skkeleton.setup()| 呼び出し時にソースが自動登録されます。手動で登録する場
+合は `require("skkeleton.completion.cmp").register()` を呼び出してください。
+
+------------------------------------------------------------------------------
+completefunc の設定                             *skkeleton-completion-native*
+
+Neovim 組み込みの補完を使用する場合は、バッファまたはファイルタイプごとに
+'completefunc' を設定します。
+>lua
+    vim.bo.completefunc = "v:lua.require'skkeleton.completion'.completefunc"
+<
+入力中に `<C-x><C-u>` を押すと補完メニューが表示されます。候補を選択して
+確定（`CompleteDone`）すると、自動的にユーザー辞書への登録とランク更新が行
+われます。
+
+------------------------------------------------------------------------------
+補完オプション                                 *skkeleton-completion-options*
+
+|skkeleton.setup()| の引数に `completion` テーブルを渡すことで、補完動作を
+設定できます。
+>lua
+    require("skkeleton").setup({
+      completion = {
+        enabled = true,   -- 補完メニューの自動トリガーを有効にする
+        minLength = 2,    -- 補完を開始する最小のかな文字数
+      },
+    })
+<
 
 ==============================================================================
 かなテーブルとキーマップ                                 *skkeleton-kanatable*
@@ -783,13 +902,13 @@ skkeleton からの移行                                     *skkeleton-migrati
   す。skkeleton が生成した Deno KV の DB ファイルは使用せず、新しい形式で DB
   を作成します。
 - `sources` の `"deno_kv"` は `"skk_dictionary"` と同じものとして扱われます。
-- `skkServer*` および `completionRankFile` は型の検証のみを行い、実際の処理で
-  は使用しません。
+- `skkServer*` は型の検証のみを行い、実際の処理では使用しません。
 
 非対応の機能~
 - skkserv および Google 日本語入力（`sources` の `"skk_server"`、
   `"google_japanese_input"`）
-- ddc.vim の補完ソースおよび `completionRankFile`
+- ddc.vim の補完ソース（blink.cmp、nvim-cmp、組み込み completefunc に対応
+  しています）
 - YAML 形式・MessagePack 形式の辞書（JSON 形式の辞書には対応しています）
 - `skkeleton#handle()`、`skkeleton#dangerously_clear_buffer_local_mappings()`
 

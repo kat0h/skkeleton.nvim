@@ -545,4 +545,241 @@ T["egg_like_newline"]["does not call blink.accept when item is only preselected"
   eq(helpers.buffer(child), { "かんj" })
 end
 
+-- =========================================================================
+-- 5. 3 段階補完候補ソート (skkeleton.completion.sort)
+-- =========================================================================
+T["sort"] = MiniTest.new_set()
+
+T["sort"]["sorts by reading length, user rank, and dictionary order"] = function()
+  local res = child.lua_get([[(function()
+    local sort = require("skkeleton.completion.sort")
+    local input = {
+      { "かんじ", { "漢字", "幹事", "感じ" } },
+      { "かん", { "缶", "感", "漢" } },
+      { "か", { "蚊", "課" } },
+    }
+    local ranks = {
+      ["感じ"] = 10,
+      ["漢字"] = 5,
+      ["感"] = 2,
+    }
+    return sort.sort_completions(input, ranks)
+  end)()]])
+
+  -- 1st level: length of reading (shorter first) -> "か" (len 1), then "かん" (len 2), then "かんじ" (len 3)
+  -- Within "か": dict order (蚊, then 課)
+  eq(res[1], { kana = "か", word = "蚊", rank = 0, kana_len = 1, dict_order = 7 })
+  eq(res[2], { kana = "か", word = "課", rank = 0, kana_len = 1, dict_order = 8 })
+
+  -- Within "かん": user rank first ("感" has rank 2, others 0), then dict order ("缶", then "漢")
+  eq(res[3].kana, "かん")
+  eq(res[3].word, "感")
+  eq(res[3].rank, 2)
+  eq(res[4].kana, "かん")
+  eq(res[4].word, "缶")
+  eq(res[5].kana, "かん")
+  eq(res[5].word, "漢")
+
+  -- Within "かんじ": user rank ("感じ" rank 10 > "漢字" rank 5 > "幹事" rank 0)
+  eq(res[6].kana, "かんじ")
+  eq(res[6].word, "感じ")
+  eq(res[6].rank, 10)
+  eq(res[7].kana, "かんじ")
+  eq(res[7].word, "漢字")
+  eq(res[7].rank, 5)
+  eq(res[8].kana, "かんじ")
+  eq(res[8].word, "幹事")
+  eq(res[8].rank, 0)
+end
+
+T["sort"]["deduplicates by kana and word while preserving first appearance"] = function()
+  local res = child.lua_get([[(function()
+    local sort = require("skkeleton.completion.sort")
+    local input = {
+      { "かん", { "缶", "感", "缶" } },
+      { "かん", { "缶", "漢" } },
+    }
+    return sort.sort_completions(input, {})
+  end)()]])
+
+  eq(#res, 3)
+  eq(res[1].word, "缶")
+  eq(res[2].word, "感")
+  eq(res[3].word, "漢")
+end
+
+-- =========================================================================
+-- 6. nvim-cmp source (skkeleton.completion.cmp)
+-- =========================================================================
+T["cmp_source"] = MiniTest.new_set()
+
+T["cmp_source"]["source methods and properties"] = function()
+  local info = child.lua_get([[(function()
+    local cmp_mod = require("skkeleton.completion.cmp")
+    local s = cmp_mod.new({ test = 1 })
+    return {
+      encoding = s:get_PositionEncodingKind(),
+      triggers = s:get_trigger_characters(),
+      keyword_pattern = s:get_keyword_pattern(),
+      is_available = s:is_available(),
+      opts = s.opts,
+    }
+  end)()]])
+
+  eq(info.encoding, "utf-8")
+  eq(info.triggers, {})
+  eq(_G.type(info.keyword_pattern), "string")
+  eq(info.is_available, false)
+  eq(info.opts, { test = 1 })
+end
+
+T["cmp_source"]["complete returns 3-level sorted items with annotations"] = function()
+  enable()
+  type("Kanj")
+
+  local res = child.lua_get([[(function()
+    local s = require("skkeleton.completion.cmp").new()
+    local result = nil
+    s:complete({}, function(resp)
+      result = resp
+    end)
+    return result
+  end)()]])
+
+  eq(res.isIncomplete, true)
+  local items = res.items
+  eq(#items, 3)
+  eq(items[1].label, "漢字")
+  eq(items[1].detail, "かんじ")
+  eq(items[1].sortText, "000001")
+  eq(items[1].documentation, { kind = "plaintext", value = "kanji annotation" })
+  eq(items[1].data, { skkeleton = true, kana = "かんじ", word = "漢字;kanji annotation" })
+
+  eq(items[2].label, "幹事")
+  eq(items[2].sortText, "000002")
+  eq(items[2].documentation, { kind = "plaintext", value = "kanji secretary" })
+
+  eq(items[3].label, "感じ")
+  eq(items[3].sortText, "000003")
+  eq(items[3].documentation, nil)
+end
+
+T["cmp_source"]["execute registers word in user dictionary"] = function()
+  enable()
+  type("Kanj")
+
+  child.lua([[(function()
+    local s = require("skkeleton.completion.cmp").new()
+    local item = {
+      data = { skkeleton = true, kana = "かんじ", word = "漢字;kanji annotation" },
+    }
+    s:execute(item, function() end)
+  end)()]])
+
+  eq(
+    child.lua_get([[require("skkeleton.store").library():get_henkan_result("okurinasi", "かんじ")[1] ]]),
+    "漢字;kanji annotation"
+  )
+end
+
+T["cmp_source"]["register safely calls cmp.register_source"] = function()
+  local registered = child.lua_get([[(function()
+    local recorded = nil
+    package.loaded["cmp"] = {
+      register_source = function(name, src)
+        recorded = { name = name, has_src = src ~= nil }
+      end,
+    }
+    require("skkeleton.completion.cmp").register()
+    return recorded
+  end)()]])
+
+  eq(registered, { name = "skkeleton", has_src = true })
+end
+
+-- =========================================================================
+-- 7. completefunc support (skkeleton.completion.native)
+-- =========================================================================
+T["native_completefunc"] = MiniTest.new_set()
+
+T["native_completefunc"]["findstart returns -3 when disabled or no prefix"] = function()
+  local res1 = child.lua_get([[require("skkeleton.completion").completefunc(1, "")]])
+  eq(res1, -3)
+
+  enable()
+  local res2 = child.lua_get([[require("skkeleton.completion").completefunc(1, "")]])
+  eq(res2, -3)
+end
+
+T["native_completefunc"]["findstart returns byte col and findstart 0 returns candidates"] = function()
+  enable()
+  type("Kanj")
+
+  local start_col = child.lua_get([[require("skkeleton.completion").completefunc(1, "")]])
+  eq(_G.type(start_col), "number")
+  eq(start_col >= 0, true)
+
+  local items = child.lua_get([[require("skkeleton.completion").completefunc(0, "かん")]])
+  eq(#items, 3)
+  eq(items[1].word, "漢字")
+  eq(items[1].abbr, "漢字")
+  eq(items[1].menu, "かんじ")
+  eq(items[1].info, "kanji annotation")
+  eq(items[1].user_data, { skkeleton = { kana = "かんじ", word = "漢字;kanji annotation" } })
+
+  eq(items[2].word, "幹事")
+  eq(items[2].info, "kanji secretary")
+
+  eq(items[3].word, "感じ")
+  eq(items[3].info, "")
+end
+
+T["native_completefunc"]["CompleteDone cleans up state and registers in user dictionary"] = function()
+  enable()
+  type("Kanj")
+  eq(helpers.preedit(child), "▽かんj")
+
+  child.lua([[(function()
+    vim.v.completed_item = {
+      word = "漢字",
+      user_data = {
+        skkeleton = {
+          kana = "かんじ",
+          word = "漢字;kanji annotation",
+        },
+      },
+    }
+    vim.api.nvim_exec_autocmds("CompleteDone", {})
+  end)()]])
+
+  helpers.settle(child)
+  eq(helpers.preedit(child), "")
+  eq(
+    child.lua_get([[require("skkeleton.store").library():get_henkan_result("okurinasi", "かんじ")[1] ]]),
+    "漢字;kanji annotation"
+  )
+end
+
+-- =========================================================================
+-- 8. Converter application on completion
+-- =========================================================================
+T["converter"] = MiniTest.new_set()
+
+T["converter"]["complete applies converter when present on state"] = function()
+  enable()
+  type("Kanj")
+
+  child.lua([[(function()
+    local ctx = require("skkeleton.store").context()
+    ctx.state.converter = function(s)
+      return s == "" and "" or ("<<" .. s .. ">>")
+    end
+    require("skkeleton").complete("かんじ", "感じ")
+  end)()]])
+
+  helpers.settle(child)
+  eq(helpers.buffer(child), { "<<感じ>>" })
+  eq(helpers.preedit(child), "")
+end
+
 return T
