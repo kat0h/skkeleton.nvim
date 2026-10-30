@@ -464,25 +464,6 @@ end
 -- 当てはまる違反は「既知」として出し、失敗にしない
 M.known = {}
 
--- insert のまま cmdline に入って戻ると（<C-r>=）、インジケータが閉じたままになる（#17）
-M.known[#M.known + 1] = {
-  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
-  match = function(keys, msg)
-    return vim.tbl_contains(keys, "<C-r>=1<CR>") and msg and msg:find("0 個", 1, true) ~= nil
-  end,
-  reason = "#17: <C-r>= で式を入れて戻ると、インジケータが消えたままになる",
-}
-
--- 補完のメニューで候補が入っても、インジケータが動かない（#18）
-M.known[#M.known + 1] = {
-  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
-  match = function(keys, msg)
-    local last = keys[#keys] or ""
-    return (last == "<C-x><C-n>" or last == "<C-n>" or last == "<C-p>") and msg and msg:find("期待", 1, true) ~= nil
-  end,
-  reason = "#18: 補完で候補が入ると、インジケータが元の位置に残る",
-}
-
 -- 補完が語を消して入れ直すと、extmark がずれる（#19）
 for _, property in ipairs({
   "preedit: extmark は insert モードの今のバッファのカーソル位置にある",
