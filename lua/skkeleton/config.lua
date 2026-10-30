@@ -24,6 +24,7 @@ local function defaults()
     lowercaseMap = {},
     markerHenkan = "▽",
     markerHenkanSelect = "▼",
+    popupBorder = "none",
     registerConvertResult = false,
     selectCandidateKeys = "asdfjkl",
     setUndoPoint = true,
@@ -127,6 +128,7 @@ local validators = {
   lowercaseMap = ensure_record_of_string,
   markerHenkan = of_type("string"),
   markerHenkanSelect = of_type("string"),
+  popupBorder = of_type("string"),
   registerConvertResult = of_type("boolean"),
   selectCandidateKeys = function(x)
     local keys = ensure_type(x, "string")

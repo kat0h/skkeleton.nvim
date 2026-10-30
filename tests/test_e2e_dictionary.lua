@@ -76,6 +76,37 @@ T["popup"]["stays inside the window near the bottom of the screen"] = function()
   eq(helpers.popup(child), { "a: 管", "s: 館", "d: 観" })
 end
 
+T["popup"]["applies part-specific highlights, column alignment, and border footer"] = function()
+  child.lua([[
+    require("skkeleton.config").set({ popupBorder = "rounded" })
+    local popup = require("skkeleton.popup")
+    popup.set({ "a: 候補;短い注釈", "s: 長い候補語;注釈2" }, { index = 4, total = 12 })
+    popup.open()
+  ]])
+  local info = child.lua_get([[
+    (function()
+      for _, w in ipairs(vim.api.nvim_list_wins()) do
+        if vim.w[w].skkeleton_popup then
+          local b = vim.api.nvim_win_get_buf(w)
+          local ns = vim.api.nvim_get_namespaces()["skkeleton.popup"]
+          local marks = vim.api.nvim_buf_get_extmarks(b, ns, 0, -1, { details = true })
+          local cfg = vim.api.nvim_win_get_config(w)
+          return { marks = marks, border = cfg.border, footer = cfg.footer }
+        end
+      end
+    end)()
+  ]])
+  eq(info.border[1], "╭")
+  eq(info.footer[1][1], " 5-6/12 ")
+  eq(#info.marks, 6)
+  eq(info.marks[1][4].hl_group, "SkkeletonPopupKey")
+  eq(info.marks[2][4].hl_group, "SkkeletonPopupCandidate")
+  eq(info.marks[3][4].hl_group, "SkkeletonPopupAnnotation")
+  -- 1行目の「候補」は2行目の「長い候補語」より短いため、inline virt_text でパディングが入る
+  eq(info.marks[3][4].virt_text_pos, "inline")
+  child.lua([[require("skkeleton.popup").close()]])
+end
+
 local function user_dictionary()
   return child.lua_get(
     [[vim.fn.filereadable(_G.dir .. "/user") == 1 and table.concat(vim.fn.readfile(_G.dir .. "/user"), "\n") or ""]]
