@@ -91,6 +91,8 @@ do
       opts.jobs, i = math.min(tonumber(v), math.max(1, #vim.uv.cpu_info() - 2)), i + 1
     elseif k == "--mutate" then
       opts.mutate, i = v, i + 1
+    elseif k == "--no-cache" then
+      opts.no_cache = true
     elseif k == "--fuzz" then
       opts.fuzz, i = tonumber(v), i + 1
     elseif k == "--seed-depth" then
@@ -126,6 +128,38 @@ do
 end
 
 local profile = assert(profiles[opts.profile], "unknown profile: " .. opts.profile)
+
+-- 同じところを何度も調べないためのキャッシュ（git に入らない .tests/formal-cache/）。
+-- 幅優先の結果はコードのハッシュごとに覚え、同じなら流さない。ファジングはコーパスを引き継いで前回の続きから
+local CACHE = root .. "/.tests/formal-cache"
+local function code_hash()
+  local files = vim.fn.globpath(root, "lua/**/*.lua", true, true)
+  vim.list_extend(files, vim.fn.globpath(root, "plugin/*", true, true))
+  for _, f in ipairs({ "spec.lua", "observe.lua", "profiles.lua", "check.lua" }) do
+    files[#files + 1] = root .. "/tests/formal/" .. f
+  end
+  table.sort(files)
+  local parts = {}
+  for _, f in ipairs(files) do
+    parts[#parts + 1] = f:sub(#root + 2) .. "\0" .. table.concat(vim.fn.readfile(f, "b"), "\n")
+  end
+  return vim.fn.sha256(table.concat(parts, "\0")):sub(1, 16)
+end
+local function cache_read(name)
+  local path = CACHE .. "/" .. name
+  if opts.no_cache or vim.fn.filereadable(path) == 0 then
+    return nil
+  end
+  local ok, data = pcall(vim.json.decode, table.concat(vim.fn.readfile(path), "\n"))
+  return ok and data or nil
+end
+local function cache_write(name, data)
+  if opts.no_cache then
+    return
+  end
+  vim.fn.mkdir(CACHE, "p")
+  vim.fn.writefile({ vim.json.encode(data) }, CACHE .. "/" .. name)
+end
 local ALPHABET = profile.alphabet
 local INITS = profile.inits
 local INIT_NAMES = vim.tbl_keys(INITS)
@@ -568,6 +602,17 @@ elseif opts.fuzz then
   local hits = {} -- 辺 -> 届いた回数
   local corpus = {} -- { keys, config, swarm, rare }
   local executed, steps_total = 0, 0
+  -- 前回のファジングの続きから。コードが変わっていたら届いた辺の回数は数え直す（コーパスは使う）
+  local fuzz_cache_name = ("fuzz-%s-%s.json"):format(opts.profile, opts.mutate or "none")
+  local hash = code_hash()
+  local saved = not opts.mutate and cache_read(fuzz_cache_name)
+  if saved then
+    corpus = saved.corpus or {}
+    if saved.hash == hash then
+      hits = saved.hits or {}
+    end
+    print(("fuzz: 前回のコーパス %d 本を引き継ぐ（辺 %d）"):format(#corpus, vim.tbl_count(hits)))
+  end
   -- 浅い深さまで幅優先で調べ、抽象状態ごとに最短のキー列を 1 本ずつコーパスに入れる。
   -- キー列ではなく状態から均等に伸ばすので、まれな状態の先にも届きやすい
   if (opts.seed_depth or 0) > 0 then
@@ -689,6 +734,13 @@ elseif opts.fuzz then
     )
   end
   print(("計 %d 遷移、%d 辺"):format(steps_total, vim.tbl_count(hits)))
+  if not opts.mutate then
+    -- コーパスは大きくなりすぎないよう、新しい 400 本まで
+    while #corpus > 400 do
+      table.remove(corpus, 1)
+    end
+    cache_write(fuzz_cache_name, { hash = hash, corpus = corpus, hits = hits })
+  end
 elseif opts.random then
   -- ランダムなキー列（深い状態に届く）。違反したら ddmin で縮める
   math.randomseed(opts.seed)
@@ -722,7 +774,21 @@ elseif opts.random then
     )
   )
 else
-  -- 幅優先。frontier の各状態から、すべてのキーを 1 つずつ試す
+  -- 幅優先。同じコード・同じ深さで調べ済みなら流さない
+  local bfs_cache_name = ("bfs-%s-d%d-%s-%s.json"):format(opts.profile, opts.depth, opts.mutate or "none", code_hash())
+  local hit = cache_read(bfs_cache_name)
+  if hit then
+    print(
+      ("（キャッシュ）同じコードで調べ済み: 計 %d 遷移、%d 抽象状態"):format(
+        hit.transitions,
+        hit.states
+      )
+    )
+    print(hit.ok and "\n✓ 既知のもの以外に違反なし" or ("\n✗ 前回の違反: " .. (hit.summary or "")))
+    vim.cmd(hit.ok and "qall!" or "cquit 1")
+  end
+  _G.formal_bfs_cache_name = bfs_cache_name
+  -- frontier の各状態から、すべてのキーを 1 つずつ試す
   local visited = {}
   local frontier = {}
   local roots = {}
@@ -782,6 +848,7 @@ else
     end
   end
   print(("計 %d 遷移、%d 抽象状態"):format(transitions, vim.tbl_count(visited)))
+  _G.formal_bfs_stats = { transitions = transitions, states = vim.tbl_count(visited) }
 end
 
 print(("profile %s（%s）"):format(opts.profile, profile.doc))
@@ -798,6 +865,18 @@ for slot_name, r in vim.spairs(found) do
     failed = true
     report(r)
   end
+end
+if _G.formal_bfs_cache_name and _G.formal_bfs_stats then
+  local names = {}
+  for slot_name in pairs(found) do
+    names[#names + 1] = (slot_name:gsub("%z.*", ""))
+  end
+  cache_write(_G.formal_bfs_cache_name, {
+    transitions = _G.formal_bfs_stats.transitions,
+    states = _G.formal_bfs_stats.states,
+    ok = not failed,
+    summary = table.concat(names, " / "),
+  })
 end
 if not failed then
   print("\n✓ 既知のもの以外に違反なし")
