@@ -1,6 +1,6 @@
 *skkeleton.txt*	Neovim 向けの SKK 日本語入力
 
-Author: kat0h
+Author: Kota Kato (kat0h)
 License: zlib
 
 このドキュメントは kuuote さんの skkeleton の doc/skkeleton.jax と
@@ -30,14 +30,13 @@ skkeleton.nvim の動作に合わせて書き直したものです。元の表�
 はじめに                                                *skkeleton-introduction*
 
 *skkeleton.nvim* は Neovim で SKK 方式の日本語入力をするプラグインです。
-skkeleton を Neovim 向けに Lua で書き直したもので、denops.vim は使いません。
+skkeleton を Neovim 向けに Lua で書き直したものです。
 入力中の文字（pre-edit）は、バッファに書かずに extmark の virtual text で
 表示します。確定した文字だけがバッファに入ります。
 
 必要なもの~
 
-- Neovim 0.10 以降を想定しています。0.12 と CI の stable、nightly で動作を確
-  かめています。
+- Neovim 0.12 で動作を確かめています。
 - SKK 辞書。SKK-JISYO.L などを展開して |skkeleton-config-globalDictionaries|
   に書きます。
 
@@ -407,7 +406,7 @@ sources                                             *skkeleton-config-sources*
 		す。辞書は DB にして引きます。
 	"deno_kv":
 		"skk_dictionary" と同じです。skkeleton の設定をそのまま使えるよう
-		に受け付けます。Deno KV は使いません。
+		に受け付けます。
 	"skk_server"、"google_japanese_input":
 		v1 では使えません。指定すると警告を出して読み飛ばします。
 
@@ -729,8 +728,8 @@ skkeleton からの移行                                         *skkeleton-mig
 	skkeleton_indicator の setup({...}) -> setup({ indicator = {...} })
 
 違うところ~
-- |skkeleton-config-databasePath| はディレクトリです。Deno KV のファイルは読
-  みません。
+- |skkeleton-config-databasePath| はディレクトリです。skkeleton が作った DB
+  のファイルは使わず、新しく作ります。
 - `sources` の "deno_kv" は "skk_dictionary" と同じ扱いです。
 - skkServer*、completionRankFile は値の確認だけをして使いません。
 
@@ -740,7 +739,6 @@ v1 で使えないもの~
 - ddc の補完ソースと、補完の rank file
 - yaml と msgpack の辞書
 - `skkeleton#handle()`、`skkeleton#dangerously_clear_buffer_local_mappings()`
-- kakuteiUndo。upstream の現在のバージョン（770b265d）にも無いため入れていません。
 
 同じ Neovim に skkeleton と skkeleton.nvim の両方を入れないでください。
 

@@ -6,7 +6,7 @@ Neovim で SKK 方式の日本語入力をするためのプラグインです�
 
 ## 必要なもの
 
-- Neovim 0.10 以降を想定しています。動作を確かめているのは 0.12 と、CI で回している stable と nightly です
+- Neovim 0.12 で動作を確かめています
 - SKK 辞書。[SKK-JISYO.L](https://skk-dev.github.io/dict/) などを展開して、パスを設定に書きます。辞書は EUC-JP と UTF-8 を自動で判別します
 
 ## インストール
@@ -54,7 +54,7 @@ require("skkeleton").setup({ indicator = false })
 
 ## skkeleton から移る
 
-skkeleton.nvim は skkeleton を置き換えるものです。同じ Neovim に両方を入れず、どちらかだけにしてください。skkeleton.nvim は denops.vim を使いません。
+skkeleton.nvim は skkeleton を置き換えるものです。同じ Neovim に両方を入れず、どちらかだけにしてください。
 
 設定のキー（`eggLikeNewline` など）はそのまま使えます。呼び出しの名前は次のように変わります。
 
@@ -71,10 +71,10 @@ skkeleton.nvim は skkeleton を置き換えるものです。同じ Neovim に�
 
 違いがあるところは次のとおりです。
 
-- `databasePath` はディレクトリです。辞書ごとに `<ハッシュ>.db` というファイルをその下に作ります。upstream が Deno KV のファイルとして使っていたパスは読みません。パスがファイルとして存在するか、`skk.db` のように拡張子があるときは、その親ディレクトリを使います。空にすると `stdpath("cache")/skkeleton` です
+- `databasePath` はディレクトリです。辞書ごとに `<ハッシュ>.db` というファイルをその下に作ります。skkeleton が作った DB のファイルは使わず、新しく作ります。パスがファイルとして存在するか、`skk.db` のように拡張子があるときは、その親ディレクトリを使います。空にすると `stdpath("cache")/skkeleton` です
 - `sources` の `"deno_kv"` は `"skk_dictionary"` と同じ扱いです。どちらを書いても、辞書は DB にして引きます。DB を使うために `databasePath` を設定する必要はありません
 - `skkServer*` と `completionRankFile` は値の確認だけをして使いません
-- 次のものは v1 では使えません。`sources` の `"skk_server"` と `"google_japanese_input"`、ddc の補完ソース、rank file、yaml と msgpack の辞書（JSON の辞書は読めます）、`skkeleton#handle()`、`skkeleton#dangerously_clear_buffer_local_mappings()`、kakuteiUndo。kakuteiUndo は upstream の現在のバージョン（`770b265d`）にも無いため入れていません
+- 次のものは v1 では使えません。`sources` の `"skk_server"` と `"google_japanese_input"`、ddc の補完ソース、rank file、yaml と msgpack の辞書（JSON の辞書は読めます）、`skkeleton#handle()`、`skkeleton#dangerously_clear_buffer_local_mappings()`
 
 設定の移し方の例です。
 
@@ -101,7 +101,7 @@ skkeleton.setup({
 })
 skkeleton.register_kanatable("rom", { [","] = { "，", "" }, ["."] = { "．", "" } })
 vim.keymap.set({ "i", "c" }, "<C-j>", "<Plug>(skkeleton-toggle)")
--- インジケータは setup() が開始する
+-- インジケータは setup() で有効になる
 ```
 
 `databasePath` を残すときは、`~/.cache/skk.db` ではなく `~/.cache/skkeleton` のような専用のディレクトリを指すのを勧めます。`~/.cache/skk.db` のままだと、親の `~/.cache` に DB のファイルが並びます。
@@ -123,4 +123,4 @@ make lint              # stylua --check
 make fmt
 ```
 
-stylua は`.tests/bin/stylua` があればそれを使います。設計は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)、計画と経緯は [docs/PLAN.md](docs/PLAN.md) にあります。
+stylua は `.tests/bin/stylua` があればそれを使います。設計は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)、計画と経緯は [docs/PLAN.md](docs/PLAN.md) にあります。
