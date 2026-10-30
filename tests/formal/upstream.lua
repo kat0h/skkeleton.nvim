@@ -26,7 +26,7 @@ local function line(s)
   if s.cmdline then
     t = t .. "  cmdline=" .. s.cmdline
   end
-  return ("%s %s"):format(s.vim, t)
+  return ("%s [%s] %s"):format(s.vim, tostring(s.mode), t)
 end
 
 local results = {}

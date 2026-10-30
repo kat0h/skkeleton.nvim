@@ -33,6 +33,12 @@ do
       opts.max_states, i = tonumber(v), i + 1
     elseif k == "--metamorphic" then
       opts.metamorphic, i = tonumber(v), i + 1
+    elseif k == "--kanatable" then
+      -- かなテーブルへの登録（rom に足す。例: '{ z = "henkanFirst" }'）
+      opts.kanatable, i = assert(loadstring("return " .. v))(), i + 1
+    elseif k == "--keymap" then
+      -- キーマップの登録（例: '{ { "input", ";", "henkanPoint" } }'）
+      opts.keymap, i = assert(loadstring("return " .. v))(), i + 1
     elseif k == "--config" then
       opts.config, i = assert(loadstring("return " .. v))(), i + 1
     elseif k == "--keys" then
@@ -120,6 +126,10 @@ local ALPHABET = {
   "1",
   "#",
   "@",
+  "&",
+  "z",
+  ";",
+  "!",
   "<space>",
   "<cr>",
   "<bs>",
@@ -157,6 +167,14 @@ local function new_run(answer)
   local lib = Fake.new()
   lib.data = vim.deepcopy(DICT)
   store.set_library(lib)
+  kana.reset()
+  keymap.reset()
+  if opts.kanatable then
+    kana.register("rom", opts.kanatable)
+  end
+  for _, km in ipairs(opts.keymap or {}) do
+    keymap.register(km[1], km[2], km[3])
+  end
   kana.set_current("rom")
   local ctx = store.init_context()
   ctx.vim_mode = "c"
@@ -229,8 +247,14 @@ local function check_state(run, key, prev_committed)
 end
 
 -- 1 キー流して確かめる。違反なら説明を返す
+-- かなテーブルに無い記号
+SYMBOLS = { ["&"] = true, ["@"] = true, ["%"] = true }
+
 local function step(run, key)
   local prev_committed = run.committed
+  local pst = run.ctx.state
+  -- 全英（zenkaku）では記号が全角になり、abbrev では文字のまま読みに入るので、ひらがな・カタカナのときだけ
+  prev_direct = pst.type == "input" and pst.mode == "direct" and (run.ctx.mode == "hira" or run.ctx.mode == "kata")
   local ok, err = pcall(keymap.handle_key, run.ctx, notation.normalize(key))
   if not ok then
     return "Lua のエラー: " .. tostring(err)
@@ -241,13 +265,27 @@ local function step(run, key)
     -- <Esc> で抜けた。行はそこで終わり（以降は新しい Context）
     local out = run.ctx.preedit:output("")
     run.line = apply(run.line, out)
+    -- 有効にし直すときと同じく、かなテーブルを設定の値に戻す（main.lua の enable）
+    kana.set_current(config.options.kanaTable or "rom")
     run.ctx = store.init_context()
     run.ctx.vim_mode = "c"
     run.committed = run.line
     return nil
   end
+  local prev_line = run.line
   local out = run.ctx.preedit:output(run.ctx:to_string())
   run.line = apply(run.line, out)
+  -- かなテーブルに無い記号を、▽ でない直接入力で打つと、その記号はちょうど 1 つ増える（upstream #235 の型）
+  if SYMBOLS[key] and prev_direct then
+    local function count(str)
+      local _, n = str:gsub(vim.pesc(key), "")
+      return n
+    end
+    local d = count(run.line) - count(prev_line)
+    if d ~= 1 then
+      return ("記号 %s を打つと %d 個増えた（行 %q -> %q）"):format(key, d, prev_line, run.line)
+    end
+  end
   return check_state(run, key, prev_committed)
 end
 
@@ -506,7 +544,26 @@ if vim.tbl_isempty(found) then
   print("✓ 違反なし")
   vim.cmd("qall!")
 end
-for _, f in pairs(found) do
-  print(("\n✗ 反例（%d キー）: %s\n    %s"):format(#f.keys, fmt(f.keys), f.msg))
+-- 見つかったが、まだ直っていないもの
+local function known(f)
+  if f.msg:find("0 個増えた", 1, true) and vim.tbl_contains(f.keys, "L") then
+    return 40 -- 全英のモードで <C-q> を押すと、モードはひらがなになるのに全角の文字が入る
+  end
+  if f.msg:find("2 個増えた", 1, true) and opts.kanatable then
+    return 41 -- かなテーブルで henkanFirst を割り当てたキーのあとの記号が 2 つ入る
+  end
 end
-vim.cmd("cquit 1")
+local failed = false
+for _, f in pairs(found) do
+  local k = known(f)
+  if k then
+    print(("\n△ 既知 #%d: %s"):format(k, fmt(f.keys)))
+  else
+    failed = true
+    print(("\n✗ 反例（%d キー）: %s\n    %s"):format(#f.keys, fmt(f.keys), f.msg))
+  end
+end
+if not failed then
+  print("\n✓ 既知のもの以外に違反なし")
+end
+vim.cmd(failed and "cquit 1" or "qall!")
