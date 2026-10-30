@@ -472,6 +472,33 @@ if opts.metamorphic then
         ("x のあと %q、<Space> %d 回なら %q"):format(x.ctx:to_string(), n - 1, y.ctx:to_string())
       )
     end
+    -- M5: ▼ で候補を X で削除すると、同じ読みをもう一度変換しても、その候補は出てこない
+    if r[3] >= 2 then
+      local k = math.random(1, math.min(r[3], config.options.showCandidatesCount))
+      local sp = {}
+      for i = 1, k do
+        sp[i] = "<space>"
+      end
+      local first = line_of(concat(head, sp))
+      local purged = first.ctx:to_string():gsub("^" .. vim.pesc(config.options.markerHenkanSelect), "")
+      local again_keys = concat(head, sp, { "X" }, head, { "<space>" })
+      local all = {}
+      local again = line_of(again_keys)
+      for _ = 1, r[3] do
+        all[#all + 1] = again.ctx:to_string():gsub("^" .. vim.pesc(config.options.markerHenkanSelect), "")
+        if again.ctx.state.type ~= "henkan" then
+          break
+        end
+        require("skkeleton.keymap").handle_key(again.ctx, "<space>")
+      end
+      if purged ~= "" and vim.tbl_contains(all, purged) then
+        fail(
+          "M5 候補の削除",
+          again_keys,
+          ("%q を削除したのに、また出てきた（%s）"):format(purged, table.concat(all, " "))
+        )
+      end
+    end
     checked = checked + 1
   end
   print(("metamorphic: %d 組、%.1f 秒"):format(checked, (vim.uv.hrtime() - t0) / 1e9))
