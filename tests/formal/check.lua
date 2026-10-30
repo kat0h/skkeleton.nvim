@@ -864,7 +864,11 @@ end
 local failed = false
 for slot_name, r in vim.spairs(found) do
   local name = slot_name:gsub("%z.*", "")
-  local known = spec.is_known(name, vim.list_slice(r.keys, 1, r.steps or #r.keys), r.violations[1].msg)
+  local known = spec.is_known(
+    name,
+    vim.list_slice(r.keys, 1, (r.steps and r.steps > 0) and r.steps or #r.keys),
+    r.violations[1].msg
+  )
   if known then
     print(("\n△ 既知: %s\n  %s\n  反例: %s"):format(name, known.reason, keys_str(r.keys)))
   else
