@@ -150,14 +150,12 @@ end
 function Indicator:win_pos_config(mode, for_open)
   local border = self:border(mode)
   if Modes.is_cmdline() then
-    local screen_col = vim.fn.getcmdscreenpos()
-    if screen_col <= 0 then
-      screen_col = 1
-    end
     local has_border = border ~= nil and border ~= "none" and border ~= "shadow"
     local height_rows = 1 + (has_border and 2 or 0)
+    local border_cols = (has_border and border ~= "shadow") and 2 or 0
     local row = math.max(0, vim.o.lines - math.max(1, vim.o.cmdheight) - height_rows)
-    local col = math.max(0, math.min(screen_col - 1 + config.col, vim.o.columns - mode.width))
+    -- コマンドラインではカーソル追従によるちらつきを防ぐため、画面右端（余白1）に固定表示する
+    local col = math.max(0, vim.o.columns - mode.width - border_cols - 1)
     return {
       relative = "editor",
       row = row,

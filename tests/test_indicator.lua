@@ -403,7 +403,6 @@ end
 T["hooks"]["コマンドライン中の文字入力で不要な win_set_config や redraw が多重発火しない"] = function()
   setup({ showInCmdline = true })
   child.type_keys(":")
-  child.type_keys("abc")
 
   child.lua([[
     _G.calls = { win_set_config = 0, redraw = 0 }
@@ -420,6 +419,17 @@ T["hooks"]["コマンドライン中の文字入力で不要な win_set_config �
       return orig_cmd(cmd)
     end
   ]])
+
+  -- 右端固定のため文字入力で位置が変わらず、win_set_config も redraw も呼ばれない
+  child.type_keys("a")
+  local calls1 = child.lua_get("_G.calls")
+  eq(calls1.win_set_config, 0)
+  eq(calls1.redraw, 0)
+
+  child.type_keys("b")
+  local calls2 = child.lua_get("_G.calls")
+  eq(calls2.win_set_config, 0)
+  eq(calls2.redraw, 0)
 
   -- モード変更イベント（Aa -> Aa など同一モード）での update
   child.lua("_G.fire('skkeleton-mode-changed')")
