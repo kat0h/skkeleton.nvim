@@ -250,7 +250,8 @@ end
 T["db"]["handles an empty dictionary"] = function()
   eq(
     run([[
-      local d = db.open_dictionary(write("e", ";; coding: utf-8\n;; okuri-ari entries.\n;; okuri-nasi entries.\n"), { dir = TMP .. "/db" })
+      local src = write("e", ";; coding: utf-8\n;; okuri-ari entries.\n;; okuri-nasi entries.\n")
+      local d = db.open_dictionary(src, { dir = TMP .. "/db" })
       return { d:get_henkan_result("okurinasi", "あ"), d:get_prefix("okuriari", "", 5) }
     ]]),
     { {}, {} }

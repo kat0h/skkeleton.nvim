@@ -379,7 +379,11 @@ T["prepare"] = function()
   eq(
     run([[
       local cfg = {
-        globalDictionaries = { { TD .. "/globalJisyo", "euc-jp" }, { TD .. "/numIncludingJisyo", "utf-8" }, TD .. "/newJisyo.json" },
+        globalDictionaries = {
+          { TD .. "/globalJisyo", "euc-jp" },
+          { TD .. "/numIncludingJisyo", "utf-8" },
+          TD .. "/newJisyo.json",
+        },
         userDictionary = TMP .. "/user",
         databasePath = TMP .. "/db",
       }
@@ -389,7 +393,8 @@ T["prepare"] = function()
       vim.wait(5000, function() return lib ~= nil end)
       local n = 0
       for name in vim.fs.dir(TMP .. "/db") do n = n + (name:match("%.db$") and 1 or 0) end
-      return { sync, n, lib:get_henkan_result("okurinasi", "てすと"), lib:get_henkan_result("okurinasi", "cat2"), lib:get_henkan_result("okurinasi", "あかね") }
+      local function get(w) return lib:get_henkan_result("okurinasi", w) end
+      return { sync, n, get("てすと"), get("cat2"), get("あかね") }
     ]]),
     { false, 2, { "テスト", "test" }, { "🐈" }, { "茜" } }
   )

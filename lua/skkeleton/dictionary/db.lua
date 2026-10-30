@@ -21,7 +21,12 @@ M.VERSION = 1
 local function noop() end
 
 local function u32(n)
-  return string.char(bit.band(n, 0xff), bit.band(bit.rshift(n, 8), 0xff), bit.band(bit.rshift(n, 16), 0xff), bit.rshift(n, 24))
+  return string.char(
+    bit.band(n, 0xff),
+    bit.band(bit.rshift(n, 8), 0xff),
+    bit.band(bit.rshift(n, 16), 0xff),
+    bit.rshift(n, 24)
+  )
 end
 
 ---@param s string
@@ -138,7 +143,8 @@ function M.build(src, dst, encoding, tick)
   end
   maps = nil
   assert(pos < 2 ^ 32, "dictionary too large")
-  local header = ("SKKDB %d %d %d %d %d %d\n"):format(M.VERSION, nari, nnasi, stat.size, stat.mtime.sec, stat.mtime.nsec)
+  local header =
+    ("SKKDB %d %d %d %d %d %d\n"):format(M.VERSION, nari, nnasi, stat.size, stat.mtime.sec, stat.mtime.nsec)
   header = header .. (" "):rep(M.HEADER_SIZE - #header)
   local index = table.concat(idx)
   tick()
