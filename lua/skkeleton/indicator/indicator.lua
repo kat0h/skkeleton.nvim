@@ -192,9 +192,8 @@ function Indicator:win_pos_config(mode, for_open)
 end
 
 local function redraw_if_cmdline()
-  if Modes.is_cmdline() then
-    pcall(vim.cmd, "redraw")
-  end
+  -- コマンドライン中の強制 redraw はカーソルが一瞬ジャンプ・ちらつく原因になるため行わない。
+  -- 画面描画は Neovim のイベントループに任せる。
 end
 
 function Indicator:open()
