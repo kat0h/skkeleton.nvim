@@ -248,22 +248,7 @@ function Indicator:update()
       local winid = self.winid[1]
       local mode = self.modes:detect()
       self:set_text(vim.api.nvim_win_get_buf(winid), mode)
-      local new_cfg = self:win_pos_config(mode, false)
-      local needs_move = true
-      if Modes.is_cmdline() then
-        local cur_cfg = vim.api.nvim_win_get_config(winid)
-        if
-          cur_cfg.relative == new_cfg.relative
-          and cur_cfg.row == new_cfg.row
-          and cur_cfg.col == new_cfg.col
-          and cur_cfg.width == new_cfg.width
-        then
-          needs_move = false
-        end
-      end
-      if needs_move then
-        pcall(vim.api.nvim_win_set_config, winid, new_cfg)
-      end
+      pcall(vim.api.nvim_win_set_config, winid, self:win_pos_config(mode, false))
       self:border_highlight(winid, mode)
       redraw_if_cmdline()
     else
@@ -283,20 +268,8 @@ end
 function Indicator:move()
   if self:is_opened() then
     local mode = self.modes:detect()
-    local new_cfg = self:win_pos_config(mode, false)
-    if Modes.is_cmdline() then
-      local cur_cfg = vim.api.nvim_win_get_config(self.winid[1])
-      if
-        cur_cfg.relative == new_cfg.relative
-        and cur_cfg.row == new_cfg.row
-        and cur_cfg.col == new_cfg.col
-        and cur_cfg.width == new_cfg.width
-      then
-        return
-      end
-    end
     -- ウィンドウがすでに消えていると失敗することがある
-    local ok = pcall(vim.api.nvim_win_set_config, self.winid[1], new_cfg)
+    local ok = pcall(vim.api.nvim_win_set_config, self.winid[1], self:win_pos_config(mode, false))
     if not ok then
       table.remove(self.winid, 1)
     else
