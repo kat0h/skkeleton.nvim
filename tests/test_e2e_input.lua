@@ -271,4 +271,48 @@ T["cmdline mappings are cleaned up even if host.input errors or cancels"] = func
   eq(leaked, {})
 end
 
+T["preedit renders semantic highlight chunks and inline ghost annotation"] = function()
+  start()
+  type("KaN")
+  local chunks = child.lua_get([[
+    (function()
+      local ns = vim.api.nvim_get_namespaces()["skkeleton-preedit"]
+      local m = vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, { details = true })[1]
+      return m and m[4].virt_text or {}
+    end)()
+  ]])
+  eq(chunks, {
+    { "▽", "SkkeletonMarkerHenkan" },
+    { "か", "SkkeletonPreedit" },
+    { "*", "SkkeletonOkuri" },
+    { "n", "SkkeletonRomaji" },
+  })
+
+  -- Register an annotated candidate and verify inline ghost annotation in henkan state
+  child.lua([[
+    local store = require("skkeleton.store")
+    store.library():register_henkan_result("okurinasi", "ちゅうしゃく", "注釈語;これは説明です")
+  ]])
+  type("<C-g><C-g>Chuushaku<Space>")
+  local henkan_info = child.lua_get([[
+    (function()
+      local ns = vim.api.nvim_get_namespaces()["skkeleton-preedit"]
+      local ns_a = vim.api.nvim_get_namespaces()["skkeleton-annotation"]
+      local m = vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, { details = true })[1]
+      local ma = vim.api.nvim_buf_get_extmarks(0, ns_a, 0, -1, { details = true })[1]
+      return {
+        chunks = m and m[4].virt_text or {},
+        annot = ma and ma[4].virt_text or {},
+      }
+    end)()
+  ]])
+  eq(henkan_info.chunks, {
+    { "▼", "SkkeletonMarkerSelect" },
+    { "注釈語", "SkkeletonPreedit" },
+  })
+  eq(henkan_info.annot, {
+    { " ;これは説明です", "SkkeletonAnnotation" },
+  })
+end
+
 return T

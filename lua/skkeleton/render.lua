@@ -1,24 +1,113 @@
 -- skkeleton.nvim: 表示。handle の結果を Neovim に出す。
 -- insert モード: pre-edit は inline の extmark で出し、確定した文字列は feedkeys で流す。
 -- cmdline と terminal: BS で消して書き直す文字列を feedkeys する。
+local candidate = require("skkeleton.candidate")
+local options = require("skkeleton.config").options
 local popup = require("skkeleton.popup")
 
 local M = {}
 
 local ns = vim.api.nvim_create_namespace("skkeleton-preedit")
+local ns_annot = vim.api.nvim_create_namespace("skkeleton-annotation")
 M.ns = ns
+M.ns_annot = ns_annot
 
 -- 出し終えた回数（テストが処理の完了を待つために数える）
 M.count = 0
 
 -- 今出している extmark。tick は描いたときの changedtick
----@type { buf: integer, id: integer, row: integer, col: integer, tick: integer }?
+---@type { buf: integer, id: integer, annot_id?: integer, row: integer, col: integer, tick: integer }?
 local mark
 -- finish で描く pre-edit と、そのときの vim_mode
 local current_text = ""
+---@type string[][]?
+local current_chunks = nil
+local current_annot = ""
 local current_mode = "i"
 -- 流した確定文字列が入るのを待っているか（finish が走るまで）
 local pending = false
+
+local function ensure_highlights()
+  vim.api.nvim_set_hl(0, "SkkeletonPreedit", { default = true })
+  vim.api.nvim_set_hl(0, "SkkeletonMarkerHenkan", { link = "Special", default = true })
+  vim.api.nvim_set_hl(0, "SkkeletonMarkerSelect", { link = "Type", default = true })
+  vim.api.nvim_set_hl(0, "SkkeletonOkuri", { link = "Identifier", default = true })
+  vim.api.nvim_set_hl(0, "SkkeletonRomaji", { link = "Comment", default = true })
+  vim.api.nvim_set_hl(0, "SkkeletonAnnotation", { link = "Comment", default = true })
+end
+
+---@param chunks string[][]
+---@param part string
+---@param hl string
+local function push_chunk(chunks, part, hl)
+  if part and part ~= "" then
+    chunks[#chunks + 1] = { part, hl }
+  end
+end
+
+---@param ctx skkeleton.Context
+---@param text string
+---@return string[][] chunks, string annot
+local function build_chunks(ctx, text)
+  if text == "" then
+    return {}, ""
+  end
+  local st = ctx.state
+  local chunks = {}
+  local annot = ""
+  if st.type == "input" then
+    if st.mode == "direct" then
+      push_chunk(chunks, st.feed, "SkkeletonRomaji")
+    elseif st.mode == "okurinasi" then
+      local marker = st.converter and st.converter(options.markerHenkan) or options.markerHenkan
+      local body = st.converter and st.converter(st.henkan_feed) or st.henkan_feed
+      push_chunk(chunks, marker, "SkkeletonMarkerHenkan")
+      push_chunk(chunks, body, "SkkeletonPreedit")
+      push_chunk(chunks, st.feed, "SkkeletonRomaji")
+    elseif st.mode == "okuriari" then
+      local marker = st.converter and st.converter(options.markerHenkan) or options.markerHenkan
+      local body = st.converter and st.converter(st.henkan_feed) or st.henkan_feed
+      push_chunk(chunks, marker, "SkkeletonMarkerHenkan")
+      push_chunk(chunks, body, "SkkeletonPreedit")
+      if st.previous_feed then
+        push_chunk(chunks, st.feed, "SkkeletonRomaji")
+        push_chunk(chunks, "*", "SkkeletonOkuri")
+      else
+        local okuri_part = "*" .. st.okuri_feed
+        if st.converter then
+          okuri_part = st.converter(okuri_part)
+        end
+        push_chunk(chunks, okuri_part, "SkkeletonOkuri")
+        push_chunk(chunks, st.feed, "SkkeletonRomaji")
+      end
+    end
+  elseif st.type == "henkan" then
+    local raw_cand = st.candidates and st.candidates[st.candidate_index + 1] or nil
+    local cand = candidate.modify(raw_cand, st.affix) or "error"
+    local okuri = st.okuri_feed
+    if st.converter then
+      okuri = st.converter(okuri)
+    end
+    push_chunk(chunks, options.markerHenkanSelect, "SkkeletonMarkerSelect")
+    push_chunk(chunks, cand, "SkkeletonPreedit")
+    push_chunk(chunks, okuri, "SkkeletonOkuri")
+    if raw_cand and st.candidate_index >= 0 and st.candidate_index < options.showCandidatesCount then
+      local semi = raw_cand:find(";", 1, true)
+      if semi and #raw_cand > semi then
+        annot = " ;" .. raw_cand:sub(semi + 1)
+      end
+    end
+  end
+
+  local joined = ""
+  for _, c in ipairs(chunks) do
+    joined = joined .. c[1]
+  end
+  if joined ~= text then
+    chunks = { { text, "SkkeletonPreedit" } }
+  end
+  return chunks, annot
+end
 
 -- 確定文字列の反映待ちか
 function M.is_pending()
@@ -40,12 +129,15 @@ function M.clear()
   if mark then
     if vim.api.nvim_buf_is_valid(mark.buf) then
       pcall(vim.api.nvim_buf_del_extmark, mark.buf, ns, mark.id)
+      if mark.annot_id then
+        pcall(vim.api.nvim_buf_del_extmark, mark.buf, ns_annot, mark.annot_id)
+      end
     end
     mark = nil
   end
 end
 
-local function draw(text)
+local function draw(text, chunks, annot)
   M.clear()
   if text == "" then
     return
@@ -59,9 +151,10 @@ local function draw(text)
     return
   end
   local row, col = pos[1] - 1, pos[2]
+  local virt_text = (chunks and #chunks > 0) and chunks or { { text, "SkkeletonPreedit" } }
   -- 右側に文字が入っても動かない gravity にして、補完などで文字が増えたことを検出できるようにする
   local ok_mark, id = pcall(vim.api.nvim_buf_set_extmark, buf, ns, row, col, {
-    virt_text = { { text, "SkkeletonPreedit" } },
+    virt_text = virt_text,
     virt_text_pos = "inline",
     hl_mode = "combine",
     right_gravity = false,
@@ -69,7 +162,19 @@ local function draw(text)
   if not ok_mark then
     return
   end
-  mark = { buf = buf, id = id, row = row, col = col, tick = vim.b[buf].changedtick }
+  local annot_id
+  if annot and annot ~= "" then
+    local ok_annot, aid = pcall(vim.api.nvim_buf_set_extmark, buf, ns_annot, row, col, {
+      virt_text = { { annot, "SkkeletonAnnotation" } },
+      virt_text_pos = "inline",
+      hl_mode = "combine",
+      right_gravity = false,
+    })
+    if ok_annot then
+      annot_id = aid
+    end
+  end
+  mark = { buf = buf, id = id, annot_id = annot_id, row = row, col = col, tick = vim.b[buf].changedtick }
 end
 
 -- いま出している pre-edit の表示幅（カーソルがまだ指している行・列のときだけ。なければ 0）。
@@ -86,7 +191,7 @@ function M.preedit_width()
   if pos[1] - 1 ~= mark.row or pos[2] ~= mark.col then
     return 0
   end
-  return vim.fn.strdisplaywidth(current_text)
+  return vim.fn.strdisplaywidth(current_text .. (current_annot or ""))
 end
 
 -- pre-edit が残っているのにバッファや cmdline がそれと合わなくなっているか
@@ -121,7 +226,7 @@ function M.finish()
   pending = false
   local vm = vim.api.nvim_get_mode().mode:sub(1, 1)
   if current_mode == "i" and vm == "i" then
-    draw(current_text)
+    draw(current_text, current_chunks, current_annot)
     popup.open()
     -- pre-edit の幅が変わったので、インジケータを画面上のカーソルに寄せ直す
     require("skkeleton.indicator").move()
@@ -147,6 +252,8 @@ function M.update(ctx, prefix)
     keys = (prefix or "") .. ctx.preedit:output(pre)
     current_mode = vm
     current_text = ""
+    current_chunks = nil
+    current_annot = ""
   else
     local kakutei = ctx.preedit:take_kakutei()
     -- escape の state は <Esc> そのものを返す
@@ -154,6 +261,7 @@ function M.update(ctx, prefix)
     keys = (prefix or "") .. kakutei .. (esc and "\27" or "")
     current_mode = "i"
     current_text = esc and "" or pre
+    current_chunks, current_annot = build_chunks(ctx, current_text)
   end
   -- 流した文字が入ってから描く。Esc で抜けるときはその場で片付ける
   local deferred = keys ~= "" and not esc and (current_mode == "i" or popup.has_pending())
@@ -166,6 +274,6 @@ function M.update(ctx, prefix)
   end
 end
 
-vim.api.nvim_set_hl(0, "SkkeletonPreedit", { default = true })
+ensure_highlights()
 
 return M
