@@ -34,6 +34,8 @@ function Indicator.new()
     { "CmdlineLeave", "*", self:method("on_cmdline_leave") },
     { "TextChangedP", "*", self:method("move") },
     { "CompleteChanged", "*", self:method("move") },
+    { "WinScrolled", "*", self:method("move") },
+    { "WinResized", "*", self:method("move") },
     { "User", "skkeleton-mode-changed", self:method("update") },
     { "User", "skkeleton-disable-post", self:method("update") },
     { "User", "skkeleton-enable-post", self:method("update") },

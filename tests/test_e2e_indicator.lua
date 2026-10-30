@@ -189,4 +189,17 @@ T["is closed when insert is left with <C-c> (#27)"] = function()
   eq(positions(), vim.NIL)
 end
 
+T["follows cursor on window scroll (#30)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "line 1", "line 2", "line 3", "line 4", "line 5" })
+  child.api.nvim_win_set_cursor(0, { 2, 6 })
+  start()
+  local before = positions()
+  eq(before ~= nil, true)
+  type("<C-x><C-e>")
+  helpers.settle(child)
+  local after = positions()
+  eq(after ~= nil, true)
+  eq(after.float[1], before.float[1] - 1)
+end
+
 return T
