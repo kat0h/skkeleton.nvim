@@ -30,6 +30,9 @@ function Indicator.new()
     { "InsertEnter", "*", self:method("open") },
     { "InsertLeave", "*", self:method("close") },
     { "CursorMovedI", "*", self:method("move") },
+    { "CmdlineEnter", "*", self:method("open") },
+    { "CmdlineLeave", "*", self:method("close") },
+    { "CmdlineChanged", "*", self:method("move") },
     { "User", "skkeleton-mode-changed", self:method("update") },
     { "User", "skkeleton-disable-post", self:method("update") },
     { "User", "skkeleton-enable-post", self:method("update") },
@@ -62,6 +65,9 @@ function Indicator:is_disabled()
   if not config.always_shown and not skkeleton_enabled() then
     return true
   end
+  if Modes.is_cmdline() then
+    return not config.show_in_cmdline
+  end
   local buf = vim.api.nvim_get_current_buf()
   return vim.tbl_contains(config.ignore_ft, vim.bo[buf].filetype) or not config.buf_filter(buf)
 end
@@ -72,7 +78,31 @@ end
 function Indicator:set_text(buf, mode)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, { mode.text })
   vim.api.nvim_buf_clear_namespace(buf, self.ns, 0, -1)
-  vim.api.nvim_buf_set_extmark(buf, self.ns, 0, 0, { end_row = 0, end_col = #mode.text, hl_group = mode.hl_name })
+  if config.style == "pill" and mode.cap_hl_name and mode.left_cap and mode.right_cap then
+    local left_len = #mode.left_cap
+    local right_start = #mode.text - #mode.right_cap
+    vim.api.nvim_buf_set_extmark(buf, self.ns, 0, 0, {
+      end_row = 0,
+      end_col = left_len,
+      hl_group = mode.cap_hl_name,
+    })
+    vim.api.nvim_buf_set_extmark(buf, self.ns, 0, left_len, {
+      end_row = 0,
+      end_col = right_start,
+      hl_group = mode.hl_name,
+    })
+    vim.api.nvim_buf_set_extmark(buf, self.ns, 0, right_start, {
+      end_row = 0,
+      end_col = #mode.text,
+      hl_group = mode.cap_hl_name,
+    })
+  else
+    vim.api.nvim_buf_set_extmark(buf, self.ns, 0, 0, {
+      end_row = 0,
+      end_col = #mode.text,
+      hl_group = mode.hl_name,
+    })
+  end
   self.timer:stop()
   self.fade_epoch = (self.fade_epoch or 0) + 1
   local epoch = self.fade_epoch
@@ -103,38 +133,93 @@ end
 ---@param winid integer
 ---@param mode skkeleton.IndicatorMode
 function Indicator:border_highlight(winid, mode)
-  vim.wo[winid].winhighlight = "FloatBorder:" .. mode.hl_name
+  vim.wo[winid].winblend = config.winblend or 0
+  if config.style == "pill" then
+    vim.wo[winid].winhighlight = "Normal:Normal,NormalFloat:Normal,FloatBorder:" .. mode.hl_name
+  else
+    vim.wo[winid].winhighlight = "FloatBorder:" .. mode.hl_name
+  end
+end
+
+---@param mode skkeleton.IndicatorMode
+---@param for_open? boolean
+---@return vim.api.keyset.win_config
+function Indicator:win_pos_config(mode, for_open)
+  local border = self:border(mode)
+  if Modes.is_cmdline() then
+    local screen_col = vim.fn.getcmdscreenpos()
+    if screen_col <= 0 then
+      screen_col = 1
+    end
+    local has_border = border ~= nil and border ~= "none" and border ~= "shadow"
+    local height_rows = 1 + (has_border and 2 or 0)
+    local row = math.max(0, vim.o.lines - math.max(1, vim.o.cmdheight) - height_rows)
+    local col = math.max(0, math.min(screen_col - 1 + config.col, vim.o.columns - mode.width))
+    return {
+      relative = "editor",
+      row = row,
+      col = col,
+      width = mode.width,
+      height = 1,
+      border = border,
+    }
+  end
+  if for_open then
+    return {
+      relative = "cursor",
+      row = config.row,
+      col = config.col,
+      width = mode.width,
+      height = 1,
+      border = border,
+    }
+  end
+  local pos = vim.api.nvim_win_get_cursor(0)
+  return {
+    relative = "win",
+    win = vim.api.nvim_get_current_win(),
+    bufpos = { pos[1] - 1, pos[2] },
+    row = config.row,
+    col = config.col + require("skkeleton.render").preedit_width(),
+    width = mode.width,
+    border = border,
+  }
+end
+
+local function redraw_if_cmdline()
+  if Modes.is_cmdline() then
+    pcall(vim.cmd, "redraw")
+  end
 end
 
 function Indicator:open()
   if self:is_opened() or self:is_disabled() or vim.fn.getcmdwintype() ~= "" then
     return
   end
+  if Modes.is_cmdline() and not config.show_in_cmdline then
+    return
+  end
   local mode = self.modes:detect()
   local buf = vim.api.nvim_create_buf(false, true)
   vim.bo[buf].bufhidden = "wipe"
   self:set_text(buf, mode)
-  local winid = vim.api.nvim_open_win(buf, false, {
+  local win_cfg = vim.tbl_extend("force", self:win_pos_config(mode, true), {
     style = "minimal",
-    relative = "cursor",
-    row = config.row,
-    col = config.col,
-    height = 1,
-    width = mode.width,
     focusable = false,
     noautocmd = true,
-    border = self:border(mode),
     zindex = config.zindex,
   })
+  local winid = vim.api.nvim_open_win(buf, false, win_cfg)
   self:border_highlight(winid, mode)
   table.insert(self.winid, 1, winid)
+  redraw_if_cmdline()
 end
 
 -- skkeleton の User イベントで呼ばれる。InsertLeave のときも mode-changed が来るので、
--- schedule したあとで insert モードかを確かめる
+-- 現在のモードを確かめてから更新する（コマンドラインモード中は即座に反映して redraw する）
 function Indicator:update()
-  vim.schedule(function()
-    if not Modes.is_insert() then
+  local function do_update()
+    if not Modes.is_active() then
       return
     end
     if self:is_disabled() then
@@ -145,12 +230,18 @@ function Indicator:update()
       local winid = self.winid[1]
       local mode = self.modes:detect()
       self:set_text(vim.api.nvim_win_get_buf(winid), mode)
-      vim.api.nvim_win_set_config(winid, { border = self:border(mode), width = mode.width })
+      pcall(vim.api.nvim_win_set_config, winid, self:win_pos_config(mode, false))
       self:border_highlight(winid, mode)
+      redraw_if_cmdline()
     else
       self:open()
     end
-  end)
+  end
+  if Modes.is_cmdline() then
+    do_update()
+  else
+    vim.schedule(do_update)
+  end
 end
 
 -- カーソルに追従させる。
@@ -159,18 +250,12 @@ end
 function Indicator:move()
   if self:is_opened() then
     local mode = self.modes:detect()
-    local pos = vim.api.nvim_win_get_cursor(0)
     -- ウィンドウがすでに消えていると失敗することがある
-    local ok = pcall(vim.api.nvim_win_set_config, self.winid[1], {
-      relative = "win",
-      win = vim.api.nvim_get_current_win(),
-      bufpos = { pos[1] - 1, pos[2] },
-      row = config.row,
-      col = config.col + require("skkeleton.render").preedit_width(),
-      width = mode.width,
-    })
+    local ok = pcall(vim.api.nvim_win_set_config, self.winid[1], self:win_pos_config(mode, false))
     if not ok then
       table.remove(self.winid, 1)
+    else
+      redraw_if_cmdline()
     end
   end
 end
@@ -185,6 +270,7 @@ function Indicator:close()
     end
   end
   self.winid = {}
+  redraw_if_cmdline()
 end
 
 ---@return boolean
@@ -199,7 +285,7 @@ function Indicator:refresh()
   self.modes = Modes.new()
   if self:is_opened() then
     self:update()
-  elseif Modes.is_insert() then
+  elseif Modes.is_active() then
     self:open()
   end
 end

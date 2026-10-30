@@ -35,8 +35,9 @@ end
 
 -- 候補一覧の popup。lines は "a: 候補" の配列。描画のあとに開く
 ---@param lines string[]
-function M.show_candidates(lines)
-  require("skkeleton.popup").set(lines)
+---@param meta? { index: integer, total: integer }
+function M.show_candidates(lines, meta)
+  require("skkeleton.popup").set(lines, meta)
 end
 
 -- 辞書登録の入力。取り消しなら nil か ""

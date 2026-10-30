@@ -86,7 +86,7 @@ local function show_candidates(state)
     local key = keys[i + 1] or ""
     lines[#lines + 1] = ("%s: %s"):format(key, candidate.modify(c, state.affix))
   end
-  host.show_candidates(lines)
+  host.show_candidates(lines, { index = idx, total = #state.candidates })
 end
 
 ---@param ctx skkeleton.Context

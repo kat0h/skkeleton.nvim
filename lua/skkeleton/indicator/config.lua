@@ -4,6 +4,7 @@
 
 ---@alias skkeleton.IndicatorBorder "none"|"single"|"double"|"rounded"|"solid"|"shadow"|string[]|string[][]
 ---@alias skkeleton.IndicatorBorderOpt skkeleton.IndicatorBorder|fun(args: { mode: string }): skkeleton.IndicatorBorder?
+---@alias skkeleton.IndicatorStyle "default"|"rounded"|"pill"|"minimal"
 
 ---@class skkeleton.IndicatorOpts
 ---@field eijiHlName? string
@@ -19,6 +20,9 @@
 ---@field zenkakuText? string
 ---@field abbrevText? string
 ---@field border? skkeleton.IndicatorBorderOpt
+---@field style? skkeleton.IndicatorStyle
+---@field winblend? integer
+---@field showInCmdline? boolean
 ---@field row? integer
 ---@field col? integer
 ---@field zindex? integer
@@ -42,6 +46,9 @@
 ---@field zenkaku_text string
 ---@field abbrev_text string
 ---@field border? skkeleton.IndicatorBorderOpt
+---@field style skkeleton.IndicatorStyle
+---@field winblend integer
+---@field show_in_cmdline boolean
 ---@field row integer
 ---@field col integer
 ---@field zindex? integer
@@ -67,6 +74,9 @@ M.defaults = {
   hankata_text = "半ｶﾀ",
   zenkaku_text = "全英",
   abbrev_text = "abbr",
+  style = "default",
+  winblend = 0,
+  show_in_cmdline = true,
   row = 1,
   col = 1,
   always_shown = true,
@@ -76,6 +86,22 @@ M.defaults = {
     return true
   end,
   use_default_highlight = true,
+}
+
+local minimal_texts = {
+  eiji_text = "A",
+  hira_text = "あ",
+  kata_text = "ア",
+  hankata_text = "ｶ",
+  zenkaku_text = "全",
+  abbrev_text = "a",
+}
+
+local valid_styles = {
+  default = true,
+  rounded = true,
+  pill = true,
+  minimal = true,
 }
 
 -- 設定のキーと型。border と zindex だけは省略できる
@@ -93,6 +119,9 @@ local types = {
   zenkaku_text = "string",
   abbrev_text = "string",
   border = { "string", "table", "function" },
+  style = "string",
+  winblend = "number",
+  show_in_cmdline = "boolean",
   row = "number",
   col = "number",
   zindex = "number",
@@ -121,6 +150,23 @@ function M.setup(opts)
   for key in pairs(raw) do
     if types[key] == nil then
       error("skkeleton.indicator: unknown option: " .. key, 2)
+    end
+  end
+
+  local style = raw.style or M.defaults.style
+  if type(style) ~= "string" or not valid_styles[style] then
+    error("skkeleton.indicator: invalid style: " .. tostring(style), 2)
+  end
+
+  if style == "rounded" and raw.border == nil then
+    raw.border = "rounded"
+  elseif style == "pill" and raw.border == nil then
+    raw.border = "none"
+  elseif style == "minimal" then
+    for k, v in pairs(minimal_texts) do
+      if raw[k] == nil then
+        raw[k] = v
+      end
     end
   end
 
