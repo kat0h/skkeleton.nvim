@@ -308,15 +308,9 @@ end
 
 -- cmdline の pre-edit は本物の文字なので、カーソルの前が pre-edit で終わる。
 -- pre-edit が無いのにマーカーが残っていたら、消し忘れ（#12 の型）
-M.state["cmdline: カーソルの前は pre-edit で終わり、マーカーを残さない"] = function(s)
+M.state["cmdline: pre-edit が無ければマーカーを残さない"] = function(s)
   if not s.cmdline or not s.enabled then
     return
-  end
-  local before = s.cmdline:sub(1, s.cmdpos - 1)
-  -- <Left> などでカーソルだけ動いたときは、次のキーで片付ける（#12 の修正）ので、行末にあるときだけ確かめる
-  local at_end = s.cmdpos == #s.cmdline + 1
-  if at_end and s.ctx_text ~= "" and before:sub(-#s.ctx_text) ~= s.ctx_text then
-    return ("cmdline %q（位置 %d）が pre-edit %q で終わらない"):format(s.cmdline, s.cmdpos, s.ctx_text)
   end
   if s.ctx_text == "" then
     for _, m in ipairs(markers(s)) do
@@ -364,7 +358,24 @@ end
 
 M.action = {}
 
-M.action["keepState: 同じバッファで insert に戻ると、抜ける前のモードで有効になる"] = function(
+-- <Left> などでカーソルだけ動いたときは、次のキーで片付ける（#12 の修正）。
+-- skkeleton がキーを処理した直後は、cmdline のカーソルの前が pre-edit で終わる
+M.action["cmdline: skkeleton が処理したあと、カーソルの前は pre-edit で終わる"] = function(p, key, s)
+  if not s.cmdline or not s.enabled or s.handled == p.handled or s.ctx_text == "" then
+    return
+  end
+  local before = s.cmdline:sub(1, s.cmdpos - 1)
+  if before:sub(-#s.ctx_text) ~= s.ctx_text then
+    return ("%s のあと cmdline %q（位置 %d）が pre-edit %q で終わらない"):format(
+      key,
+      s.cmdline,
+      s.cmdpos,
+      s.ctx_text
+    )
+  end
+end
+
+M.action["keepState: 同じバッファで insert に戻ると有効になる（keepMode ならモードも戻る）"] = function(
   p,
   key,
   s,
@@ -375,7 +386,8 @@ M.action["keepState: 同じバッファで insert に戻ると、抜ける前の
   if not (s.opt.keepState and l and l.enabled and p.vim_mode == "n" and insert_mode(s) and s.buf == l.buf) then
     return
   end
-  if not s.enabled or s.skk_mode ~= l.mode then
+  -- モードまで戻すのは keepMode のときだけ（upstream も lastMode を keepMode のときだけ覚える）
+  if not s.enabled or (s.opt.keepMode and s.skk_mode ~= l.mode) then
     return ("%s で insert に戻ると enabled=%s mode=%q、抜ける前は %q"):format(
       key,
       tostring(s.enabled),
@@ -482,7 +494,7 @@ end
 
 -- #12 の残り: 辞書登録の欄で <Tab> などで cmdline に文字が入ると、状態は初期化されるのに ▽ が残る
 M.known[#M.known + 1] = {
-  property = "cmdline: カーソルの前は pre-edit で終わり、マーカーを残さない",
+  property = "cmdline: pre-edit が無ければマーカーを残さない",
   match = function(keys, msg)
     local last = keys[#keys] or ""
     return (last == "<Tab>" or last:match("^<C%-") ~= nil)
@@ -515,6 +527,15 @@ M.known[#M.known + 1] = {
     return keys[#keys] == "<C-j>"
   end,
   reason = "#24: blink.cmp: 有効にしても、無効のときに出ていた buffer の補完のメニューが残る",
+}
+
+-- ウィンドウの最後の行で折り返した pre-edit を片付けると、▽ と @ が画面に残る（#26）
+M.known[#M.known + 1] = {
+  property = "screen: 画面の行はバッファに pre-edit を差し込んだもの",
+  match = function(keys, msg)
+    return keys[1] == "#corner" or keys[1] == "#bottom" or (msg and msg:find("@", 1, true) ~= nil)
+  end,
+  reason = "#26: ウィンドウの最後の行で折り返した pre-edit を片付けると、▽ と @ が画面に残る",
 }
 
 function M.is_known(name, keys, msg)
