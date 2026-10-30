@@ -349,7 +349,7 @@ end
 function M.observe(hist, prev, s)
   -- insert から normal へ抜けたときの、有効かとモード（keepState / keepMode の確かめに使う）
   if prev and insert_mode(prev) and s.vim_mode == "n" then
-    hist.left_insert = { enabled = prev.enabled, mode = prev.skk_mode }
+    hist.left_insert = { enabled = prev.enabled, mode = prev.skk_mode, buf = prev.buf }
   elseif prev and prev.vim_mode == "n" and insert_mode(s) then
     hist.left_insert = nil
   end
@@ -364,9 +364,15 @@ end
 
 M.action = {}
 
-M.action["keepState: insert に戻ると、抜ける前のモードで有効になる"] = function(p, key, s, hist)
+M.action["keepState: 同じバッファで insert に戻ると、抜ける前のモードで有効になる"] = function(
+  p,
+  key,
+  s,
+  hist
+)
   local l = hist and hist.left_insert
-  if not (s.opt.keepState and l and l.enabled and p.vim_mode == "n" and insert_mode(s)) then
+  -- upstream と同じく、抜けたバッファで insert に戻ったときだけ（InsertEnter <buffer>）
+  if not (s.opt.keepState and l and l.enabled and p.vim_mode == "n" and insert_mode(s) and s.buf == l.buf) then
     return
   end
   if not s.enabled or s.skk_mode ~= l.mode then
@@ -558,6 +564,15 @@ M.known[#M.known + 1] = {
     return keys[#keys] == "<C-j>"
   end,
   reason = "#24: blink.cmp: 有効にしても、無効のときに出ていた buffer の補完のメニューが残る",
+}
+
+-- 辞書登録の欄でウィンドウを移ると、cmdline に ▽ が残る（#13 の残り）
+M.known[#M.known + 1] = {
+  property = "cmdline: カーソルの前は pre-edit で終わり、マーカーを残さない",
+  match = function(keys)
+    return vim.tbl_contains(keys, "<Cmd>wincmd w<CR>")
+  end,
+  reason = "#13: 辞書登録の欄でウィンドウを移ると、cmdline に ▽ が残る",
 }
 
 function M.is_known(name, keys, msg)
