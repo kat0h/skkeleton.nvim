@@ -385,6 +385,13 @@ end
 -- 2 手以上をまたぐ性質のための履歴。各キーのあとに呼ぶ
 -- hist.before_register: 辞書登録の input() に入る直前の観測
 function M.observe(hist, prev, s)
+  -- 複数のキーをまとめた操作（Q1 など）のあいだにバッファが変わると、途中の状態（undo の区切り）を
+  -- 観測していないので、そのあとの undo は確かめない
+  local key = s.key or ""
+  local multi = #key > 1 and not key:match("^<[^>]+>$")
+  if prev and multi and table.concat(prev.lines, "\n") ~= table.concat(s.lines, "\n") then
+    hist.unseen = true
+  end
   -- これまでに観測したバッファの状態（undo の性質で使う）
   hist.texts = hist.texts or {}
   if prev then
@@ -411,7 +418,7 @@ M.action = {}
 -- upstream #41 の型: normal の u と <C-r> は、これまでに観測したバッファの状態のどれかに戻る
 -- （入力の途中の、存在しなかった状態にはならない）
 M.action["undo: u と <C-r> は観測したことのある状態に戻る"] = function(p, key, s, hist)
-  if (key ~= "u" and key ~= "<C-r>") or p.vim_mode ~= "n" or not hist or not hist.texts then
+  if (key ~= "u" and key ~= "<C-r>") or p.vim_mode ~= "n" or not hist or not hist.texts or hist.unseen then
     return
   end
   local text = (s.buf or 0) .. ":" .. table.concat(s.lines, "\n")
