@@ -57,6 +57,23 @@ local function draw(text)
   mark = { buf = buf, id = id, row = row, col = col, tick = vim.b[buf].changedtick }
 end
 
+-- いま出している pre-edit の表示幅（カーソルがまだ指している行・列のときだけ。なければ 0）。
+-- relative = "cursor" のウィンドウは inline の virtual text の幅を含まないので、インジケータが足す
+---@return integer
+function M.preedit_width()
+  if not mark or current_text == "" or not vim.api.nvim_buf_is_valid(mark.buf) then
+    return 0
+  end
+  if mark.buf ~= vim.api.nvim_get_current_buf() then
+    return 0
+  end
+  local pos = vim.api.nvim_win_get_cursor(0)
+  if pos[1] - 1 ~= mark.row or pos[2] ~= mark.col then
+    return 0
+  end
+  return vim.fn.strdisplaywidth(current_text)
+end
+
 -- pre-edit が残っているのにバッファや cmdline がそれと合わなくなっているか
 -- （矢印キーで動いた、補完で文字が入ったなど）
 ---@param ctx skkeleton.Context
@@ -92,6 +109,8 @@ function M.finish()
     M.clear()
   end
   popup.open()
+  -- pre-edit の幅が変わったので、インジケータを画面上のカーソルに寄せ直す
+  require("skkeleton.indicator").move()
   M.count = M.count + 1
   vim.api.nvim_exec_autocmds("User", { pattern = "skkeleton-handled", modeline = false })
 end

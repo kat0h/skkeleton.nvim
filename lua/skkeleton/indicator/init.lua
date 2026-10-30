@@ -33,4 +33,11 @@ function M.refresh()
   end
 end
 
+-- 開いていれば位置を直す（pre-edit が伸び縮みしたときに render から呼ぶ）
+function M.move()
+  if indicator then
+    indicator:move()
+  end
+end
+
 return M
