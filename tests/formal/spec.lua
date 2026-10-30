@@ -408,8 +408,13 @@ end
 
 -- upstream #130: 辞書登録から出るときに disable の autocmd が発火する。
 -- disable-post は、有効から無効に変わったときだけ発火する
+-- @a や . は記録したキーを 1 ステップでまとめて再生するので、途中で有効・無効が行き来してもよい
+local function replays(key)
+  return key == "." or (key or ""):match("^@") ~= nil
+end
+
 M.action["event: disable-post は無効になったときだけ"] = function(p, key, s)
-  if not p.events or not s.events or registering(p) or registering(s) then
+  if not p.events or not s.events or registering(p) or registering(s) or replays(key) then
     return
   end
   local fired = count(s, "skkeleton-disable-post") > count(p, "skkeleton-disable-post")
@@ -426,7 +431,7 @@ end
 
 -- upstream #43: skkeleton-mode-changed がすぐに発火しない
 M.action["event: モードが変わったら mode-changed が発火する"] = function(p, key, s)
-  if not p.events or not s.events then
+  if not p.events or not s.events or replays(key) then
     return
   end
   if p.skk_mode ~= s.skk_mode and count(s, "skkeleton-mode-changed") == count(p, "skkeleton-mode-changed") then
