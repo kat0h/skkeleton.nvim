@@ -141,3 +141,4 @@ require("skkeleton.indicator").setup(opts)  -- opts は skkeleton_indicator と�
 - `docs/PLAN.md` の方針どおり、1 コミット = 1 つの意味のある単位。`make test` が通る状態でだけコミットする
 - メッセージは Conventional Commits 風（`feat:`、`fix:`、`test:`、`docs:`）。本文の最後に、書いたモデルの行を付ける（例: `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`）
 - コメントは日本語で、コードの意図を短く書く
+- ドキュメント（`docs/`、README、`doc/`）、issue、PR の日本語は、yomiyasu スキル（https://github.com/nanaism/yomiyasu）で推敲してからコミット・投稿する
