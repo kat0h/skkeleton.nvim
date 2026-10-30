@@ -29,6 +29,9 @@ do
     elseif k == "--record" then
       -- asciinema の形式（.cast）で、1 キーごとの画面を書き出す。違反があっても最後のキーまで流す
       opts.record, i = v, i + 1
+    elseif k == "--flicker" then
+      -- 1 キーごとに、端末に出したフレームの数とカーソルの寄り道を数える（#25）
+      opts.flicker = true
     elseif k == "--verbose" then
       opts.verbose = true
     end
@@ -37,6 +40,7 @@ do
 end
 
 local profile = assert(profiles[opts.profile], "unknown profile")
+local flick
 local mini = os.getenv("MINI_PATH") or (root .. "/.tests/mini.nvim")
 
 local function sh(cmd)
@@ -141,6 +145,83 @@ end
 
 function Session:lua(code, args)
   return vim.rpcrequest(self.chan, "nvim_exec_lua", code, args or {})
+end
+
+-- 端末への出力をファイルに写す（ちらつきを数えるため）
+function Session:start_pipe()
+  self.pipe = self.dir .. "/out.raw"
+  sh({ "tmux", "pipe-pane", "-o", "-t", self.name, "cat >> " .. vim.fn.shellescape(self.pipe) })
+  self.pipe_pos = 0
+end
+
+-- 前に読んだところからの出力を返す
+function Session:take_output()
+  local f = io.open(self.pipe, "rb")
+  if not f then
+    return ""
+  end
+  f:seek("set", self.pipe_pos)
+  local data = f:read("*a") or ""
+  self.pipe_pos = self.pipe_pos + #data
+  f:close()
+  return data
+end
+
+-- 出力を解析する。Neovim の TUI は 1 回の描き直しを同期出力（ESC[?2026h 〜 ESC[?2026l）で囲むので、
+-- その組をフレームとして数え、フレームの終わりのカーソル位置を集める。カーソルは絶対位置（CSI H）、
+-- 相対の移動（CSI A/B/C/D）、\r・\n、文字の書き出し（表示幅のぶん進む）で動くので、それを追う
+local function analyze(data, start_row, start_col)
+  local frames, stops = 0, {}
+  local row, col = start_row or 1, start_col or 1
+  local in_frame, touched = false, false
+  local i, n = 1, #data
+  while i <= n do
+    local c = data:sub(i, i)
+    if c == "\27" then
+      local s, e, params, final = data:find("^%[([%d;?]*)([%a])", i + 1)
+      if s then
+        if params == "?2026" and final == "h" then
+          in_frame, touched = true, false
+        elseif params == "?2026" and final == "l" then
+          if in_frame and touched then
+            frames = frames + 1
+            stops[#stops + 1] = { row, col }
+          end
+          in_frame = false
+        elseif final == "H" or final == "f" then
+          local r, cc = params:match("^(%d*);?(%d*)$")
+          row, col = tonumber(r) or 1, tonumber(cc) or 1
+          touched = true
+        elseif final == "A" then
+          row, touched = row - (tonumber(params) or 1), true
+        elseif final == "B" then
+          row, touched = row + (tonumber(params) or 1), true
+        elseif final == "C" then
+          col, touched = col + (tonumber(params) or 1), true
+        elseif final == "D" then
+          col, touched = col - (tonumber(params) or 1), true
+        end
+        i = e + 1
+      else
+        -- ESC ( B などの 2 文字のもの
+        i = i + 2
+      end
+    elseif c == "\r" then
+      col, i = 1, i + 1
+    elseif c == "\n" then
+      row, i = row + 1, i + 1
+    elseif c:byte() < 32 then
+      i = i + 1
+    else
+      -- UTF-8 の 1 文字を書く
+      local len = c:byte() >= 240 and 4 or c:byte() >= 224 and 3 or c:byte() >= 192 and 2 or 1
+      local ch = data:sub(i, i + len - 1)
+      col = col + math.max(1, vim.fn.strdisplaywidth(ch))
+      touched = true
+      i = i + len
+    end
+  end
+  return frames, stops, row, col
 end
 
 function Session:send(key)
@@ -274,16 +355,21 @@ function Session:stop()
 end
 
 local SETUP = [[
-  local dir, extra, init = ...
+  local dir, extra, init, plain = ...
   vim.o.textwidth = 78
   for _, k in ipairs({ "K", "q", "Q", "gQ" }) do vim.keymap.set({ "n", "x" }, k, "<Nop>") end
-  require("skkeleton").setup(vim.tbl_deep_extend("force", {
-    globalDictionaries = { { dir .. "/dict", "utf-8" } },
-    userDictionary = dir .. "/user",
-    databasePath = dir .. "/db",
-    indicator = {},
-  }, extra))
-  vim.keymap.set({ "i", "c" }, "<C-j>", "<Plug>(skkeleton-toggle)")
+  -- plain: skkeleton を使わない素の nvim（ちらつきの差分を取るため）
+  if not plain then
+    require("skkeleton").setup(vim.tbl_deep_extend("force", {
+      globalDictionaries = { { dir .. "/dict", "utf-8" } },
+      userDictionary = dir .. "/user",
+      databasePath = dir .. "/db",
+      indicator = {},
+    }, extra))
+    vim.keymap.set({ "i", "c" }, "<C-j>", "<Plug>(skkeleton-toggle)")
+  else
+    vim.keymap.set({ "i", "c" }, "<C-j>", "<Nop>")
+  end
   _G.formal_events = {}
   for _, name in ipairs({ "skkeleton-enable-post", "skkeleton-disable-post", "skkeleton-mode-changed" }) do
     _G.formal_events[name] = 0
@@ -349,13 +435,13 @@ local function check_terminal(s)
   end
 end
 
-local function run(keys)
+local function run(keys, plain)
   local sess = Session.new()
   local init_name = profile.inits[keys[1]] and keys[1] or nil
   local init = profile.inits[init_name] or profile.inits[vim.tbl_keys(profile.inits)[1]]
   local result = { keys = keys, violations = {} }
   local ok, err = pcall(function()
-    sess:lua(SETUP, { sess.dir, profile.config, init })
+    sess:lua(SETUP, { sess.dir, profile.config, init, plain or false })
     for _, k in ipairs(tokenize(init.keys)) do
       sess:send(k)
     end
@@ -374,8 +460,17 @@ local function run(keys)
     local prev = base
     local hist = {}
     spec.observe(hist, nil, base)
+    if opts.flicker then
+      sess:start_pipe()
+      result.flicker = {}
+      local t0 = sess:terminal()
+      sess.cur_row, sess.cur_col = t0.row, t0.col
+    end
     for i, key in ipairs(keys) do
       if not (i == 1 and init_name) then
+        if opts.flicker then
+          sess:take_output()
+        end
         local real = profiles.aliases and profiles.aliases[key] or key
         if real:match("^<Cmd>") then
           sess:send(real)
@@ -391,6 +486,24 @@ local function run(keys)
         end
         local term, screen = sess:terminal()
         local s = with_terminal(snapshot(sess), term, screen)
+        if opts.flicker then
+          -- フレームの数と、最後の位置と違うところでカーソルを出したフレーム（寄り道）
+          local frames, stops, lr, lc = analyze(sess:take_output(), sess.cur_row, sess.cur_col)
+          sess.cur_row, sess.cur_col = term.row, term.col
+          -- まねで追った最後の位置が本物のカーソルと合わないときは、まねが外れているので数えない
+          local reliable = lr == term.row and lc == term.col
+          local detours = {}
+          for _, st in ipairs(stops) do
+            if st[1] ~= term.row or st[2] ~= term.col then
+              detours[#detours + 1] = ("%d,%d"):format(st[1], st[2])
+            end
+          end
+          if not reliable then
+            detours = {}
+          end
+          result.flicker[#result.flicker + 1] =
+            { key = key, frames = frames, detours = detours, mode = s.vim_mode, reliable = reliable }
+        end
         if opts.verbose then
           print(
             ("%-10s mode=%s pre-edit=%q 端末=%d,%d 行=%q"):format(
@@ -449,6 +562,9 @@ local function run(keys)
   if not ok then
     result.violations[#result.violations + 1] = { name = "error", msg = tostring(err) }
   end
+  if opts.flicker and os.getenv("FORMAL_KEEP_RAW") then
+    vim.fn.writefile(vim.fn.readfile(sess.pipe, "b"), os.getenv("FORMAL_KEEP_RAW"), "b")
+  end
   sess:stop()
   return result
 end
@@ -466,18 +582,61 @@ if opts.keys then
   opts.verbose = true
   local r = run(opts.keys)
   report(r)
+  if opts.flicker then
+    local saved = opts.verbose
+    opts.verbose = false
+    local b = run(opts.keys, true).flicker or {}
+    opts.verbose = saved
+    for j, f in ipairs(r.flicker or {}) do
+      if b[j] and #b[j].detours > 0 then
+        f.base = true
+      end
+      f.base_frames = b[j] and b[j].frames
+    end
+  end
+  for _, f in ipairs(r.flicker or {}) do
+    print(
+      ("  フレーム %2d（素 %s）  寄り道 %s  %s (%s)%s"):format(
+        f.frames,
+        tostring(f.base_frames),
+        #f.detours > 0 and table.concat(f.detours, " ") or "-",
+        f.key,
+        f.mode,
+        (f.reliable and "" or "  [まねが外れた]") .. (f.base and "  [素の nvim でも]" or "")
+      )
+    )
+  end
   failed = #r.violations > 0
 else
   math.randomseed(opts.seed)
   local names = vim.tbl_keys(profile.inits)
   table.sort(names)
   local seen = {}
+  flick = {}
   for n = 1, opts.random or 20 do
     local ks = { names[math.random(#names)] }
     for _ = 1, opts.length do
       ks[#ks + 1] = profile.alphabet[math.random(#profile.alphabet)]
     end
     local r = run(ks)
+    -- 素の nvim でも同じステップで寄り道するもの（Neovim 本来の描き方）は除く
+    local base_flick = opts.flicker and (run(ks, true).flicker or {}) or {}
+    for j, f in ipairs(r.flicker or {}) do
+      local b = base_flick[j]
+      if b and #b.detours > 0 then
+        f.detours = {}
+      end
+    end
+    -- ちらつきの候補: 1 つのキーの操作（複数のキーのまとまりでないもの）で、最後と違う位置でフレームが終わった
+    for j, f in ipairs(r.flicker or {}) do
+      local single = #tokenize(profiles.expand(f.key)) == 1 or f.key:match("^<Cmd>") or profiles.aliases[f.key]
+      if single and #f.detours > 0 then
+        local prev = (r.flicker[j - 1] or {}).mode or "?"
+        local k = ("%s（%s → %s）"):format(f.key, prev, f.mode)
+        flick[k] = flick[k] or { count = 0, example = vim.list_slice(r.keys, 1, j + 1), detours = f.detours }
+        flick[k].count = flick[k].count + 1
+      end
+    end
     for _, v in ipairs(r.violations) do
       if not seen[v.name] then
         seen[v.name] = true
@@ -488,6 +647,26 @@ else
     if n % 10 == 0 then
       print(("%d 本"):format(n))
     end
+  end
+end
+if flick and next(flick) then
+  print("\nちらつきの候補（1 つのキーで、最後と違う位置でフレームが終わった）:")
+  local list = {}
+  for k, v in pairs(flick) do
+    list[#list + 1] = { k = k, v = v }
+  end
+  table.sort(list, function(a, b)
+    return a.v.count > b.v.count
+  end)
+  for _, e in ipairs(list) do
+    print(
+      ("  %3d 回  %s  寄り道 %s  例: %s"):format(
+        e.v.count,
+        e.k,
+        table.concat(e.v.detours, " "),
+        table.concat(e.v.example, " ")
+      )
+    )
   end
 end
 vim.cmd(failed and "cquit 1" or "qall!")
