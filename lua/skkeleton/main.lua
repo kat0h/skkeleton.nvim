@@ -143,6 +143,19 @@ function M.init(force)
       })
     end,
   })
+  -- 置換モードでは有効にできない（enable で断る）ので、insert で有効にしたまま <Insert> で
+  -- 置換モードに移ったときも、pre-edit を捨てて無効にする（InsertLeave も InsertEnter も来ない）
+  vim.api.nvim_create_autocmd("ModeChanged", {
+    group = group,
+    pattern = "i:R*",
+    callback = function()
+      if host.is_in_input() then
+        return
+      end
+      reset()
+      host.disable()
+    end,
+  })
   -- insert のままウィンドウやバッファを切り替えても残らないようにする
   -- （辞書登録の input() の最中は元の状態を壊さないようスキップする）
   vim.api.nvim_create_autocmd({ "WinLeave", "BufLeave" }, {

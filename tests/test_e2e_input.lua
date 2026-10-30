@@ -339,4 +339,21 @@ T["stale preedit: insert 中に <C-r>= で cmdline に入ったとき extmark �
   eq(lines, { "1ab cd" })
 end
 
+T["<Insert> で置換モードに移ると pre-edit を捨てて無効になる (#29)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "ab cd" })
+  child.api.nvim_win_set_cursor(0, { 1, 4 })
+  child.type_keys("a")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+  eq(helpers.preedit(child), "▽かn")
+  child.type_keys("<Insert>")
+  helpers.settle(child)
+  eq(child.fn.mode(), "R")
+  eq(child.g["skkeleton#enabled"], false)
+  eq(helpers.preedit(child), "")
+  local marks =
+    child.lua_get([[vim.api.nvim_buf_get_extmarks(0, vim.api.nvim_get_namespaces()["skkeleton-preedit"], 0, -1, {})]])
+  eq(#marks, 0)
+end
+
 return T
