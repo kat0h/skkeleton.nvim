@@ -1,6 +1,6 @@
-# skkeleton.nvim の構成と設計規約
+# skkeleton.nvim の構成と設計
 
-Phase 2 の実装を複数のモジュール担当に分けて進めるための設計規約。ここに記載したインターフェースはモジュール間で共有するため、変更する場合はこのドキュメントもあわせて更新する。
+skkeleton.nvim のモジュールの構成と、モジュールのあいだのインターフェース。インターフェースを変えるときは、このドキュメントもあわせて更新する。
 
 移植元は `skkeleton`（以下 upstream）および `skkeleton_indicator.nvim`。upstream の `denops/skkeleton/*.ts` と関数を 1 対 1 で対応させ、挙動に迷った場合は upstream の仕様に合わせる。
 
@@ -12,27 +12,27 @@ Phase 2 の実装を複数のモジュール担当に分けて進めるための
 - 設定のキー名は upstream から移行しやすいよう、同じ camelCase（`markerHenkan` など）を維持する。
 - `state` などの内部テーブルのフィールド名は snake_case とする。ただし、関数の登録名（キーマップやかなテーブルで文字列として指定するもの）は upstream と同じ camelCase（`henkanFirst` など）にする。
 
-## モジュール構成と担当
+## モジュール構成
 
-| モジュール | 担当 | 内容 |
+| モジュール | 区分 | 内容 |
 |---|---|---|
 | `lua/skkeleton/util.lua` | 共通 | `lazy(name)`（循環 `require` を避ける遅延プロキシ）、UTF-8 の文字操作 |
-| `lua/skkeleton/config.lua` | K | 既定値、バリデーション、正規化（`~` の展開など） |
-| `lua/skkeleton/notation.lua` | K | キー表記の正規化（`<C-j>` → `<nl>` など） |
-| `lua/skkeleton/kana/{init,rom_hira,rom_zen,hira_kata,hira_hankata}.lua` | K | かなテーブル（Trie）とかな変換 |
-| `lua/skkeleton/{state,context,candidate,okuri,preedit,store,host}.lua` | K | 入力状態、Context、確定文字列のバッファ |
-| `lua/skkeleton/keymap.lua` | K | 状態ごとのキーマップと `handle_key` |
-| `lua/skkeleton/function/{init,common,input,henkan,mode,disable,dictionary}.lua` | K | upstream の `function/*.ts` に対応する各機能 |
-| `lua/skkeleton/dictionary/{init,skk,db,user,numeral}.lua` | D | 辞書管理（Library、SKK 辞書、DB キャッシュ、ユーザー辞書、数値変換） |
-| `lua/skkeleton/indicator/{init,modes}.lua` | I | `skkeleton_indicator.nvim` の移植 |
-| `lua/skkeleton/{init,main,render,popup,map}.lua`、`plugin/skkeleton.lua`、`autoload/skkeleton.vim`、`host.lua` の UI 部分 | U | Neovim との結合。`main.lua` が enable/disable/toggle/handle と autocmd、`render.lua` が描画、`popup.lua` が候補ポップアップ、`map.lua` がマッピングとオプションの退避・復元を担当 |
-| `tests/helpers.lua` のキー入力ドライバ、E2E テスト | U | 結合テスト・E2E テスト基盤 |
+| `lua/skkeleton/config.lua` | コア | 既定値、バリデーション、正規化（`~` の展開など） |
+| `lua/skkeleton/notation.lua` | コア | キー表記の正規化（`<C-j>` → `<nl>` など） |
+| `lua/skkeleton/kana/{init,rom_hira,rom_zen,hira_kata,hira_hankata}.lua` | コア | かなテーブル（Trie）とかな変換 |
+| `lua/skkeleton/{state,context,candidate,okuri,preedit,store,host}.lua` | コア | 入力状態、Context、確定文字列のバッファ |
+| `lua/skkeleton/keymap.lua` | コア | 状態ごとのキーマップと `handle_key` |
+| `lua/skkeleton/function/{init,common,input,henkan,mode,disable,dictionary}.lua` | コア | upstream の `function/*.ts` に対応する各機能 |
+| `lua/skkeleton/dictionary/{init,skk,db,user,numeral}.lua` | 辞書 | 辞書管理（Library、SKK 辞書、DB キャッシュ、ユーザー辞書、数値変換） |
+| `lua/skkeleton/indicator/{init,modes}.lua` | インジケータ | `skkeleton_indicator.nvim` の移植 |
+| `lua/skkeleton/{init,main,render,popup,map}.lua`、`plugin/skkeleton.lua`、`autoload/skkeleton.vim`、`host.lua` の UI 部分 | UI | Neovim との結合。`main.lua` が enable/disable/toggle/handle と autocmd、`render.lua` が描画、`popup.lua` が候補ポップアップ、`map.lua` がマッピングとオプションの退避・復元を担当 |
+| `tests/helpers.lua` のキー入力ドライバ、E2E テスト | UI | 結合テスト・E2E テスト基盤 |
 
-各担当は自身の担当ファイルのみを作成・変更する。他担当のモジュールを利用する際は以下のインターフェースのみを通し、単体テストではスタブに差し替える。
+ほかの区分のモジュールを使うときは、以下のインターフェースだけを通す。単体テストでは、ほかの区分のモジュールをスタブに差し替える。
 
 ## インターフェース
 
-### state（K）
+### state（コア）
 ```lua
 ---@alias skkeleton.HenkanType "okuriari"|"okurinasi"
 ---@class skkeleton.InputState
@@ -55,7 +55,7 @@ state.initialize(st, ignore?)   -- upstream の initializeState
 state.to_string(st)
 ```
 
-### Context と store（K）
+### Context と store（コア）
 ```lua
 local ctx = require("skkeleton.context").new()
 ctx.state, ctx.mode ("hira" など), ctx.preedit, ctx.vim_mode ("i"|"c"|"t"|""), ctx.last_candidate
@@ -69,25 +69,25 @@ store.set_library(lib) -- テスト用の差し替え
 store.variables.last_mode
 ```
 
-### PreEdit（K）
+### PreEdit（コア）
 ```lua
 pe:do_kakutei(str)          -- 確定した文字列をバッファに追加する
 pe:output(next) -> string   -- upstream と同じ。BS*(前回の文字数) .. 確定文字列 .. next を返す（cmdline/terminal およびテスト用）
 pe:take_kakutei() -> string -- 蓄積した確定文字列を取り出して空にする（insert モードの描画用）
 ```
 
-### host（K が既定実装を書き、U が UI 部分を実装する）
+### host（既定の実装はコア、UI の部分は UI）
 core から UI へアクセスする処理はすべてここを経由する。
 ```lua
-host.mode_changed(mode)           -- g:skkeleton#mode を更新して User skkeleton-mode-changed を発火（K が実装）
-host.disable()                    -- skkeleton を無効化する（U）
-host.show_candidates(lines)       -- 候補一覧のポップアップ表示（U）。lines は "a: 候補" の配列
-host.input(prompt) -> string?     -- 辞書登録のプロンプト入力（U）。キャンセル時は nil または ""
-host.confirm(msg) -> boolean      -- purgeCandidate の確認ダイアログ（U）
-host.keep_state_on_insert_enter() -- keepState 有効時の再有効化処理（U）
+host.mode_changed(mode)           -- g:skkeleton#mode を更新して User skkeleton-mode-changed を発火（コア）
+host.disable()                    -- skkeleton を無効化する（UI）
+host.show_candidates(lines)       -- 候補一覧のポップアップ表示（UI）。lines は "a: 候補" の配列
+host.input(prompt) -> string?     -- 辞書登録のプロンプト入力（UI）。キャンセル時は nil または ""
+host.confirm(msg) -> boolean      -- purgeCandidate の確認ダイアログ（UI）
+host.keep_state_on_insert_enter() -- keepState 有効時の再有効化処理（UI）
 ```
 
-### KanaTable（K）
+### KanaTable（コア）
 ```lua
 local kana = require("skkeleton.kana")
 kana.get_table(name?) -> skkeleton.KanaTable  -- 省略時は現在のテーブル名
@@ -100,7 +100,7 @@ tbl:node(prefix) -> { count = 前方一致する件数, result = 完全一致の
 tbl:filter(pred) -> KanaTable
 ```
 
-### Library（D）
+### Library（辞書）
 ```lua
 local dictionary = require("skkeleton.dictionary")
 dictionary.load() -> Library      -- config（globalDictionaries、userDictionary、databasePath など）から生成
@@ -113,13 +113,13 @@ lib:load(); lib:save()
 ```
 DB フォーマットは `docs/PLAN.md` の「DB の形式 v1」に従う（`bench/lib/cache.lua` がリファレンス実装）。
 
-### indicator（I）
+### indicator（インジケータ）
 ```lua
 require("skkeleton.indicator").setup(opts)  -- opts は skkeleton_indicator と同じキー（camelCase）。false で無効化
 ```
 モードは `vim.g["skkeleton#mode"]` と `vim.g["skkeleton#enabled"]` から読み取り、upstream と同じ User イベント（`skkeleton-mode-changed`、`skkeleton-enable-post`、`skkeleton-disable-post`）で表示を更新する。
 
-### 公開インターフェース（U、upstream と互換）
+### 公開インターフェース（UI、upstream と互換）
 - 変数: `g:skkeleton#enabled`、`g:skkeleton#mode`
 - User イベント: `skkeleton-initialize-pre/post`、`skkeleton-enable-pre/post`、`skkeleton-disable-pre/post`、`skkeleton-mode-changed`、`skkeleton-handled`
 - `<Plug>(skkeleton-enable)`、`<Plug>(skkeleton-disable)`、`<Plug>(skkeleton-toggle)`（`i` / `c` / `t` モード）
