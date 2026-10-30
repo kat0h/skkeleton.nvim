@@ -6,6 +6,8 @@ if not vim.startswith(mini, "/") then
 end
 
 vim.opt.runtimepath = { vim.env.VIMRUNTIME, root, mini }
+-- tests/helpers.lua などを require できるようにする
+package.path = root .. "/tests/?.lua;" .. package.path
 vim.opt.packpath = {}
 vim.o.swapfile = false
 vim.o.shada = ""

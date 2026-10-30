@@ -1,6 +1,3 @@
--- tests/ は runtimepath にないので、helpers を読めるようにする
-local tests_dir = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h")
-package.path = tests_dir .. "/?.lua;" .. package.path
 local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 
