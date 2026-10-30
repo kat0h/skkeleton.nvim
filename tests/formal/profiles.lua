@@ -503,6 +503,18 @@ M.options = {
   dict = dict,
 }
 
+-- マクロ（q で記録して @ で再生）と .（前回の入力を繰り返す）。記録したときと同じ結果になるか
+M.macro = {
+  doc = "マクロ（qa … q と @a）と . の繰り返しで、skkeleton の入力が同じ結果になるか",
+  config = {},
+  allow_q = true,
+  alphabet = { "<C-j>", "Kan", "a", "k", "<Space>", "<CR>", "<Esc>", "qa", "q", "@a", ".", "j", "0", "A", "i", "<C-c>" },
+  inits = {
+    ["#mid"] = { lines = { "ab cd", "ef gh", "ij kl" }, cursor = { 1, 2 }, keys = "<Esc>" },
+  },
+  dict = dict,
+}
+
 -- インジケータを切ったもの（ちらつきなどの原因がインジケータかを切り分けるため）
 M.noindicator = {
   doc = "インジケータを切った既定の設定（原因の切り分け用）",

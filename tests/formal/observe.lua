@@ -187,6 +187,9 @@ function M.snapshot()
     end)(),
     columns = vim.o.columns,
     ambiwidth = vim.o.ambiwidth,
+    -- マクロ（レジスタ a と、記録中か）
+    reg_a = vim.fn.getreg("a"),
+    recording = vim.fn.reg_recording(),
     list = vim.wo[win].list,
     editor_lines = vim.o.lines,
     cmdheight = vim.o.cmdheight,

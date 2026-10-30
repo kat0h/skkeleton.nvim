@@ -171,7 +171,9 @@ table.sort(INIT_NAMES)
 local SETUP = [[
   local dir, dict, mutation, extra, init, extra_code = ...
   vim.o.textwidth = 78
-  for _, k in ipairs({ "K", "q", "Q", "gQ" }) do vim.keymap.set({ "n", "x" }, k, "<Nop>") end
+  for _, k in ipairs({ "K", "Q", "gQ" }) do vim.keymap.set({ "n", "x" }, k, "<Nop>") end
+  -- マクロのプロファイルのほかは q（記録）も止める
+  if not init.allow_q then vim.keymap.set({ "n", "x" }, "q", "<Nop>") end
   require("skkeleton").setup(vim.tbl_deep_extend("force", {
     globalDictionaries = { { dict, "utf-8" } },
     userDictionary = dir .. "/user",
@@ -232,7 +234,8 @@ local function start(child, mutation, init, config)
   local f = assert(io.open(dict, "w"))
   f:write(profile.dict)
   f:close()
-  local it = INITS[init] or INITS[INIT_NAMES[1]]
+  local it = vim.deepcopy(INITS[init] or INITS[INIT_NAMES[1]])
+  it.allow_q = profile.allow_q
   child.lua(SETUP, {
     dir,
     dict,

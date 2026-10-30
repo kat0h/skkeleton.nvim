@@ -357,7 +357,8 @@ end
 local SETUP = [[
   local dir, extra, init, plain = ...
   vim.o.textwidth = 78
-  for _, k in ipairs({ "K", "q", "Q", "gQ" }) do vim.keymap.set({ "n", "x" }, k, "<Nop>") end
+  for _, k in ipairs({ "K", "Q", "gQ" }) do vim.keymap.set({ "n", "x" }, k, "<Nop>") end
+  if not init.allow_q then vim.keymap.set({ "n", "x" }, "q", "<Nop>") end
   -- plain: skkeleton を使わない素の nvim（ちらつきの差分を取るため）
   if not plain then
     require("skkeleton").setup(vim.tbl_deep_extend("force", {
@@ -441,6 +442,8 @@ local function run(keys, plain)
   local init = profile.inits[init_name] or profile.inits[vim.tbl_keys(profile.inits)[1]]
   local result = { keys = keys, violations = {} }
   local ok, err = pcall(function()
+    init = vim.deepcopy(init)
+    init.allow_q = profile.allow_q
     sess:lua(SETUP, { sess.dir, profile.config, init, plain or false })
     for _, k in ipairs(tokenize(init.keys)) do
       sess:send(k)

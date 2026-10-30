@@ -374,6 +374,14 @@ M.state["mode: g:skkeleton#mode は内部のモードと同じ（無効なら空
   end
 end
 
+-- マクロ（#36 の型）: 記録したレジスタには、利用者が打ったキーだけが入り、skkeleton が内部で流したもの
+-- （確定の文字列を入れたあとの finish() の呼び出し）は入らない
+M.state["macro: レジスタに skkeleton が内部で流したものが入らない"] = function(s)
+  if s.recording == "" and s.reg_a and s.reg_a:find("skkeleton.render", 1, true) then
+    return ("レジスタ a に %q"):format(s.reg_a:sub(1, 60))
+  end
+end
+
 -- 2 手以上をまたぐ性質のための履歴。各キーのあとに呼ぶ
 -- hist.before_register: 辞書登録の input() に入る直前の観測
 function M.observe(hist, prev, s)
@@ -604,6 +612,15 @@ M.known[#M.known + 1] = {
     return keys[1] == "#list"
   end,
   reason = "#35: 'list' でカーソルの直後がタブのとき、端末のカーソルが pre-edit の上に描かれる",
+}
+
+-- マクロに確定の文字列と finish() の呼び出しが入る（#36）
+M.known[#M.known + 1] = {
+  property = "macro: レジスタに skkeleton が内部で流したものが入らない",
+  match = function()
+    return true
+  end,
+  reason = "#36: skkeleton の入力をマクロに記録して再生すると、確定した文字列が二重に入って崩れる",
 }
 
 function M.is_known(name, keys, msg)
