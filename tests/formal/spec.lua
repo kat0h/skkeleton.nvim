@@ -578,15 +578,6 @@ end
 -- 当てはまる違反は「既知」として出し、失敗にしない
 M.known = {}
 
--- ウィンドウの最後の行の右端で入力すると、折り返した pre-edit が @@@ で隠れる（#34）
-M.known[#M.known + 1] = {
-  property = "screen: 画面の行はバッファに pre-edit を差し込んだもの",
-  match = function(keys, msg)
-    return keys[1] == "#corner" or keys[1] == "#bottom" or (msg and msg:find("@@", 1, true) ~= nil)
-  end,
-  reason = "#34: ウィンドウの最後の行の右端で入力すると、折り返した pre-edit が @@@ で隠れて見えない",
-}
-
 -- 'list' でカーソルの直後がタブのとき、端末のカーソルが pre-edit の上に描かれる（#35）
 M.known[#M.known + 1] = {
   property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
