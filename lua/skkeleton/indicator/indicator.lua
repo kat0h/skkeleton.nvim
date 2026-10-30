@@ -77,32 +77,36 @@ end
 ---@param buf integer
 ---@param mode skkeleton.IndicatorMode
 function Indicator:set_text(buf, mode)
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { mode.text })
-  vim.api.nvim_buf_clear_namespace(buf, self.ns, 0, -1)
-  if config.style == "pill" and mode.cap_hl_name and mode.left_cap and mode.right_cap then
-    local left_len = #mode.left_cap
-    local right_start = #mode.text - #mode.right_cap
-    vim.api.nvim_buf_set_extmark(buf, self.ns, 0, 0, {
-      end_row = 0,
-      end_col = left_len,
-      hl_group = mode.cap_hl_name,
-    })
-    vim.api.nvim_buf_set_extmark(buf, self.ns, 0, left_len, {
-      end_row = 0,
-      end_col = right_start,
-      hl_group = mode.hl_name,
-    })
-    vim.api.nvim_buf_set_extmark(buf, self.ns, 0, right_start, {
-      end_row = 0,
-      end_col = #mode.text,
-      hl_group = mode.cap_hl_name,
-    })
-  else
-    vim.api.nvim_buf_set_extmark(buf, self.ns, 0, 0, {
-      end_row = 0,
-      end_col = #mode.text,
-      hl_group = mode.hl_name,
-    })
+  if self.current_mode_name ~= mode.name or self.current_mode_text ~= mode.text then
+    self.current_mode_name = mode.name
+    self.current_mode_text = mode.text
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { mode.text })
+    vim.api.nvim_buf_clear_namespace(buf, self.ns, 0, -1)
+    if config.style == "pill" and mode.cap_hl_name and mode.left_cap and mode.right_cap then
+      local left_len = #mode.left_cap
+      local right_start = #mode.text - #mode.right_cap
+      vim.api.nvim_buf_set_extmark(buf, self.ns, 0, 0, {
+        end_row = 0,
+        end_col = left_len,
+        hl_group = mode.cap_hl_name,
+      })
+      vim.api.nvim_buf_set_extmark(buf, self.ns, 0, left_len, {
+        end_row = 0,
+        end_col = right_start,
+        hl_group = mode.hl_name,
+      })
+      vim.api.nvim_buf_set_extmark(buf, self.ns, 0, right_start, {
+        end_row = 0,
+        end_col = #mode.text,
+        hl_group = mode.cap_hl_name,
+      })
+    else
+      vim.api.nvim_buf_set_extmark(buf, self.ns, 0, 0, {
+        end_row = 0,
+        end_col = #mode.text,
+        hl_group = mode.hl_name,
+      })
+    end
   end
   self.timer:stop()
   self.fade_epoch = (self.fade_epoch or 0) + 1
@@ -279,6 +283,8 @@ end
 
 function Indicator:close()
   self.timer:stop()
+  self.current_mode_name = nil
+  self.current_mode_text = nil
   for _, winid in ipairs(self.winid) do
     if vim.api.nvim_win_is_valid(winid) then
       local buf = vim.api.nvim_win_get_buf(winid)
