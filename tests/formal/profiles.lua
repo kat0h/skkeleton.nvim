@@ -268,6 +268,132 @@ M.terminal = {
   dict = dict,
 }
 
-M.names = { "default", "modes", "config", "edge", "cmdline", "styles", "rounded", "minimal", "misc", "terminal" }
+-- blink.cmp の補完（利用者の設定と同じ: super-tab、preselect と auto_insert、fuzzy は lua）
+local BLINK = vim.fn.expand("~/.local/share/nvim/lazy/blink.cmp")
+M.blink = {
+  doc = "blink.cmp の補完（super-tab、auto_insert）。blink.cmp が無ければ使えない",
+  available = vim.uv.fs_stat(BLINK) ~= nil,
+  config = {},
+  setup = ([[
+    vim.opt.rtp:append(%q)
+    vim.cmd("runtime plugin/blink-cmp.lua")
+    require("blink.cmp").setup({
+      keymap = { preset = "super-tab", ["<Space>"] = {} },
+      completion = { list = { selection = { preselect = true, auto_insert = true } } },
+      sources = {
+        default = function()
+          if require("skkeleton").is_enabled() then
+            return { "skkeleton" }
+          end
+          return { "buffer" }
+        end,
+        providers = { skkeleton = { name = "skkeleton", module = "skkeleton.completion.blink" } },
+      },
+      fuzzy = { implementation = "lua" },
+    })
+  ]]):format(BLINK),
+  wait_ms = 60,
+  alphabet = {
+    "<C-j>",
+    "Kan",
+    "Kanj",
+    "Kanji",
+    "K",
+    "a",
+    "n",
+    "j",
+    "i",
+    "<Tab>",
+    "<S-Tab>",
+    "<C-n>",
+    "<C-p>",
+    "<CR>",
+    "<C-e>",
+    "<Space>",
+    "<BS>",
+    "<C-g>",
+    "<Esc>",
+    "<Left>",
+    "<C-w>",
+  },
+  inits = line_inits,
+  dict = dict,
+}
+
+-- 折り返しのある長い行（'wrap'）。pre-edit が折り返しをまたぐところ
+M.wrap = {
+  doc = "折り返しのある長い行で、pre-edit・インジケータ・popup が折り返しをまたぐ",
+  config = { showCandidatesCount = 1 },
+  alphabet = {
+    "<C-j>",
+    "Kan",
+    "Kanji",
+    "<Space>",
+    "x",
+    "<CR>",
+    "<BS>",
+    "<C-g>",
+    "<Esc>",
+    "A",
+    "a",
+    "<Left>",
+    "<Right>",
+    "<C-u>",
+    "<Up>",
+    "<Down>",
+  },
+  inits = {
+    -- 80 桁の画面で、1 行目が 2 行に折り返す。カーソルは 1 段目の右端の手前と、2 段目
+    ["#wrap1"] = { lines = { ("w"):rep(100), "next" }, cursor = { 1, 76 }, keys = "i" },
+    ["#wrap2"] = { lines = { ("w"):rep(100), "next" }, cursor = { 1, 99 }, keys = "a" },
+    ["#wide"] = { lines = { ("全"):rep(39) .. "x", "next" }, cursor = { 1, 117 }, keys = "a" },
+  },
+  dict = dict,
+}
+
+-- 送り仮名・数値変換・接頭辞と接尾辞・abbrev の変換
+M.okuri = {
+  doc = "送り仮名（Kaer、WaruK）・数値変換（Q1ba）・abbrev 変換・確定の取り消しまわり",
+  config = {},
+  alphabet = {
+    "<C-j>",
+    "Kaer",
+    "WaruK",
+    "E",
+    "u",
+    "Q",
+    "1",
+    "bai",
+    "#",
+    "/abc",
+    "<Space>",
+    "x",
+    "X",
+    "<CR>",
+    "<BS>",
+    "<C-g>",
+    "<Esc>",
+    ">",
+    "<Left>",
+  },
+  inits = line_inits,
+  dict = dict,
+}
+
+M.names = {
+  "default",
+  "modes",
+  "config",
+  "edge",
+  "cmdline",
+  "styles",
+  "rounded",
+  "minimal",
+  "misc",
+  "terminal",
+  "blink",
+  "wrap",
+  "okuri",
+}
 
 return M

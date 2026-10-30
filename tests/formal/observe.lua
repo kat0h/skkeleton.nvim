@@ -146,6 +146,12 @@ function M.snapshot()
     sentinel = type(sentinel) == "table" and sentinel.desc or nil,
     has_sentinel = vim.b[buf].formal_sentinel == true,
     buftype = vim.bo[buf].buftype,
+    -- blink.cmp のメニュー（読んでいなければ nil）
+    menu = package.loaded["blink.cmp"] and require("blink.cmp").is_menu_visible() or nil,
+    menu_items = package.loaded["blink.cmp"] and require("blink.cmp").is_menu_visible() and vim.tbl_map(function(i)
+      return i.label
+    end, require("blink.cmp").get_items()) or nil,
+    pum = vim.fn.pumvisible() == 1,
     textwidth = vim.bo[buf].textwidth,
     opt = {
       showCandidatesCount = options.showCandidatesCount,

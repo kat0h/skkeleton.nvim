@@ -93,6 +93,10 @@ M.state["screen: 画面の行はバッファに pre-edit を差し込んだも�
   if line:find("%c") then
     return
   end
+  -- 折り返す行は 1 行の画面と比べられないので見ない（wrap のプロファイルでは他の性質で確かめる）
+  if width(line .. mark_text(s) .. annot_text(s)) >= s.win_width - s.textoff then
+    return
+  end
   local before, after = line:sub(1, s.cursor[2]), line:sub(s.cursor[2] + 1)
   local expect = cells_of(before .. mark_text(s) .. annot_text(s) .. after)
   -- float（インジケータの枠など）が重なる桁から右は比べない
@@ -320,6 +324,23 @@ M.state["cmdline: カーソルの前は pre-edit で終わり、マーカーを�
   end
 end
 
+-- blink.cmp の skkeleton の候補は ▽ の入力中だけ（upstream の getCompletionResult と同じ）。
+-- ▽ を抜けたら（確定、取り消し、変換）メニューは閉じる
+M.state["blink: 有効なら、メニューは ▽ の入力中だけ"] = function(s)
+  if s.menu == nil or not s.menu or not s.enabled or not insert_mode(s) then
+    return
+  end
+  local st = s.state
+  if not (st.type == "input" and st.mode == "okurinasi" and st.henkan_feed ~= "") then
+    return ("状態 %s/%s %q でメニューが出ている: %s"):format(
+      st.type,
+      tostring(st.mode),
+      st.henkan_feed,
+      short(s.menu_items)
+    )
+  end
+end
+
 -- 2 手以上をまたぐ性質のための履歴。各キーのあとに呼ぶ
 -- hist.before_register: 辞書登録の input() に入る直前の観測
 function M.observe(hist, prev, s)
@@ -429,7 +450,6 @@ end
 -- 見つかったが、今は直さないもの。反例の性質の名前と、キー列で見分ける。
 -- 当てはまる違反は「既知」として出し、失敗にしない
 M.known = {}
-
 
 -- 枠つきのインジケータは、画面の右端で左へ押し戻されてカーソルに重なる（#16。元の skkeleton_indicator.nvim も同じ）
 M.known[#M.known + 1] = {

@@ -127,7 +127,7 @@ local INIT_NAMES = vim.tbl_keys(INITS)
 table.sort(INIT_NAMES)
 
 local SETUP = [[
-  local dir, dict, mutation, extra, init = ...
+  local dir, dict, mutation, extra, init, extra_code = ...
   vim.o.textwidth = 78
   for _, k in ipairs({ "K", "q", "Q", "gQ" }) do vim.keymap.set({ "n", "x" }, k, "<Nop>") end
   require("skkeleton").setup(vim.tbl_deep_extend("force", {
@@ -159,6 +159,10 @@ local SETUP = [[
   if mutation then
     assert(loadstring(mutation))()
   end
+  -- プロファイルの追加の設定（blink.cmp を読むなど）
+  if extra_code then
+    assert(loadstring(extra_code))()
+  end
 ]]
 
 local function new_child()
@@ -176,7 +180,10 @@ local function start(child, mutation, init)
   f:write(profile.dict)
   f:close()
   local it = INITS[init] or INITS[INIT_NAMES[1]]
-  child.lua(SETUP, { dir, dict, mutation and MUTATIONS[mutation].code or false, profile.config, it })
+  child.lua(
+    SETUP,
+    { dir, dict, mutation and MUTATIONS[mutation].code or false, profile.config, it, profile.setup or false }
+  )
   child.type_keys(it.keys)
 end
 
@@ -205,6 +212,13 @@ local function settle(child)
   if not settle_once(child) then
     return false
   end
+  -- 非同期に描くもの（blink.cmp のメニューなど）を待つ
+  if profile.wait_ms then
+    vim.uv.sleep(profile.wait_ms)
+    if not settle_once(child) then
+      return false
+    end
+  end
   if child.lua_get("vim.bo.buftype") == "terminal" then
     vim.uv.sleep(200)
     return settle_once(child)
@@ -232,6 +246,7 @@ local function abstract(s)
     math.min(#s.lines, 3),
     s.buf,
     s.cmdline and ((s.cmdtype or "") .. (s.cmdline == "" and "0" or "1")) or "-",
+    s.menu and "menu" or "-",
   }, "|")
 end
 
