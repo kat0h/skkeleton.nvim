@@ -378,7 +378,7 @@ end
 function M.observe(hist, prev, s)
   -- insert から normal へ抜けたときの、有効かとモード（keepState / keepMode の確かめに使う）
   if prev and insert_mode(prev) and s.vim_mode == "n" then
-    hist.left_insert = { enabled = prev.enabled, mode = prev.skk_mode, buf = prev.buf }
+    hist.left_insert = { enabled = prev.enabled, mode = prev.skk_mode, buf = prev.buf, by_esc = s.key == "<Esc>" }
   elseif prev and prev.vim_mode == "n" and insert_mode(s) then
     hist.left_insert = nil
   end
@@ -472,7 +472,10 @@ M.action["keepState: 同じバッファで insert に戻ると有効になる（
 )
   local l = hist and hist.left_insert
   -- upstream と同じく、抜けたバッファで insert に戻ったときだけ（InsertEnter <buffer>）
-  if not (s.opt.keepState and l and l.enabled and p.vim_mode == "n" and insert_mode(s) and s.buf == l.buf) then
+  -- keepState は skkeleton の <Esc>（escape）で抜けたときだけ効く（<C-c> などは skkeleton を通らない。upstream も同じ）
+  if
+    not (s.opt.keepState and l and l.enabled and l.by_esc and p.vim_mode == "n" and insert_mode(s) and s.buf == l.buf)
+  then
     return
   end
   -- モードまで戻すのは keepMode のときだけ（upstream も lastMode を keepMode のときだけ覚える）

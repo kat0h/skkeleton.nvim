@@ -532,6 +532,7 @@ local function run(keys, plain)
             result.violations[#result.violations + 1] = { name = name, msg = tostring(m) }
           end
         end
+        s.key = key
         spec.observe(hist, prev, s)
         prev = s
         if rec then

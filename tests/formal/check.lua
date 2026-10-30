@@ -367,6 +367,7 @@ local function run(child, keys, mutation, every, config)
           return { steps = i, violations = v, abstract = abstract(s), snapshot = s, prev = prev, seen = seen }
         end
       end
+      s.key = key
       spec.observe(hist, prev, s)
       -- 辺（前の抽象状態・キー・次の抽象状態）を記録する
       seen[#seen + 1] = abstract(prev) .. " >" .. key .. "> " .. abstract(s)
@@ -562,6 +563,7 @@ if opts.keys then
       local k = slot(v.name, opts.keys, v.msg)
       found[k] = found[k] or { keys = opts.keys, violations = { v } }
     end
+    s.key = key
     spec.observe(hist, prev, s)
     prev = s
   end
