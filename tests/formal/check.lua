@@ -140,7 +140,7 @@ local dict_text = table.concat({
 }, "\n")
 
 local SETUP = [[
-  local dir, dict, mutation = ...
+  local dir, dict, mutation, col = ...
   vim.o.textwidth = 78
   for _, k in ipairs({ "K", "q", "Q", "gQ" }) do vim.keymap.set("n", k, "<Nop>") end
   require("skkeleton").setup({
@@ -159,13 +159,13 @@ local SETUP = [[
   vim.api.nvim_buf_set_lines(0, 0, -1, false, { "xy" })
   sentinel()
   vim.cmd("wincmd p")
-  vim.api.nvim_win_set_cursor(0, { 1, 2 })
+  vim.api.nvim_win_set_cursor(0, { 1, col })
   -- ":" のコマンドラインは開くだけで実行しない（:q や :n でウィンドウやバッファが変わらないように）
   vim.api.nvim_create_autocmd("CmdlineLeave", {
     pattern = ":",
     command = "let v:event.abort = v:true",
   })
-  if mutation then
+  if mutation and mutation ~= vim.NIL then
     assert(loadstring(mutation))()
   end
 ]]
@@ -174,7 +174,13 @@ local function new_child()
   return MiniTest.new_child_neovim()
 end
 
-local function start(child, mutation)
+-- 初期状態（TLA+ の Init に当たる）。キー列の先頭の "#bol" などで選ぶ。無ければ "#mid"
+-- 行は "ab cd"。insert モードで、カーソルは行頭・途中・行末のどれか
+local INITS =
+  { ["#bol"] = { col = 0, key = "i" }, ["#mid"] = { col = 2, key = "i" }, ["#eol"] = { col = 4, key = "a" } }
+local INIT_NAMES = { "#bol", "#mid", "#eol" }
+
+local function start(child, mutation, init)
   child.restart({ "-u", root .. "/tests/minimal_init.lua" })
   local dir = vim.fn.tempname()
   vim.fn.mkdir(dir, "p")
@@ -182,8 +188,9 @@ local function start(child, mutation)
   local f = assert(io.open(dict, "w"))
   f:write(dict_text)
   f:close()
-  child.lua(SETUP, { dir, dict, mutation and MUTATIONS[mutation].code or nil })
-  child.type_keys("i")
+  local it = INITS[init] or INITS["#mid"]
+  child.lua(SETUP, { dir, dict, mutation and MUTATIONS[mutation].code or nil, it.col })
+  child.type_keys(it.key)
 end
 
 -- 流したキーが全部処理されるまで待つ。入力待ち（input() など）で止まったら false
@@ -229,7 +236,7 @@ local function abstract(s)
   }, "|")
 end
 
-local function check(base, prev, key, s)
+local function check(base, prev, key, s, hist)
   local out = {}
   for name, f in vim.spairs(spec.state) do
     local ok, msg = pcall(f, s, base)
@@ -239,7 +246,7 @@ local function check(base, prev, key, s)
   end
   if prev then
     for name, f in vim.spairs(spec.action) do
-      local ok, msg = pcall(f, prev, key, s)
+      local ok, msg = pcall(f, prev, key, s, hist)
       if not ok or msg then
         out[#out + 1] = { name = name, msg = tostring(msg) }
       end
@@ -249,49 +256,46 @@ local function check(base, prev, key, s)
 end
 
 -- キー列を流して、各キーのあとで性質を確かめる。最初の違反で止まる
--- every = false なら最後のキーだけ確かめる（それより前は探索で確かめ済み）
+-- every = false なら最後のキーだけ確かめる（それより前は探索で確かめ済み）。
+-- 観測は毎回取り、2 手以上をまたぐ性質のために履歴（hist）を渡す
 local function run(child, keys, mutation, every)
-  start(child, mutation)
+  local init = keys[1] and INITS[keys[1]] and keys[1] or nil
+  start(child, mutation, init)
   settle(child)
   local base = snapshot(child)
-  local prev = base
-  if every then
-    local v = check(base, nil, nil, base)
+  local hist = {}
+  spec.observe(hist, nil, base)
+  if every or #keys == 0 or (init and #keys == 1) then
+    local v = check(base, nil, nil, base, hist)
     if #v > 0 then
       return { steps = 0, violations = v, abstract = abstract(base) }
     end
   end
+  local prev = base
   for i, key in ipairs(keys) do
-    local last = i == #keys
-    if (every or last) and prev == nil then
-      -- 前の観測が要る
-      prev = snapshot(child)
-    end
-    -- normal の n や cmdline の <CR> などで Neovim 本体が出すエラー（E35 など）は違反にしない。
-    -- skkeleton の Lua のエラーは違反にする
-    local ok, err = pcall(child.type_keys, key)
-    if not ok and (tostring(err):find("skkeleton", 1, true) or not tostring(err):find("E%d+:")) then
-      return { steps = i, violations = { { name = "error", msg = tostring(err) } }, abstract = "error" }
-    end
-    if not settle(child) then
-      -- 入力待ち（辞書登録の input() など）。ここから先は広げない
-      return { steps = i, blocked = true, abstract = "blocked" }
-    end
-    if every or last then
+    if not (i == 1 and init) then
+      -- normal の n や cmdline の <CR> などで Neovim 本体が出すエラー（E35 など）は違反にしない。
+      -- skkeleton の Lua のエラーは違反にする
+      local ok, err = pcall(child.type_keys, key)
+      if not ok and (tostring(err):find("skkeleton", 1, true) or not tostring(err):find("E%d+:")) then
+        return { steps = i, violations = { { name = "error", msg = tostring(err) } }, abstract = "error" }
+      end
+      if not settle(child) then
+        -- 入力待ち（confirm() など）。ここから先は広げない
+        return { steps = i, blocked = true, abstract = "blocked" }
+      end
       local s = snapshot(child)
-      local v = check(base, prev, key, s)
-      if #v > 0 then
-        return { steps = i, violations = v, abstract = abstract(s), snapshot = s, prev = prev }
+      if every or i == #keys then
+        local v = check(base, prev, key, s, hist)
+        if #v > 0 then
+          return { steps = i, violations = v, abstract = abstract(s), snapshot = s, prev = prev }
+        end
       end
+      spec.observe(hist, prev, s)
       prev = s
-      if last then
-        return { steps = i, abstract = abstract(s) }
-      end
-    else
-      prev = nil
     end
   end
-  return { steps = 0, abstract = abstract(base) }
+  return { steps = #keys, abstract = abstract(prev) }
 end
 
 -- worker: 入力ファイルのキー列を流して、結果を JSON で書く
@@ -422,13 +426,21 @@ end
 
 local found = {}
 
+-- 反例を性質ごとに 1 つ覚える。既知のものと既知でないものは分けて覚える（既知の反例で隠れないように）
+local function slot(name, keys)
+  return spec.is_known(name, keys) and (name .. "\0known") or name
+end
+
 if opts.keys then
   -- 1 本のキー列を流して、キーごとの観測を出す（反例を追うため）
   local child = new_child()
-  start(child, opts.mutate)
+  local init = INITS[opts.keys[1]] and table.remove(opts.keys, 1) or nil
+  start(child, opts.mutate, init)
   settle(child)
   local base = snapshot(child)
   local prev = base
+  local hist = {}
+  spec.observe(hist, nil, base)
   for _, key in ipairs(opts.keys) do
     pcall(child.type_keys, key)
     if not settle(child) then
@@ -448,10 +460,12 @@ if opts.keys then
         s.wins
       )
     )
-    for _, v in ipairs(check(base, prev, key, s)) do
+    for _, v in ipairs(check(base, prev, key, s, hist)) do
       print("  ✗ " .. v.name .. ": " .. v.msg)
-      found[v.name] = found[v.name] or { keys = opts.keys, violations = { v } }
+      local k = slot(v.name, opts.keys)
+      found[k] = found[k] or { keys = opts.keys, violations = { v } }
     end
+    spec.observe(hist, prev, s)
     prev = s
   end
   child.stop()
@@ -460,16 +474,16 @@ elseif opts.random then
   math.randomseed(opts.seed)
   local items = {}
   for _ = 1, opts.random do
-    local ks = {}
-    for i = 1, opts.length do
-      ks[i] = ALPHABET[math.random(#ALPHABET)]
+    local ks = { INIT_NAMES[math.random(#INIT_NAMES)] }
+    for _ = 1, opts.length do
+      ks[#ks + 1] = ALPHABET[math.random(#ALPHABET)]
     end
     items[#items + 1] = { keys = ks, mutation = opts.mutate, every = true }
   end
   for _, r in ipairs(run_parallel(items)) do
     if r.violations then
       local prefix = vim.list_slice(r.keys, 1, r.steps)
-      local key = r.violations[1].name
+      local key = slot(r.violations[1].name, prefix)
       if not found[key] then
         found[key] = shrink(prefix, opts.mutate) or r
       end
@@ -479,12 +493,19 @@ elseif opts.random then
 else
   -- 幅優先。frontier の各状態から、すべてのキーを 1 つずつ試す
   local visited = {}
-  local frontier = { {} }
-  local first = run_parallel({ { keys = {}, mutation = opts.mutate, every = true } })[1]
-  visited[first.abstract] = true
-  if first.violations then
-    first.keys = {}
-    found[first.violations[1].name] = first
+  local frontier = {}
+  local roots = {}
+  for _, name in ipairs(INIT_NAMES) do
+    roots[#roots + 1] = { keys = { name }, mutation = opts.mutate, every = true }
+  end
+  for _, r in ipairs(run_parallel(roots)) do
+    if r.violations then
+      local k = slot(r.violations[1].name, r.keys)
+      found[k] = found[k] or r
+    elseif not visited[r.abstract] then
+      visited[r.abstract] = true
+      frontier[#frontier + 1] = r.keys
+    end
   end
   local transitions = 0
   for depth = 1, opts.depth do
@@ -502,8 +523,9 @@ else
       if r.violations then
         local name = r.violations[1].name
         -- 同じ性質の反例は最初（最短）のものだけ
-        if not found[name] then
-          found[name] = r
+        local k = slot(name, r.keys)
+        if not found[k] then
+          found[k] = r
         end
       elseif r.blocked then
         blocked = blocked + 1
@@ -534,12 +556,20 @@ end
 if opts.mutate then
   print(("mutation %s（%s）"):format(opts.mutate, MUTATIONS[opts.mutate].issue))
 end
-if vim.tbl_isempty(found) then
-  print("✓ 違反なし")
-  vim.cmd("qall!")
-else
-  for _, r in vim.spairs(found) do
+local failed = false
+for slot_name, r in vim.spairs(found) do
+  local name = slot_name:gsub("%z.*", "")
+  local known = spec.is_known(name, vim.list_slice(r.keys, 1, r.steps or #r.keys))
+  if known then
+    print(("\n△ 既知: %s\n  %s\n  反例: %s"):format(name, known.reason, keys_str(r.keys)))
+  else
+    failed = true
     report(r)
   end
+end
+if not failed then
+  print("\n✓ 既知のもの以外に違反なし")
+  vim.cmd("qall!")
+else
   vim.cmd("cquit 1")
 end
