@@ -197,3 +197,10 @@ make fmt
 ```
 
 `stylua` は `.tests/bin/stylua` が存在すればそちらを優先して使用します。内部設計は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)、開発計画と経緯は [docs/PLAN.md](docs/PLAN.md) を参照してください。
+
+### ブランチ構成
+
+- `main`: 主系ブランチ。安定版のコードを管理します。
+- `feat/*`: 新機能の開発用ブランチ。
+- `fix/*`: バグ修正用の作業ブランチ。
+- `poc/*`: 概念実証（PoC）や実験的ツールの検証用ブランチ（モデル検査など）。

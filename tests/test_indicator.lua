@@ -237,7 +237,7 @@ T["hooks"]["setup を何度呼んでも 1 つしか出ない。設定は最後�
   local f = floats()
   eq(#f, 1)
   eq(f[1].text, "Aa")
-  eq(#child.api.nvim_get_autocmds({ group = "skkeleton-indicator" }), 10)
+  eq(#child.api.nvim_get_autocmds({ group = "skkeleton-indicator" }), 12)
 end
 
 T["hooks"]["style = rounded / minimal / pill と winblend が反映される"] = function()
@@ -343,20 +343,46 @@ end
 T["hooks"]["insert 中に input() へ入り抜けてもインジケーターが連動する"] = function()
   setup({ showInCmdline = true })
   child.type_keys("i")
-  eq(floats()[1].relative, "win")
+  local ins_row = floats()[1].row
+  eq(ins_row < 5, true)
 
-  -- Insert 中に Cmdline へ遷移したとき即座に relative=editor になる
+  -- Insert 中に Cmdline へ遷移したとき即座に cmdline の上の行へ移る
   child.type_keys("<C-r>=")
   local f_cmd = floats()
   eq(#f_cmd, 1)
-  eq(f_cmd[1].relative, "editor")
+  eq(f_cmd[1].row > ins_row, true)
 
   -- Cmdline を抜けて Insert に戻ると再びインジケーターが開く
   child.type_keys("<Esc>")
   wait(30)
   local f_ins = floats()
   eq(#f_ins, 1)
-  eq(f_ins[1].relative, "win")
+  eq(f_ins[1].row, ins_row)
+end
+
+T["hooks"]["insert 中に <C-r>= で式を確定して戻ってもインジケーターが出る"] = function()
+  setup({ showInCmdline = true })
+  child.type_keys("i")
+  local ins_row = floats()[1].row
+
+  child.type_keys("<C-r>=1<CR>")
+  wait(30)
+  local f = floats()
+  eq(#f, 1)
+  eq(f[1].row, ins_row)
+end
+
+T["hooks"]["補完で候補が入ったときにインジケーターが追従する"] = function()
+  setup({})
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "ab cd" })
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.type_keys("i")
+  local before_col = floats()[1].col
+
+  child.type_keys("<C-x><C-n>")
+  wait(30)
+  local after_col = floats()[1].col
+  eq(after_col > before_col, true)
 end
 
 T["hooks"]["indicator のバッファは閉じたときに wipe される"] = function()

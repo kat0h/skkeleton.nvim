@@ -265,6 +265,28 @@ T["register"]["switching windows during input() does not break state or mappings
   eq(helpers.preedit(child), "▽あ*あ")
 end
 
+T["register"]["switching windows after a cancelled nested registration keeps the window"] = function()
+  child.cmd("botright new")
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "xy" })
+  child.cmd("wincmd p")
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "ab cd" })
+  enable()
+  -- 外側の登録の欄で、入れ子の登録に入って取り消す
+  type("KanA")
+  eq(child.fn.mode(), "c")
+  type("AKan")
+  child.type_keys("<C-u><CR>")
+  helpers.settle(child)
+  eq(child.fn.getcmdline(), "▽あ*か")
+  child.type_keys("<Cmd>wincmd w<CR>")
+  helpers.settle(child)
+  eq(child.api.nvim_buf_get_lines(0, 0, -1, false), { "ab cd" })
+  type("k")
+  eq(child.fn.getcmdline(), "▽あ*かk")
+  type("<Esc>")
+  type("<Esc>")
+end
+
 T["purge"] = MiniTest.new_set()
 
 T["purge"]["X removes the candidate after confirming"] = function()
