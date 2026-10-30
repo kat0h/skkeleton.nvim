@@ -560,23 +560,20 @@ if opts.regress and not opts.regress_sub then
   local bad = 0
   for p in vim.spairs(by) do
     local r = vim
-      .system(
-        {
-          vim.v.progpath,
-          "--headless",
-          "-u",
-          "NONE",
-          "-i",
-          "NONE",
-          "-l",
-          here .. "/check.lua",
-          "--profile",
-          p,
-          "--regress",
-          "--regress-sub",
-        },
-        { env = { MINI_PATH = mini }, text = true }
-      )
+      .system({
+        vim.v.progpath,
+        "--headless",
+        "-u",
+        "NONE",
+        "-i",
+        "NONE",
+        "-l",
+        here .. "/check.lua",
+        "--profile",
+        p,
+        "--regress",
+        "--regress-sub",
+      }, { env = { MINI_PATH = mini }, text = true })
       :wait()
     io.stdout:write(r.stdout or "")
     if r.code ~= 0 then
