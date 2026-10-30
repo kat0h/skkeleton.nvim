@@ -493,13 +493,17 @@ local function run(keys, plain)
         local s = with_terminal(snapshot(sess), term, screen)
         if opts.flicker then
           -- フレームの数と、最後の位置と違うところでカーソルを出したフレーム（寄り道）
+          local before_row, before_col = sess.cur_row, sess.cur_col
           local frames, stops, lr, lc = analyze(sess:take_output(), sess.cur_row, sess.cur_col)
           sess.cur_row, sess.cur_col = term.row, term.col
           -- まねで追った最後の位置が本物のカーソルと合わないときは、まねが外れているので数えない
           local reliable = lr == term.row and lc == term.col
           local detours = {}
+          -- キーを押す前の位置で止まったフレーム（まだ動いていないだけ）は寄り道にしない
           for _, st in ipairs(stops) do
-            if st[1] ~= term.row or st[2] ~= term.col then
+            local at_end = st[1] == term.row and st[2] == term.col
+            local at_start = st[1] == before_row and st[2] == before_col
+            if not at_end and not at_start then
               detours[#detours + 1] = ("%d,%d"):format(st[1], st[2])
             end
           end

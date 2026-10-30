@@ -573,29 +573,6 @@ end
 -- 当てはまる違反は「既知」として出し、失敗にしない
 M.known = {}
 
--- 一度も有効にしないまま <C-c> で insert を抜けると、インジケータが残る（#27 の残り）
-M.known[#M.known + 1] = {
-  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
-  match = function(keys)
-    return vim.tbl_contains(keys, "<C-c>")
-  end,
-  reason = "#27: 一度も有効にしないまま <C-c> で insert を抜けると、インジケータが残る",
-}
-
--- <Esc> のすぐあとに v を押すと、状態が escape のまま残る（#32）
-for _, property in ipairs({
-  "preedit: 表示は状態の文字列と一致する",
-  "frame: skkeleton の外でバッファやカーソルが動いたら pre-edit を捨てる",
-}) do
-  M.known[#M.known + 1] = {
-    property = property,
-    match = function(keys)
-      return vim.tbl_contains(keys, "<Esc>v")
-    end,
-    reason = "#32: <Esc> のすぐあとに v を押すと、skkeleton の状態が escape のまま残る",
-  }
-end
-
 -- ウィンドウの最後の行の右端で入力すると、折り返した pre-edit が @@@ で隠れる（#34）
 M.known[#M.known + 1] = {
   property = "screen: 画面の行はバッファに pre-edit を差し込んだもの",
