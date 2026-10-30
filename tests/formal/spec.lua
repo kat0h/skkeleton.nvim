@@ -679,7 +679,8 @@ M.known[#M.known + 1] = {
         n = n + 1
       end
     end
-    return n >= 2 and msg and msg:find("0 個", 1, true) ~= nil
+    -- <Insert> 1 回でも、置換モードの <C-a>（前回の入力の <Insert> を入れ直す）で insert に戻ることがある
+    return n >= 1 and msg and msg:find("0 個", 1, true) ~= nil
   end,
   reason = "#38: <Insert> を 2 回押して insert に戻ると、インジケータが消えたままになる",
 }
