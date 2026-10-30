@@ -10,9 +10,8 @@ function M.completefunc(findstart, base)
     if not skkeleton.is_enabled() or skkeleton.get_prefix() == "" then
       return -3
     end
-    local pre_edit = skkeleton.get_pre_edit()
     local col = vim.api.nvim_win_get_cursor(0)[2]
-    return math.max(0, col - #pre_edit)
+    return col
   end
 
   local sort = require("skkeleton.completion.sort")
