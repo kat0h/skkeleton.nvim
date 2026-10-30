@@ -104,6 +104,22 @@ function M.setup(opts)
       M.refresh()
     end,
   })
+  vim.api.nvim_create_autocmd("User", {
+    group = group,
+    pattern = { "skkeleton-enable-post", "skkeleton-disable-post" },
+    callback = function()
+      local blink = get_blink()
+      if blink then
+        pcall(blink.hide)
+      end
+      local cmp = get_cmp()
+      if cmp then
+        pcall(cmp.close)
+      end
+      shown = false
+      last_key = nil
+    end,
+  })
 end
 
 -- ▽ の入力中（送りなしで、読みが空でない）か。補完の候補を返してよい状態
