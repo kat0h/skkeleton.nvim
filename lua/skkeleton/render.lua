@@ -22,8 +22,11 @@ local function termcodes(s)
   return vim.api.nvim_replace_termcodes(s, true, true, true)
 end
 
-local function feed(keys)
-  vim.api.nvim_feedkeys(keys, "nit", false)
+-- keys の K_SPECIAL (0x80) を逃がして流す。cmd があれば逃がさずにあとへ続ける。
+-- 「、」のように 0x80 を含む文字が、特殊キーの始まりと読まれないようにするため
+local function feed(keys, cmd)
+  keys = keys:gsub("\128", "\128\254X")
+  vim.api.nvim_feedkeys(keys .. (cmd or ""), "nit", false)
 end
 
 -- pre-edit の extmark を消す
@@ -114,11 +117,8 @@ function M.update(ctx, prefix)
   end
   -- 流した文字が入ってから描く。Esc で抜けるときはその場で片付ける
   local deferred = keys ~= "" and not esc and (current_mode == "i" or popup.has_pending())
-  if deferred then
-    keys = keys .. termcodes("<Cmd>lua require('skkeleton.render').finish()<CR>")
-  end
   if keys ~= "" then
-    feed(keys)
+    feed(keys, deferred and termcodes("<Cmd>lua require('skkeleton.render').finish()<CR>") or nil)
   end
   if not deferred then
     M.finish()

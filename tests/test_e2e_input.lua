@@ -1,0 +1,163 @@
+-- 実際のキー入力を子の nvim に流して、バッファ・pre-edit・モードを確かめる
+local helpers = require("helpers")
+local eq = MiniTest.expect.equality
+
+local T, child = helpers.e2e_set()
+local type = function(...)
+  helpers.type(child, ...)
+end
+
+local function start()
+  child.type_keys("i")
+  type("<Plug>(skkeleton-enable)")
+end
+
+-- { 名前, 打つキー, 確定した行, pre-edit, モード }
+local cases = {
+  { "hiragana", "aiueo", { "あいうえお" }, "", "hira" },
+  { "n is kept until the next consonant", "kan", { "か" }, "n", "hira" },
+  { "nn", "kann", { "かん" }, "", "hira" },
+  { "sokuon", "kitte", { "きって" }, "", "hira" },
+  { "henkan point", "Kan", { "" }, "▽かn", "hira" },
+  { "henkan point is fixed by <C-j>", "Kan<C-j>", { "かん" }, "", "hira" },
+  { "okurinasi: first candidate", "Kan<Space>", { "" }, "▼缶", "hira" },
+  { "okurinasi: kakutei by <C-j>", "Kan<Space><C-j>", { "缶" }, "", "hira" },
+  { "okurinasi: second candidate", "Kan<Space><Space><C-j>", { "感" }, "", "hira" },
+  { "okurinasi: next input confirms", "Kan<Space>a", { "缶あ" }, "", "hira" },
+  { "okurinasi: kakutei by <CR> inserts a newline", "Kan<Space><CR>", { "缶", "" }, "", "hira" },
+  { "okurinasi: x goes back", "Kan<Space>x", { "" }, "▽かん", "hira" },
+  { "okurinasi: <C-g> cancels", "Kan<Space><C-g>", { "" }, "", "hira" },
+  { "okurinasi: word with two characters", "Kanzi<Space><C-j>", { "漢字" }, "", "hira" },
+  { "okuriari", "KaeRu", { "" }, "▼帰る", "hira" },
+  { "okuriari: kakutei", "KaeRu<C-j>", { "帰る" }, "", "hira" },
+  { "okuriari: a word with a stem of two characters", "WaruKu", { "" }, "▼悪く", "hira" },
+  { "okuriari: followed by input", "WaruKuka", { "悪くか" }, "", "hira" },
+  { "candidate popup is not used for the first few candidates", "Kan<Space><Space>", { "" }, "▼感", "hira" },
+  { "backspace in the pre-edit", "Kan<BS>", { "" }, "▽か", "hira" },
+  { "backspace on the buffer", "ka<BS>", { "" }, "", "hira" },
+  { "katakana", "qka", { "カ" }, "", "kata" },
+  { "katakana toggles back", "qkaqka", { "カか" }, "", "hira" },
+  { "katakana henkan point", "qKa<C-j>", { "カ" }, "", "kata" },
+  { "hankaku katakana", "<C-q>ka", { "ｶ" }, "", "hankata" },
+  { "zenkaku", "Lab", { "ａｂ" }, "", "zenkaku" },
+  { "abbrev", "/abc<Space>", { "" }, "▼ＡＢＣ", "abbrev" },
+  { "abbrev: kakutei", "/abc<Space><C-j>", { "ＡＢＣ" }, "", "hira" },
+  { "<C-j> without pre-edit is hiragana", "q<C-j>ka", { "か" }, "", "hira" },
+  { "symbols", ",.", { "、。" }, "", "hira" },
+  { "symbols with a sequence", "z,", { "‥" }, "", "hira" },
+  { "an unmapped sequence is kept as typed", "ka1", { "か1" }, "", "hira" },
+  { "<Bar> is input", "|", { "|" }, "", "hira" },
+  { "<lt> is passed to the kana table", "<LT>", { "" }, "<", "hira" },
+  { "space without pre-edit", "ka ka", { "か か" }, "", "hira" },
+  { "okurinasi with a candidate that has an annotation-less single entry", "Nihon<Space><C-j>", { "日本" }, "", "hira" },
+}
+
+for _, c in ipairs(cases) do
+  T[c[1]] = function()
+    start()
+    type(c[2])
+    eq(helpers.buffer(child), c[3])
+    eq(helpers.preedit(child), c[4])
+    eq(helpers.mode(child), c[5])
+  end
+end
+
+T["<Esc> confirms the pre-edit and leaves insert mode"] = function()
+  start()
+  type("Ka")
+  eq(helpers.preedit(child), "▽か")
+  type("<Esc>")
+  eq(helpers.buffer(child), { "か" })
+  eq(helpers.preedit(child), "")
+  eq(child.fn.mode(), "n")
+  eq(helpers.mode(child), "")
+  eq(child.lua_get([[vim.g["skkeleton#enabled"] ]]), false)
+end
+
+T["<Esc> after converting inserts the candidate"] = function()
+  start()
+  type("Kan<Space><Esc>")
+  eq(helpers.buffer(child), { "缶" })
+  eq(child.fn.mode(), "n")
+end
+
+T["the pre-edit follows the cursor in the middle of a line"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "abcdef" })
+  child.api.nvim_win_set_cursor(0, { 1, 3 })
+  start()
+  type("Ka")
+  eq(helpers.preedit(child), "▽か")
+  eq(helpers.cursor(child), { 1, 3 })
+  type("<C-j>")
+  eq(helpers.buffer(child), { "abcかdef" })
+  eq(helpers.cursor(child), { 1, 6 })
+end
+
+T["moving the cursor drops the pre-edit"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "abcdef" })
+  child.api.nvim_win_set_cursor(0, { 1, 3 })
+  start()
+  type("Ka")
+  child.api.nvim_win_set_cursor(0, { 1, 1 })
+  type("ka")
+  eq(helpers.preedit(child), "")
+  eq(helpers.buffer(child), { "aかbcdef" })
+end
+
+T["text inserted by completion drops the pre-edit"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "foobar", "" })
+  child.api.nvim_win_set_cursor(0, { 2, 0 })
+  start()
+  type("Ka")
+  eq(helpers.preedit(child), "▽か")
+  type("<C-n>")
+  eq(helpers.buffer(child), { "foobar", "foobar" })
+  type("<C-y>ka")
+  eq(helpers.preedit(child), "")
+  eq(helpers.buffer(child), { "foobar", "foobarか" })
+end
+
+T["each conversion is one undo step"] = function()
+  start()
+  type("Kan<Space><C-j>Kanzi<Space><C-j>Nihon<Space><C-j>")
+  eq(helpers.buffer(child), { "缶漢字日本" })
+  type("<Esc>u")
+  eq(helpers.buffer(child), { "缶漢字" })
+  type("u")
+  eq(helpers.buffer(child), { "缶" })
+  type("u")
+  eq(helpers.buffer(child), { "" })
+end
+
+T["the inserted text can be repeated with dot"] = function()
+  start()
+  type("Kan<Space><C-j><Esc>")
+  eq(helpers.buffer(child), { "缶" })
+  type(".")
+  eq(helpers.buffer(child), { "缶缶" })
+end
+
+T["textwidth is restored after disabling"] = function()
+  child.o.textwidth = 5
+  start()
+  eq(child.o.textwidth, 0)
+  type("<Esc>")
+  eq(child.o.textwidth, 5)
+end
+
+T["a long line is not broken by textwidth"] = function()
+  child.o.textwidth = 5
+  start()
+  type("aiueoaiueoaiueo")
+  eq(helpers.buffer(child), { "あいうえおあいうえおあいうえお" })
+end
+
+T["indent is kept by a newline"] = function()
+  child.o.autoindent = true
+  child.type_keys("i")
+  child.lua([[vim.keymap.set("i", "J", "<Plug>(skkeleton-enable)")]])
+  type("J<Tab>hoge<CR>hoge;hoge<CR><Esc>")
+  eq(helpers.buffer(child), { "\tほげ", "\tほげほげ", "" })
+end
+
+return T
