@@ -596,22 +596,13 @@ end
 -- 当てはまる違反は「既知」として出し、失敗にしない
 M.known = {}
 
--- 'list' でカーソルの直後がタブのとき、端末のカーソルが pre-edit の上に描かれる（#35）
+-- ダブルクリックで insert から直接 visual に移ると、pre-edit が残る（#28 の残り）
 M.known[#M.known + 1] = {
-  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
+  property = "preedit: extmark は insert モードの今のバッファのカーソル位置にある",
   match = function(keys)
-    return keys[1] == "#list"
+    return vim.tbl_contains(keys, "<ClickL2>")
   end,
-  reason = "#35: 'list' でカーソルの直後がタブのとき、端末のカーソルが pre-edit の上に描かれる",
-}
-
--- マクロに確定の文字列と finish() の呼び出しが入る（#36）
-M.known[#M.known + 1] = {
-  property = "macro: レジスタに skkeleton が内部で流したものが入らない",
-  match = function()
-    return true
-  end,
-  reason = "#36: skkeleton の入力をマクロに記録して再生すると、確定した文字列が二重に入って崩れる",
+  reason = "#28: ダブルクリックで insert から直接 visual に移ると、skkeleton が片付けられず pre-edit が残る",
 }
 
 function M.is_known(name, keys, msg)

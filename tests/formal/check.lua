@@ -94,6 +94,11 @@ do
     elseif k == "--config" then
       -- 再生のときの設定（ファジングの反例の「設定:」をそのまま渡す）
       opts.config, i = assert(loadstring("return " .. v))(), i + 1
+    elseif k == "--regress" then
+      -- これまでの issue の反例を流し直す（tests/formal/regressions.lua）
+      opts.regress = true
+    elseif k == "--regress-sub" then
+      opts.regress_sub = true
     elseif k == "--no-cache" then
       opts.no_cache = true
     elseif k == "--fuzz" then
@@ -541,6 +546,78 @@ local found = {}
 -- 反例を性質ごとに 1 つ覚える。既知のものと既知でないものは分けて覚える（既知の反例で隠れないように）
 local function slot(name, keys, msg)
   return spec.is_known(name, keys, msg) and (name .. "\0known") or name
+end
+
+if opts.regress and not opts.regress_sub then
+  -- プロファイルごとに自分を起こして流す（並列のワーカーはプロファイルを 1 つしか持たないため）
+  local list = dofile(here .. "/regressions.lua")
+  local by = {}
+  for _, e in ipairs(list) do
+    local p = e.profile or "default"
+    by[p] = by[p] or {}
+    table.insert(by[p], e)
+  end
+  local bad = 0
+  for p in vim.spairs(by) do
+    local r = vim
+      .system(
+        {
+          vim.v.progpath,
+          "--headless",
+          "-u",
+          "NONE",
+          "-i",
+          "NONE",
+          "-l",
+          here .. "/check.lua",
+          "--profile",
+          p,
+          "--regress",
+          "--regress-sub",
+        },
+        { env = { MINI_PATH = mini }, text = true }
+      )
+      :wait()
+    io.stdout:write(r.stdout or "")
+    if r.code ~= 0 then
+      bad = bad + 1
+    end
+  end
+  print(
+    bad == 0 and "\n✓ 回帰なし（これまでの issue の反例はすべて直ったまま）"
+      or ("\n✗ 回帰のあるプロファイル " .. bad)
+  )
+  vim.cmd(bad == 0 and "qall!" or "cquit 1")
+end
+
+if opts.regress_sub then
+  local list = dofile(here .. "/regressions.lua")
+  local items, meta = {}, {}
+  for _, e in ipairs(list) do
+    if (e.profile or "default") == opts.profile then
+      items[#items + 1] = { keys = e.keys, every = true, config = e.config }
+      meta[#meta + 1] = e
+    end
+  end
+  local failed = false
+  for idx, r in ipairs(run_parallel(items)) do
+    local e = meta[idx]
+    if r.violations then
+      failed = true
+      io.stdout:write(
+        ("✗ #%d（%s）%s\n    %s: %s\n"):format(
+          e.issue,
+          opts.profile,
+          table.concat(e.keys, " "),
+          r.violations[1].name,
+          r.violations[1].msg
+        )
+      )
+    else
+      io.stdout:write(("✓ #%d（%s）\n"):format(e.issue, opts.profile))
+    end
+  end
+  vim.cmd(failed and "cquit 1" or "qall!")
 end
 
 if opts.keys then

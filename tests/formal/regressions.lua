@@ -1,0 +1,31 @@
+-- 形式検証の PoC: これまで issue にした反例（再現のキー列）。main を取り込むたびに流し直して、
+-- 直したバグが戻っていないかを確かめる（make verify ARGS=--regress）
+return {
+  { issue = 12, keys = { "#mid", "<C-j>", "A", "<Space>", "A", "<Left>", "<CR>" } },
+  { issue = 13, keys = { "<C-j>", "Kan", "A", "A", "Kan", "<C-u>", "<CR>", "<Cmd>wincmd w<CR>", "k" } },
+  { issue = 14, keys = { "#bol", "<C-j>", "Kan", "<Space>", "<Space><Space><Space><Space>", "k" } },
+  { issue = 15, keys = { "#mid", "<C-j>", "K", "K", "<Cmd>wincmd w<CR>" } },
+  { issue = 16, profile = "edge", keys = { "#right", "Kan" } },
+  { issue = 17, profile = "misc", keys = { "#eol", "<C-r>=1<CR>" } },
+  { issue = 18, profile = "misc", keys = { "#bol", "<C-x><C-n>" } },
+  { issue = 19, profile = "misc", keys = { "#eol", "<C-j>", "Kan", "<C-n>", "R", "<C-e>" } },
+  { issue = 20, profile = "misc", keys = { "#bol", "<C-j>", "O", "<C-r>=1<CR>" } },
+  { issue = 21, profile = "wrap", keys = { "#wide", "<C-j>", "Kan" } },
+  { issue = 23, profile = "blink", keys = { "#mid", "<Tab>", "<Esc>", "i" } },
+  { issue = 24, profile = "blink", keys = { "Kanji", "<CR>", "Kan", "<C-j>" } },
+  { issue = 26, profile = "edge", keys = { "#corner", "<Left>", "<C-j>", "Kan", "A", "<Esc>", "<Right>" } },
+  { issue = 27, keys = { "#mid", "<C-c>" } },
+  { issue = 27, keys = { "#mid", "<C-j>", "Kan", "<C-c>" } },
+  { issue = 28, keys = { "#mid", "<Esc>", "v", "/", "<C-j>", "<Esc>", "c", "a", "K", "a", "n" } },
+  { issue = 28, profile = "steal", keys = { "#mid", "<C-j>", "<ClickL2>", "/", "<ClickL2>" } },
+  { issue = 29, profile = "steal", keys = { "#eol", "<C-j>", "Kan", "<Insert>", "a", "<Space>", "k" } },
+  { issue = 30, profile = "steal", keys = { "#eol", "<C-x><C-e>" } },
+  { issue = 32, profile = "steal", keys = { "#eol", "<C-j>", "<Esc>v", "<C-g>j", "a" } },
+  { issue = 34, profile = "edge", keys = { "#corner", "<C-j>", "<BS>", "Kan", "A", "<Esc>", "<BS>" } },
+  { issue = 35, profile = "options", keys = { "#list", "<C-j>", "n" } },
+  {
+    issue = 36,
+    profile = "macro",
+    keys = { "#mid", "qa", "A", "<C-j>", "K", "a", "n", "<Space>", "<CR>", "<Esc>", "q", "j", "@a" },
+  },
+}
