@@ -411,13 +411,13 @@ local I, ichild = helpers.e2e_set({ config = { indicator = {} } })
 T["indicator"] = I
 I["follows the mode"] = function()
   helpers.type(ichild, "i")
-  eq(helpers.indicator(ichild).text, "英字")
+  eq(helpers.indicator(ichild).text, "Aa")
   helpers.type(ichild, "<Plug>(skkeleton-enable)")
-  eq(helpers.indicator(ichild).text, "ひら")
+  eq(helpers.indicator(ichild).text, "あ")
   helpers.type(ichild, "q")
-  eq(helpers.indicator(ichild).text, "カタ")
+  eq(helpers.indicator(ichild).text, "ア")
   helpers.type(ichild, "<Plug>(skkeleton-disable)")
-  eq(helpers.indicator(ichild).text, "英字")
+  eq(helpers.indicator(ichild).text, "Aa")
 end
 
 return T
