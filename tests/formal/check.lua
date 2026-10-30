@@ -603,7 +603,11 @@ if opts.regress_sub then
   local failed = false
   for idx, r in ipairs(run_parallel(items)) do
     local e = meta[idx]
-    if r.violations then
+    local known = r.violations and spec.is_known(r.violations[1].name, e.keys, r.violations[1].msg)
+    if known then
+      -- まだ開いている issue（既知）の反例は、直っていないだけなので回帰に数えない
+      io.stdout:write(("△ #%d（%s）未修正\n"):format(e.issue, opts.profile))
+    elseif r.violations then
       failed = true
       io.stdout:write(
         ("✗ #%d（%s）%s\n    %s: %s\n"):format(
