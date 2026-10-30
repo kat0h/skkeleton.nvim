@@ -1,7 +1,9 @@
 # skkeleton.nvim
 
-[skkeleton](https://github.com/vim-skk/skkeleton) を Neovim 専用の Lua プラグインとして再実装するプロジェクトです。Deno と denops は要りません。[skkeleton_indicator.nvim](https://github.com/delphinus/skkeleton_indicator.nvim) の機能も内蔵する予定です。
+Neovim で SKK 方式の日本語入力をするためのプラグインです。kuuote さんの [skkeleton](https://github.com/vim-skk/skkeleton) を、Neovim 向けに Lua で書き直しています。入力モードの表示には delphinus さんの [skkeleton_indicator.nvim](https://github.com/delphinus/skkeleton_indicator.nvim) を元にしたものを内蔵する予定です。
 
-開発中です。計画は [docs/PLAN.md](docs/PLAN.md) にあります。
+いまは開発の途中で、まだ日常の入力には使えません。計画は [docs/PLAN.md](docs/PLAN.md) にあります。
 
-ライセンスは zlib です（[LICENSE](LICENSE)、移植元の表示は [LICENSES/](LICENSES/)）。
+## ライセンス
+
+zlib ライセンスです（[LICENSE](LICENSE)）。skkeleton と skkeleton_indicator.nvim の著作権表示は [LICENSES/](LICENSES/) にあります。
