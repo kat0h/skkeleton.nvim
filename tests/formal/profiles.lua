@@ -242,7 +242,7 @@ M.terminal = {
   doc = "terminal モードでの入力・変換・抜け方",
   config = {},
   alphabet = {
-    "<C-j>",
+    "<Plug>(skkeleton-toggle)",
     "k",
     "a",
     "n",
@@ -257,7 +257,13 @@ M.terminal = {
     "q",
   },
   inits = {
-    ["#term"] = { lines = { "ab cd" }, cursor = { 1, 2 }, cmd = "terminal cat", keys = "i" },
+    -- cat だと端末の消去文字（^?）と skkeleton が流す BS（^H）が合わないので、^H を消去に使う bash にする
+    ["#term"] = {
+      lines = { "ab cd" },
+      cursor = { 1, 2 },
+      cmd = "terminal env PS1='$ ' bash --norc --noprofile",
+      keys = "i",
+    },
   },
   dict = dict,
 }

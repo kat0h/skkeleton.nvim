@@ -68,7 +68,17 @@ local MUTATIONS = {
 }
 
 -- 引数
-local opts = { profile = "default", depth = 3, jobs = 8, mutate = nil, random = nil, length = 12, seed = 1, worker = nil, max_states = 400 }
+local opts = {
+  profile = "default",
+  depth = 3,
+  jobs = 8,
+  mutate = nil,
+  random = nil,
+  length = 12,
+  seed = 1,
+  worker = nil,
+  max_states = 400,
+}
 do
   local i = 1
   while i <= #arg do
@@ -129,6 +139,7 @@ local SETUP = [[
   vim.keymap.set({ "i", "c" }, "<C-j>", "<Plug>(skkeleton-toggle)")
   local function sentinel()
     vim.keymap.set("i", "<C-g>", "<Nop>", { buffer = true, desc = "user-sentinel" })
+    vim.b.formal_sentinel = true
   end
   vim.api.nvim_buf_set_lines(0, 0, -1, false, init.lines)
   sentinel()
@@ -170,7 +181,7 @@ local function start(child, mutation, init)
 end
 
 -- 流したキーが全部処理されるまで待つ。入力待ち（input() など）で止まったら false
-local function settle(child)
+local function settle_once(child)
   local quiet = 0
   for _ = 1, 1000 do
     if child.is_blocked() then
@@ -187,6 +198,18 @@ local function settle(child)
     vim.uv.sleep(1)
   end
   error("settle: the child still has pending input")
+end
+
+-- terminal ではシェルの表示が遅れて追いつくので、落ち着いたあと少し待ってもう一度待つ
+local function settle(child)
+  if not settle_once(child) then
+    return false
+  end
+  if child.lua_get("vim.bo.buftype") == "terminal" then
+    vim.uv.sleep(200)
+    return settle_once(child)
+  end
+  return true
 end
 
 local function snapshot(child)
@@ -439,7 +462,13 @@ if opts.keys then
       )
     )
     if os.getenv("FORMAL_DEBUG") then
-      print("  " .. vim.inspect({ screen = s.screen, popup = s.popup, indicator = s.indicator, win_pos = s.win_pos }, { newline = " ", indent = "" }))
+      print(
+        "  "
+          .. vim.inspect(
+            { screen = s.screen, popup = s.popup, indicator = s.indicator, win_pos = s.win_pos },
+            { newline = " ", indent = "" }
+          )
+      )
     end
     for _, v in ipairs(check(base, prev, key, s, hist)) do
       print("  ✗ " .. v.name .. ": " .. v.msg)

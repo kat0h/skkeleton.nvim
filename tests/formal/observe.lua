@@ -144,6 +144,8 @@ function M.snapshot()
     skk_maps_here = skk_maps(buf, "i"),
     skk_maps_all = all_skk_maps,
     sentinel = type(sentinel) == "table" and sentinel.desc or nil,
+    has_sentinel = vim.b[buf].formal_sentinel == true,
+    buftype = vim.bo[buf].buftype,
     textwidth = vim.bo[buf].textwidth,
     opt = {
       showCandidatesCount = options.showCandidatesCount,

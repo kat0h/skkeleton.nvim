@@ -124,6 +124,10 @@ M.state["screen: 画面の行はバッファに pre-edit を差し込んだも�
 end
 
 M.state["buffer: マーカーがバッファに漏れない"] = function(s)
+  -- terminal では pre-edit を本物の文字として流すので、pre-edit があるあいだは見ない
+  if s.buftype == "terminal" and (s.ctx_text ~= "" or registering(s)) then
+    return
+  end
   for i, l in ipairs(s.lines) do
     for _, m in ipairs(markers(s)) do
       if l:find(m, 1, true) then
@@ -155,7 +159,7 @@ M.state["disabled: マッピング・インジケータ・popup が残らない"
   if s.skk_maps_all > 0 then
     return ("無効なのに skkeleton のマッピングが %d 個"):format(s.skk_maps_all)
   end
-  if s.sentinel ~= "user-sentinel" then
+  if s.has_sentinel and s.sentinel ~= "user-sentinel" then
     return ("利用者の <C-g> のマッピングが戻っていない: %s"):format(tostring(s.sentinel))
   end
   if #s.popup > 0 then
@@ -196,7 +200,8 @@ M.state["indicator: insert では pre-edit の直後に 1 つ、normal では出
   -- 位置は枠を含めた左上
   local b = ind.border and 1 or 0
   local expect = { s.screen.row - 1 + s.ind_cfg.row, s.screen.col - 1 + s.ind_cfg.col }
-  local fits = expect[2] + ind.width + 2 * b <= s.columns and expect[1] + ind.height + 2 * b <= s.editor_lines - s.cmdheight
+  local fits = expect[2] + ind.width + 2 * b <= s.columns
+    and expect[1] + ind.height + 2 * b <= s.editor_lines - s.cmdheight
   local got = ind.pos
   if fits and (got[1] ~= expect[1] or got[2] ~= expect[2]) then
     return ("インジケータ %s、期待 %s"):format(short(got), short(expect))
@@ -342,7 +347,12 @@ M.action["keepState: insert に戻ると、抜ける前のモードで有効に�
     return
   end
   if not s.enabled or s.skk_mode ~= l.mode then
-    return ("%s で insert に戻ると enabled=%s mode=%q、抜ける前は %q"):format(key, tostring(s.enabled), s.skk_mode, l.mode)
+    return ("%s で insert に戻ると enabled=%s mode=%q、抜ける前は %q"):format(
+      key,
+      tostring(s.enabled),
+      s.skk_mode,
+      l.mode
+    )
   end
 end
 
@@ -350,6 +360,10 @@ end
 M.action["register: 取り消すと登録の前に戻る"] = function(p, key, s, hist)
   local b = hist and hist.before_register
   if not (b and registering(p) and not registering(s) and (key == "<Esc>" or key == "<C-g>")) then
+    return
+  end
+  -- terminal のバッファの行とカーソルは、動いているプログラムが決めるので比べない
+  if s.buftype == "terminal" then
     return
   end
   -- 取り消したら ▼ の前の ▽ に戻る（upstream と同じ）。行とカーソルは変わらない
@@ -463,12 +477,9 @@ M.known[#M.known + 1] = {
 M.known[#M.known + 1] = {
   property = "cmdline: カーソルの前は pre-edit で終わり、マーカーを残さない",
   match = function(keys)
-    for _, k in ipairs({ "<Left>", "<Right>", "<C-w>", "<C-u>" }) do
-      if keys[#keys] == k then
-        return true
-      end
-    end
-    return false
+    -- skkeleton が処理しないキー（Ctrl 系、<Tab>、矢印）
+    local last = keys[#keys] or ""
+    return last:match("^<C%-") ~= nil or last == "<Tab>" or last == "<Left>" or last == "<Right>"
   end,
   reason = "#12: cmdline のずれを次のキーまで見つけない",
 }
@@ -481,6 +492,45 @@ M.known[#M.known + 1] = {
   end,
   reason = "#16: 枠つきのインジケータが、画面の右端でカーソルと打った文字を隠す",
 }
+
+-- insert のまま cmdline に入って戻ると（<C-r>=）、インジケータが閉じたままになる（#17）
+M.known[#M.known + 1] = {
+  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
+  match = function(keys, msg)
+    return vim.tbl_contains(keys, "<C-r>=1<CR>") and msg and msg:find("0 個", 1, true) ~= nil
+  end,
+  reason = "#17: <C-r>= で式を入れて戻ると、インジケータが消えたままになる",
+}
+
+-- 補完のメニューで候補が入っても、インジケータが動かない（#18）
+M.known[#M.known + 1] = {
+  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
+  match = function(keys, msg)
+    local last = keys[#keys] or ""
+    return (last == "<C-x><C-n>" or last == "<C-n>" or last == "<C-p>") and msg and msg:find("期待", 1, true) ~= nil
+  end,
+  reason = "#18: 補完で候補が入ると、インジケータが元の位置に残る",
+}
+
+-- 補完が語を消して入れ直すと、extmark がずれる（#19）
+for _, property in ipairs({
+  "preedit: extmark は insert モードの今のバッファのカーソル位置にある",
+  "screen: 画面の行はバッファに pre-edit を差し込んだもの",
+  "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
+}) do
+  M.known[#M.known + 1] = {
+    property = property,
+    match = function(keys)
+      for _, k in ipairs(keys) do
+        if k == "<C-n>" or k == "<C-p>" or k == "<C-x><C-n>" then
+          return true
+        end
+      end
+      return false
+    end,
+    reason = "#19: ▽ の入力中に補完を入れたり取り消したりすると、pre-edit が行の途中に描かれる",
+  }
+end
 
 function M.is_known(name, keys, msg)
   for _, k in ipairs(M.known) do

@@ -54,13 +54,14 @@ local TMUX_KEYS = {
   ["<Esc>"] = "Escape",
   ["<Left>"] = "Left",
   ["<Right>"] = "Right",
+  ["<Tab>"] = "Tab",
 }
 
 local function tokenize(keys)
   local out = {}
   local i = 1
   while i <= #keys do
-    local s, e = keys:find("^<[%w%-]+>", i)
+    local s, e = keys:find("^<[%w%-\\]+>", i)
     if s then
       out[#out + 1] = keys:sub(s, e)
       i = e + 1
@@ -116,6 +117,14 @@ function Session.new()
     vim.uv.sleep(10)
   end
   self.chan = vim.fn.sockconnect("pipe", sock, { rpc = true })
+  -- ソケットは init.lua を読み終える前にできるので、読み終わるまで待つ
+  for _ = 1, 500 do
+    local ok, done = pcall(vim.rpcrequest, self.chan, "nvim_exec_lua", "return package.loaded['mini.test'] ~= nil", {})
+    if ok and done then
+      break
+    end
+    vim.uv.sleep(10)
+  end
   return self
 end
 
@@ -124,8 +133,11 @@ function Session:lua(code, args)
 end
 
 function Session:send(key)
+  local ctrl = key:match("^<C%-(.)>$")
   if TMUX_KEYS[key] then
     sh({ "tmux", "send-keys", "-t", self.name, TMUX_KEYS[key] })
+  elseif ctrl then
+    sh({ "tmux", "send-keys", "-t", self.name, "C-" .. ctrl:lower() })
   elseif key:match("^<Cmd>") then
     -- <Cmd> は端末から送れないので、RPC で流す
     self:lua("vim.api.nvim_input(...)", { key })
@@ -187,6 +199,7 @@ local SETUP = [[
   vim.keymap.set({ "i", "c" }, "<C-j>", "<Plug>(skkeleton-toggle)")
   local function sentinel()
     vim.keymap.set("i", "<C-g>", "<Nop>", { buffer = true, desc = "user-sentinel" })
+    vim.b.formal_sentinel = true
   end
   vim.api.nvim_buf_set_lines(0, 0, -1, false, init.lines)
   sentinel()
@@ -270,7 +283,16 @@ local function run(keys)
         local term, screen = sess:terminal()
         local s = with_terminal(snapshot(sess), term, screen)
         if opts.verbose then
-          print(("%-10s mode=%s pre-edit=%q 端末=%d,%d 行=%q"):format(key, s.vim_mode, s.ctx_text, term.row, term.col, s.term_line))
+          print(
+            ("%-10s mode=%s pre-edit=%q 端末=%d,%d 行=%q"):format(
+              key,
+              s.vim_mode,
+              s.ctx_text,
+              term.row,
+              term.col,
+              s.term_line
+            )
+          )
         end
         local msg = check_terminal(s)
         if msg then
