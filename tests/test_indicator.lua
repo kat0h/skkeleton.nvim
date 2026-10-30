@@ -400,6 +400,36 @@ T["hooks"]["fade_epoch により古いタイマーコールバックが新しい
   eq(#floats(), 0)
 end
 
+T["hooks"]["コマンドライン中の文字入力で不要な win_set_config や redraw が多重発火しない"] = function()
+  setup({ showInCmdline = true })
+  child.type_keys(":")
+  child.type_keys("abc")
+
+  child.lua([[
+    _G.calls = { win_set_config = 0, redraw = 0 }
+    local orig_win_set_config = vim.api.nvim_win_set_config
+    vim.api.nvim_win_set_config = function(...)
+      _G.calls.win_set_config = _G.calls.win_set_config + 1
+      return orig_win_set_config(...)
+    end
+    local orig_cmd = vim.cmd
+    vim.cmd = function(cmd)
+      if cmd == "redraw" then
+        _G.calls.redraw = _G.calls.redraw + 1
+      end
+      return orig_cmd(cmd)
+    end
+  ]])
+
+  -- モード変更イベント（Aa -> Aa など同一モード）での update
+  child.lua("_G.fire('skkeleton-mode-changed')")
+  local calls = child.lua_get("_G.calls")
+  eq(calls.win_set_config, 0)
+  eq(calls.redraw, 0)
+
+  child.type_keys("<Esc>")
+end
+
 T["config"] = MiniTest.new_set()
 
 T["config"]["row は border によって既定値が変わる"] = function()
