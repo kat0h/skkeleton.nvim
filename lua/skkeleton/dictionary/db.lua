@@ -40,15 +40,19 @@ function M.parse_header(s)
 end
 
 -- DB を置くディレクトリ。databasePath が無ければ stdpath("cache")/skkeleton。
--- databasePath がディレクトリでなければ（upstream ではファイルのパスだった）その親を使う
+-- databasePath がディレクトリでなければ（upstream ではファイルのパスだった）その親を使う。
+-- まだ無いパスは、拡張子があれば（"skk.db" など）ファイル、なければディレクトリとみなす
 ---@param database_path? string
 ---@return string
 function M.cache_dir(database_path)
   if database_path and database_path ~= "" then
     local p = util.expand_home(database_path)
     local st = uv.fs_stat(p)
-    if st and st.type == "directory" then
-      return p
+    if st then
+      return st.type == "directory" and p or vim.fs.dirname(vim.fs.normalize(p))
+    end
+    if p:sub(-1) == "/" or not vim.fs.basename(p):find(".", 2, true) then
+      return vim.fs.normalize(p)
     end
     return vim.fs.dirname(vim.fs.normalize(p))
   end

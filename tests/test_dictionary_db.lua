@@ -98,6 +98,19 @@ T["encoding"]["follows the coding: comment"] = function()
   )
 end
 
+T["encoding"]["treats an untagged file that is clearly UTF-8 as UTF-8"] = function()
+  eq(
+    run([[
+      return {
+        skk.load_memory(TD .. "/globalJisyo2"):get_henkan_result("okurinasi", "てすと"),
+        skk.detect_encoding(";; okuri-nasi entries.\nabc /def/\n"),
+        skk.detect_encoding("\164\162 /\164\162/"),
+      }
+    ]]),
+    { { "ﾃｽﾄ" }, "euc-jp", "euc-jp" }
+  )
+end
+
 T["encoding"]["an explicit encoding wins"] = function()
   eq(
     run([[
@@ -363,11 +376,13 @@ T["db"]["cache_dir"] = function()
       return {
         db.cache_dir(dir) == dir,
         db.cache_dir(file) == TMP .. "/old",
+        db.cache_dir(TMP .. "/not/yet") == TMP .. "/not/yet",
+        db.cache_dir(TMP .. "/not/yet/") == TMP .. "/not/yet",
         db.cache_dir(nil) == vim.fs.joinpath(vim.fn.stdpath("cache"), "skkeleton"),
         db.cache_dir("") == vim.fs.joinpath(vim.fn.stdpath("cache"), "skkeleton"),
       }
     ]]),
-    { true, true, true, true }
+    { true, true, true, true, true, true }
   )
 end
 

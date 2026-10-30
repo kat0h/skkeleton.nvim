@@ -38,7 +38,43 @@ local function normalize_encoding(name)
   return ALIASES[name] or name
 end
 
--- 文字コードを決める。指定があればそれ、無ければ先頭のコメントの `coding:`、それも無ければ EUC-JP
+-- 最初の非 ASCII のあたりが正しい UTF-8 か。EUC-JP の文字は UTF-8 としては必ず不正になるので見分けられる
+---@param data string
+local function looks_like_utf8(data)
+  local p = data:find("[\128-\255]")
+  if not p then
+    return false
+  end
+  local last = math.min(#data, p + 63)
+  while p <= last do
+    local b = data:byte(p)
+    local n
+    if b < 0x80 then
+      n = 0
+    elseif b >= 0xc2 and b <= 0xdf then
+      n = 1
+    elseif b >= 0xe0 and b <= 0xef then
+      n = 2
+    elseif b >= 0xf0 and b <= 0xf4 then
+      n = 3
+    else
+      return false
+    end
+    for i = 1, n do
+      local c = data:byte(p + i)
+      if c == nil then
+        return true -- 窓の端で切れただけ
+      elseif c < 0x80 or c > 0xbf then
+        return false
+      end
+    end
+    p = p + n + 1
+  end
+  return true
+end
+
+-- 文字コードを決める。指定があればそれ、無ければ先頭のコメントの `coding:`、
+-- それも無ければ EUC-JP（ただし中身がはっきり UTF-8 のときは UTF-8）
 ---@param data string
 ---@param encoding? string
 ---@return string
@@ -55,7 +91,7 @@ function M.detect_encoding(data, encoding)
       return normalize_encoding(c)
     end
   end
-  return "euc-jp"
+  return looks_like_utf8(data) and "utf-8" or "euc-jp"
 end
 
 -- UTF-8 の文字列にする
@@ -230,14 +266,21 @@ function M.load_json(path)
   return Memory.new(maps)
 end
 
+-- yaml と msgpack の辞書は v1 では扱わない
+---@param path string
+function M.check_supported(path)
+  local lower = path:lower()
+  if lower:match("%.ya?ml$") or lower:match("%.mpk$") then
+    error(("unsupported dictionary format (yaml and msgpack are not supported): %s"):format(path), 0)
+  end
+end
+
 -- SKK 形式のファイルをメモリに読む（DB を使わないとき用）。.json は JSON として読む
 ---@param path string
 ---@param encoding? string
 function M.load_memory(path, encoding)
-  local lower = path:lower()
-  if lower:match("%.ya?ml$") or lower:match("%.mpk$") then
-    error(("unsupported dictionary format (yaml and msgpack are not supported): %s"):format(path), 0)
-  elseif lower:match("%.json$") then
+  M.check_supported(path)
+  if path:lower():match("%.json$") then
     return M.load_json(path)
   end
   local data = M.read_file(path)
