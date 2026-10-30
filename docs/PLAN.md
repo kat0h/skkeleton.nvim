@@ -54,6 +54,23 @@
 - `bench/results/` と `docs/PLAN.md` に結論と DB の形式（v1）を書いてコミットする（`bench: ...`、`docs: decide db format`）
 - **ここで止めて、ユーザーに結果を報告する**
 
+### Phase 1 の結果（2026-10-30）
+詳しくは [bench/results/2026-10-30.md](../bench/results/2026-10-30.md)。
+
+- **C（永続キャッシュ＋ `vim.uv.fs_read` による pread）を採用する。** SKK-JISYO.L で、起動 3.1ms、検索 p50 0.011ms・p99 0.087ms、前方一致の max 0.40ms、キャッシュの生成 0.44 秒、RSS の増加 0.7MB。すべての目標を満たした。5 辞書でも、起動 3.3ms・検索 p99 0.26ms
+- 今の Deno KV と比べると、起動は約 150 倍、前方一致は 100 倍以上速い。DB の生成は 4.75 秒から 0.44 秒に、サイズは 37MB から 6.9MB になる
+- C'（FFI の mmap）は C より約 10 倍速いが、C に十分な余裕があるので v1 では入れない
+- 結果が A と一致することは、約 37 万件の照合（`bench/verify.lua`）で確かめた
+
+### DB の形式 v1（`lua/skkeleton/dictionary/db.lua` で実装する）
+`bench/lib/cache.lua` のとおり。
+- 置き場所: `stdpath("cache")/skkeleton/<元の辞書の正規化した絶対パスの sha256 の先頭 16 文字>.db`（設定の `databasePath` があればそのディレクトリ）
+- `[0,128)` のヘッダは ASCII で `SKKDB <ver> <nari> <nnasi> <src_size> <src_mtime_sec> <src_mtime_nsec>\n` を空白で埋めたもの。ヘッダのサイズと mtime が元の辞書と合わなければ作り直す
+- `[128,…)` の索引: u32 LE の行頭オフセット。okuri-ari が nari 個＋終端、okuri-nasi が nnasi 個＋終端。行の長さはオフセットの差でわかる
+- データ部: UTF-8 の `読み 候補\n` を、種類ごとにバイト順（LuaJIT の文字列比較と同じ）でソートしたもの
+- 書き込みは `.tmp` に書いてから rename する。同じ読みが 2 回あれば先のものを使う
+- 本体に入れるときに足すもの: 生成を `vim.uv` の work/スレッドかコルーチンで小分けにして UI を止めないこと。エンコーディングの指定。複数の Neovim が同時に作ろうとしたときの扱い（rename なので壊れはしない）
+
 ---
 
 ## Phase 2 以降（参考。Phase 1 のあとで判断する）
