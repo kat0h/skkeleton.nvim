@@ -265,9 +265,7 @@ function Indicator:update()
         pcall(vim.api.nvim_win_set_config, winid, new_cfg)
       end
       self:border_highlight(winid, mode)
-      if needs_move then
-        redraw_if_cmdline()
-      end
+      redraw_if_cmdline()
     else
       self:open()
     end
