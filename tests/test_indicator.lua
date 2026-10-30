@@ -19,9 +19,12 @@ local function prepare()
             width = cfg.width,
             row = cfg.row,
             col = cfg.col,
+            relative = cfg.relative,
             border = cfg.border,
             hl = marks[1] and marks[1][4].hl_group or nil,
+            marks = marks,
             winhl = vim.wo[w].winhighlight,
+            winblend = vim.wo[w].winblend,
           })
         end
       end
@@ -234,7 +237,51 @@ T["hooks"]["setup を何度呼んでも 1 つしか出ない。設定は最後�
   local f = floats()
   eq(#f, 1)
   eq(f[1].text, "英字")
-  eq(#child.api.nvim_get_autocmds({ group = "skkeleton-indicator" }), 7)
+  eq(#child.api.nvim_get_autocmds({ group = "skkeleton-indicator" }), 10)
+end
+
+T["hooks"]["style = rounded / minimal / pill と winblend が反映される"] = function()
+  setup({ style = "rounded", winblend = 15 })
+  child.type_keys("i")
+  local f1 = floats()[1]
+  eq(f1.border[1], "╭")
+  eq(f1.winblend, 15)
+  child.type_keys("<Esc>")
+
+  setup({ style = "minimal" })
+  child.g["skkeleton#mode"] = "hira"
+  child.type_keys("i")
+  local f2 = floats()[1]
+  eq(f2.text, "あ")
+  eq(f2.width, 2)
+  child.type_keys("<Esc>")
+
+  setup({ style = "pill" })
+  child.g["skkeleton#mode"] = "hira"
+  child.type_keys("i")
+  local f3 = floats()[1]
+  eq(f3.text, "\238\130\182 ひら \238\130\180")
+  eq(#f3.marks, 3)
+  eq(f3.marks[1][4].hl_group, "SkkeletonIndicatorHiraCap")
+  eq(f3.marks[2][4].hl_group, "SkkeletonIndicatorHira")
+  eq(f3.marks[3][4].hl_group, "SkkeletonIndicatorHiraCap")
+  child.type_keys("<Esc>")
+end
+
+T["hooks"]["コマンドラインモード（: や /）でもインジケーターが表示・更新・クローズされる"] = function()
+  setup({})
+  child.type_keys(":")
+  local f = floats()
+  eq(#f, 1)
+  eq(f[1].text, "英字")
+  eq(f[1].relative, "editor")
+
+  child.g["skkeleton#mode"] = "hira"
+  child.lua("_G.fire('skkeleton-mode-changed')")
+  eq(floats()[1].text, "ひら")
+
+  child.type_keys("<Esc>")
+  eq(#floats(), 0)
 end
 
 T["hooks"]["insert 中に setup すると設定が反映される"] = function()

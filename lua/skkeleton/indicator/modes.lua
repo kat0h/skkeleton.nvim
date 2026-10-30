@@ -8,10 +8,16 @@ local config = require("skkeleton.indicator.config")
 
 ---@class skkeleton.IndicatorMode
 ---@field text string
+---@field raw_text string
+---@field left_cap? string
+---@field right_cap? string
 ---@field hl_name string
+---@field cap_hl_name? string
 ---@field name skkeleton.IndicatorModeName
 ---@field width integer
 local Mode = {
+  LEFT_CAP = "\238\130\182", -- \u{e0b6} 
+  RIGHT_CAP = "\238\130\180", -- \u{e0b4} 
   -- colorscheme が無いとき（または未定義のとき）に使う既定の色
   default_hl = {
     dark = {
@@ -38,14 +44,34 @@ Mode.__index = Mode
 ---@param name skkeleton.IndicatorModeName
 ---@return skkeleton.IndicatorMode
 function Mode.new(name)
-  local self = setmetatable({ name = name, hl_name = config[name .. "_hl_name"], text = config[name .. "_text"] }, Mode)
-  self.width = vim.fn.strdisplaywidth(self.text)
+  local raw_text = config[name .. "_text"]
+  local self = setmetatable({
+    name = name,
+    hl_name = config[name .. "_hl_name"],
+    raw_text = raw_text,
+    text = raw_text,
+  }, Mode)
   local hl = vim.api.nvim_get_hl(0, { name = self.hl_name })
   local is_default_colorscheme = not vim.g.colors_name
   if vim.tbl_isempty(hl) or (is_default_colorscheme and config.use_default_highlight) then
     hl = Mode.default_hl[vim.o.background][name]
   end
   vim.api.nvim_set_hl(0, self.hl_name, hl)
+
+  if config.style == "pill" then
+    self.left_cap = Mode.LEFT_CAP
+    self.right_cap = Mode.RIGHT_CAP
+    self.text = Mode.LEFT_CAP .. " " .. raw_text .. " " .. Mode.RIGHT_CAP
+    self.cap_hl_name = self.hl_name .. "Cap"
+    local resolved = vim.api.nvim_get_hl(0, { name = self.hl_name, link = false })
+    vim.api.nvim_set_hl(0, self.cap_hl_name, {
+      fg = resolved.bg or hl.bg,
+      ctermfg = resolved.ctermbg or hl.ctermbg,
+      bg = "NONE",
+    })
+  end
+
+  self.width = vim.fn.strdisplaywidth(self.text)
   return self
 end
 
@@ -66,6 +92,16 @@ end
 ---@return boolean
 function Modes.is_insert()
   return vim.api.nvim_get_mode().mode:sub(1, 1) == "i"
+end
+
+---@return boolean
+function Modes.is_cmdline()
+  return vim.api.nvim_get_mode().mode:sub(1, 1) == "c"
+end
+
+---@return boolean
+function Modes.is_active()
+  return Modes.is_insert() or (config.show_in_cmdline and Modes.is_cmdline())
 end
 
 -- g:skkeleton#mode から今のモードを引く。空や未知の名前は英字にする
