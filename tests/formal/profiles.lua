@@ -159,6 +159,8 @@ M.cmdline = {
   doc = "コマンドライン（:）の中での入力・変換・取り消し",
   config = {},
   alphabet = {
+    "<C-y>", -- skkeleton を通らずに文字が入るキー
+    "<C-k>a:",
     "<C-j>",
     "k",
     "a",

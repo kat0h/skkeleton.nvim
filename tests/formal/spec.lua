@@ -734,6 +734,20 @@ M.known[#M.known + 1] = {
   reason = "#45: 組み込みの補完（<C-x><C-u>）で、カーソルの前の文字まで候補で置き換えられて消える",
 }
 
+-- cmdline の pre-edit の後ろに skkeleton を通らずに文字が入ると、▽ が残る（#12 の残り）
+M.known[#M.known + 1] = {
+  property = "cmdline: pre-edit が無ければマーカーを残さない",
+  match = function(keys)
+    for _, k in ipairs(keys) do
+      if k == "<C-y>" or k:match("^<C%-k>") then
+        return true
+      end
+    end
+    return false
+  end,
+  reason = "#12: cmdline の pre-edit の後ろに skkeleton を通らずに文字が入ると、▽ が残る",
+}
+
 function M.is_known(name, keys, msg)
   for _, k in ipairs(M.known) do
     if k.property == name and k.match(keys, msg) then
