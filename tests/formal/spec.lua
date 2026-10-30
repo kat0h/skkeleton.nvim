@@ -90,7 +90,8 @@ end
 
 M.state["screen: 画面の行はバッファに pre-edit を差し込んだもの"] = function(s)
   -- float の中では headless の screenrow()/screencol() が正しい値を返さない
-  if not insert_mode(s) or s.pending or s.screen_row <= 0 or s.win_float then
+  -- 'list' のときは listchars（タブや行末の空白の記号）で画面が変わるので比べない
+  if not insert_mode(s) or s.pending or s.screen_row <= 0 or s.win_float or s.list then
     return
   end
   local line = cur_line(s)
@@ -594,6 +595,15 @@ M.known[#M.known + 1] = {
     return keys[1] == "#corner" or keys[1] == "#bottom" or (msg and msg:find("@@", 1, true) ~= nil)
   end,
   reason = "#34: ウィンドウの最後の行の右端で入力すると、折り返した pre-edit が @@@ で隠れて見えない",
+}
+
+-- 'list' でカーソルの直後がタブのとき、端末のカーソルが pre-edit の上に描かれる（#35）
+M.known[#M.known + 1] = {
+  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
+  match = function(keys)
+    return keys[1] == "#list"
+  end,
+  reason = "#35: 'list' でカーソルの直後がタブのとき、端末のカーソルが pre-edit の上に描かれる",
 }
 
 function M.is_known(name, keys, msg)

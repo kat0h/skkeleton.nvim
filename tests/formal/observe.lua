@@ -187,6 +187,7 @@ function M.snapshot()
     end)(),
     columns = vim.o.columns,
     ambiwidth = vim.o.ambiwidth,
+    list = vim.wo[win].list,
     editor_lines = vim.o.lines,
     cmdheight = vim.o.cmdheight,
     want_indicator = ok_mode and want_indicator or nil,
