@@ -20,5 +20,9 @@ zlib ライセンスの条件 2（改変したソースは、改変したこと�
 - upstream が使っている npm/JSR のパッケージ（`@geolonia/japanese-numeral`（MIT）、`cr-numeral` など）のコード。数値変換などは仕様を見て自分で書き、コードは写さない
 - mini.nvim（MIT）。テストのときだけ `.tests/` に clone し、リポジトリには入れない
 
+## ドキュメント
+`doc/skkeleton.txt` の文章は、skkeleton の `doc/skkeleton.jax`、`doc/skkeleton-functions.jax`（zlib, © 2021 kuuote）と、skkeleton_indicator.nvim の `doc/skkeleton_indicator.jax`（zlib, © 2021 Yasushi Jinnouchi）を元に、skkeleton.nvim の動作に合わせて書き直したもの。移植元と改変したことは、doc の先頭に書いてある。
+
 ## テストデータ
+
 `tests/testdata/` は skkeleton の `denops/skkeleton/testdata/` の写し（zlib, © 2021 kuuote）。

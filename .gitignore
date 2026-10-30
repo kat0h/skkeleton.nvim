@@ -1,3 +1,4 @@
 /bench/out/
 /.tests/
 *.db
+/doc/tags
