@@ -77,17 +77,20 @@ for _, qq in ipairs(queries) do
   end
 end
 
-io.stdout:write(vim.json.encode({
-  kind = "run",
-  impl = name,
-  dicts = vim.tbl_map(vim.fs.basename, srcs),
-  open_ms = (t1 - t0) / 1e6,
-  first_lookup_ms = (t2 - t1) / 1e6,
-  ready_ms = (t2 - t0) / 1e6,
-  lua_heap_mb = (gc1 - gc0) / 1024,
-  rss_mb = (rss1 - rss0) / 1024,
-  hit_found = found,
-  lookup = stats(lookup_t),
-  miss = stats(miss_t),
-  prefix = stats(prefix_t),
-}), "\n")
+io.stdout:write(
+  vim.json.encode({
+    kind = "run",
+    impl = name,
+    dicts = vim.tbl_map(vim.fs.basename, srcs),
+    open_ms = (t1 - t0) / 1e6,
+    first_lookup_ms = (t2 - t1) / 1e6,
+    ready_ms = (t2 - t0) / 1e6,
+    lua_heap_mb = (gc1 - gc0) / 1024,
+    rss_mb = (rss1 - rss0) / 1024,
+    hit_found = found,
+    lookup = stats(lookup_t),
+    miss = stats(miss_t),
+    prefix = stats(prefix_t),
+  }),
+  "\n"
+)

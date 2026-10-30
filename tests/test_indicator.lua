@@ -316,29 +316,32 @@ end
 
 T["strings"]["snake_case_dict"] = function()
   local snake_case_dict = require("skkeleton.indicator.strings").snake_case_dict
-  eq(snake_case_dict({
-    eijiHlName = "SkkeletonIndicatorEiji",
-    hiraHlName = "SkkeletonIndicatorHira",
-    kataHlName = "SkkeletonIndicatorKata",
-    hankataHlName = "SkkeletonIndicatorHankata",
-    eijiText = "英字",
-    hiraText = "ひら",
-    kataText = "カタ",
-    hankataText = "半ｶﾀ",
-    fadeOutMs = 3000,
-    ignoreFt = {},
-  }), {
-    eiji_hl_name = "SkkeletonIndicatorEiji",
-    hira_hl_name = "SkkeletonIndicatorHira",
-    kata_hl_name = "SkkeletonIndicatorKata",
-    hankata_hl_name = "SkkeletonIndicatorHankata",
-    eiji_text = "英字",
-    hira_text = "ひら",
-    kata_text = "カタ",
-    hankata_text = "半ｶﾀ",
-    fade_out_ms = 3000,
-    ignore_ft = {},
-  })
+  eq(
+    snake_case_dict({
+      eijiHlName = "SkkeletonIndicatorEiji",
+      hiraHlName = "SkkeletonIndicatorHira",
+      kataHlName = "SkkeletonIndicatorKata",
+      hankataHlName = "SkkeletonIndicatorHankata",
+      eijiText = "英字",
+      hiraText = "ひら",
+      kataText = "カタ",
+      hankataText = "半ｶﾀ",
+      fadeOutMs = 3000,
+      ignoreFt = {},
+    }),
+    {
+      eiji_hl_name = "SkkeletonIndicatorEiji",
+      hira_hl_name = "SkkeletonIndicatorHira",
+      kata_hl_name = "SkkeletonIndicatorKata",
+      hankata_hl_name = "SkkeletonIndicatorHankata",
+      eiji_text = "英字",
+      hira_text = "ひら",
+      kata_text = "カタ",
+      hankata_text = "半ｶﾀ",
+      fade_out_ms = 3000,
+      ignore_ft = {},
+    }
+  )
 end
 
 return T

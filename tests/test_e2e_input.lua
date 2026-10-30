@@ -49,7 +49,13 @@ local cases = {
   { "<Bar> is input", "|", { "|" }, "", "hira" },
   { "<lt> is passed to the kana table", "<LT>", { "" }, "<", "hira" },
   { "space without pre-edit", "ka ka", { "か か" }, "", "hira" },
-  { "okurinasi with a candidate that has an annotation-less single entry", "Nihon<Space><C-j>", { "日本" }, "", "hira" },
+  {
+    "okurinasi with a candidate that has an annotation-less single entry",
+    "Nihon<Space><C-j>",
+    { "日本" },
+    "",
+    "hira",
+  },
 }
 
 for _, c in ipairs(cases) do

@@ -138,7 +138,10 @@ end
 
 T["wrap"]["converts numbers (upstream: get num candidates)"] = function()
   local d = N.wrap(memory({ okurinasi = { ["#ばん"] = "/#番/#1番/#2番/#3番/#8番/#5番/" } }))
-  eq(d:get_henkan_result("okurinasi", "101ばん"), { "101番", "１０１番", "一〇一番", "百一番", "CI番", "佰壱番" })
+  eq(
+    d:get_henkan_result("okurinasi", "101ばん"),
+    { "101番", "１０１番", "一〇一番", "百一番", "CI番", "佰壱番" }
+  )
   eq(d:get_henkan_result("okurinasi", "ばん"), {})
 end
 

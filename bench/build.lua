@@ -9,5 +9,8 @@ for _, src in ipairs(arg) do
   local t0 = boot.now()
   cache.build(src, dst)
   local ms = (boot.now() - t0) / 1e6
-  io.stdout:write(vim.json.encode({ kind = "build", dict = vim.fs.basename(src), ms = ms, bytes = vim.uv.fs_stat(dst).size }), "\n")
+  io.stdout:write(
+    vim.json.encode({ kind = "build", dict = vim.fs.basename(src), ms = ms, bytes = vim.uv.fs_stat(dst).size }),
+    "\n"
+  )
 end

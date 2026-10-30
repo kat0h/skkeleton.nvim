@@ -59,8 +59,7 @@ end
 function M.newline(ctx)
   local st = ctx.state
   local insert_newline = not (
-    options.eggLikeNewline
-    and (st.type == "henkan" or (st.type == "input" and st.mode ~= "direct"))
+    options.eggLikeNewline and (st.type == "henkan" or (st.type == "input" and st.mode ~= "direct"))
   )
   M.kakutei(ctx)
   if insert_newline then

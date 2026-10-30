@@ -52,8 +52,14 @@ T["state.to_string"] = function()
     { [[{ mode = "okurinasi", henkan_feed = "かん", feed = "j" }]], "▽かんj" },
     { [[{ mode = "okuriari", henkan_feed = "か", okuri_feed = "ん", feed = "j" }]], "▽か*んj" },
     { [[{ mode = "okuriari", henkan_feed = "や", feed = "t", previous_feed = true }]], "▽やt*" },
-    { [[{ mode = "okurinasi", henkan_feed = "ほげ", converter = require("skkeleton.kana.hira_kata").hira_to_kata }]], "▽ホゲ" },
-    { [[{ type = "henkan", candidates = { "変換;注釈" }, candidate_index = 0, okuri_feed = "った" }]], "▼変換った" },
+    {
+      [[{ mode = "okurinasi", henkan_feed = "ほげ", converter = require("skkeleton.kana.hira_kata").hira_to_kata }]],
+      "▽ホゲ",
+    },
+    {
+      [[{ type = "henkan", candidates = { "変換;注釈" }, candidate_index = 0, okuri_feed = "った" }]],
+      "▼変換った",
+    },
     {
       [[{ type = "henkan", candidates = { "変換" }, candidate_index = 0, okuri_feed = "った", converter = function(x) return x .. "X" end }]],
       "▼変換ったX",
@@ -74,7 +80,10 @@ T["state.to_string follows config markers"] = function()
     require("skkeleton.config").set({ markerHenkan = "[", markerHenkanSelect = "<" })
     state = require("skkeleton.state")
   ]])
-  eq(child.lua_get([[state.to_string({ type = "henkan", candidates = { "a" }, candidate_index = 0, okuri_feed = "" })]]), "<a")
+  eq(
+    child.lua_get([[state.to_string({ type = "henkan", candidates = { "a" }, candidate_index = 0, okuri_feed = "" })]]),
+    "<a"
+  )
 end
 
 T["candidate.modify"] = function()
@@ -113,7 +122,10 @@ T["context"] = function()
   child.lua([[
     ctx = require("skkeleton.context").new()
   ]])
-  eq(child.lua_get([[{ ctx.mode, ctx.vim_mode, ctx.state.type, ctx.last_candidate.word, ctx:to_string() }]]), { "hira", "", "input", "", "" })
+  eq(
+    child.lua_get([[{ ctx.mode, ctx.vim_mode, ctx.state.type, ctx.last_candidate.word, ctx:to_string() }]]),
+    { "hira", "", "input", "", "" }
+  )
   -- undo point は insert モードだけ
   eq(
     child.lua_get([[

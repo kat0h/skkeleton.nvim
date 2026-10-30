@@ -32,7 +32,16 @@ for _, src in ipairs(arg) do
         if got ~= want then
           failed = failed + 1
           if failed <= 20 then
-            print(("MISMATCH %s %s %s %q: want %q got %q"):format(vim.fs.basename(src), name, kind, k, tostring(want), tostring(got)))
+            print(
+              ("MISMATCH %s %s %s %q: want %q got %q"):format(
+                vim.fs.basename(src),
+                name,
+                kind,
+                k,
+                tostring(want),
+                tostring(got)
+              )
+            )
           end
         end
       end

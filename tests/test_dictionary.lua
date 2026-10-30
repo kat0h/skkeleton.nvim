@@ -42,12 +42,10 @@ end
 
 local function for_each_backend(path, enc, body, expected)
   for _, name in ipairs({ "memory", "db" }) do
-    local got = run(
-      ([[
+    local got = run(([[
         local d = backends(%q, %s)[%q]
         %s
-      ]]):format(path, enc and ("%q"):format(enc) or "nil", name, body)
-    )
+      ]]):format(path, enc and ("%q"):format(enc) or "nil", name, body))
     eq({ name, got }, { name, expected })
   end
 end
@@ -268,7 +266,12 @@ T["load(cfg)"]["builds a Library from the config"] = function()
         files,
       }
     ]]),
-    { { "test", "テスト", "ﾃｽﾄ" }, { "5番", "５番", "五番", "V番", "伍番" }, { "悪" }, { "db", "db", "db" } }
+    {
+      { "test", "テスト", "ﾃｽﾄ" },
+      { "5番", "５番", "五番", "V番", "伍番" },
+      { "悪" },
+      { "db", "db", "db" },
+    }
   )
 end
 
@@ -399,7 +402,6 @@ T["prepare"] = function()
     { false, 2, { "テスト", "test" }, { "🐈" }, { "茜" } }
   )
 end
-
 
 T["update_database"] = function()
   eq(
