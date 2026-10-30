@@ -427,6 +427,34 @@ end
 
 M.action = {}
 
+-- 候補一覧（popup）で選択キーを押すと、そのページの i 番目の候補が、カーソルの位置にそのまま確定する
+local SELECT = { a = 1, s = 2, d = 3, f = 4, j = 5, k = 6, l = 7 }
+M.action["popup: 選択キーで選んだ候補が確定する"] = function(p, key, s)
+  local i = SELECT[key]
+  if not i or not p.want_popup or #p.popup ~= 1 or not insert_mode(p) or not insert_mode(s) then
+    return
+  end
+  local cand = p.want_popup[i]
+  if not cand then
+    return
+  end
+  cand = cand:gsub(";.*$", "")
+  local pl = cur_line(p)
+  local before, after = pl:sub(1, p.cursor[2]), pl:sub(p.cursor[2] + 1)
+  local want = before .. cand .. after
+  -- 送り仮名つき（▼悪る など）のときは送り仮名も入るので、候補が入っていることだけを見る
+  local sl = table.concat(s.lines, "\n")
+  if not sl:find(before .. cand, 1, true) or s.ctx_text ~= "" then
+    return ("%s で %q を選んだはずが、行 %q（pre-edit %q）、期待 %q"):format(
+      key,
+      cand,
+      cur_line(s),
+      s.ctx_text,
+      want
+    )
+  end
+end
+
 -- upstream #41 の型: normal の u と <C-r> は、これまでに観測したバッファの状態のどれかに戻る
 -- （入力の途中の、存在しなかった状態にはならない）
 M.action["undo: u と <C-r> は観測したことのある状態に戻る"] = function(p, key, s, hist)
