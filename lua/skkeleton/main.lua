@@ -78,6 +78,10 @@ local function check_stale()
   update_state_variable()
   doautocmd("skkeleton-handled")
   require("skkeleton.indicator").move()
+  -- 折り返した pre-edit でウィンドウに収まらず @ になっていた行は、extmark を消しても描き直されない
+  if vm == "i" and vim.api.nvim__redraw then
+    pcall(vim.api.nvim__redraw, { win = 0, valid = false })
+  end
 end
 
 -- 最初に使うときに一度だけ呼ぶ。autocmd を作り、skkeleton-initialize-pre/post を発火する
