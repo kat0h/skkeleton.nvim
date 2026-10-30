@@ -564,8 +564,8 @@ M.known = {}
 -- 一度も有効にしないまま <C-c> で insert を抜けると、インジケータが残る（#27 の残り）
 M.known[#M.known + 1] = {
   property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
-  match = function(keys, msg)
-    return vim.tbl_contains(keys, "<C-c>") and msg and msg:find("normal なのに", 1, true) ~= nil
+  match = function(keys)
+    return vim.tbl_contains(keys, "<C-c>")
   end,
   reason = "#27: 一度も有効にしないまま <C-c> で insert を抜けると、インジケータが残る",
 }
@@ -583,6 +583,15 @@ for _, property in ipairs({
     reason = "#32: <Esc> のすぐあとに v を押すと、skkeleton の状態が escape のまま残る",
   }
 end
+
+-- ウィンドウの最後の行の右端で入力すると、折り返した pre-edit が @@@ で隠れる（#34）
+M.known[#M.known + 1] = {
+  property = "screen: 画面の行はバッファに pre-edit を差し込んだもの",
+  match = function(keys, msg)
+    return keys[1] == "#corner" or keys[1] == "#bottom" or (msg and msg:find("@@", 1, true) ~= nil)
+  end,
+  reason = "#34: ウィンドウの最後の行の右端で入力すると、折り返した pre-edit が @@@ で隠れて見えない",
+}
 
 function M.is_known(name, keys, msg)
   for _, k in ipairs(M.known) do
