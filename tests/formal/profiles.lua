@@ -545,6 +545,37 @@ M.undo = {
   dict = dict,
 }
 
+-- Neovim 組み込みの補完（completefunc と <C-x><C-u>）
+M.native = {
+  doc = "組み込みの補完（completefunc・<C-x><C-u>）で、▽ の読みから候補を選んで確定する",
+  config = {},
+  setup = [[
+    for _, b in ipairs(vim.api.nvim_list_bufs()) do
+      vim.bo[b].completefunc = "v:lua.require'skkeleton.completion'.completefunc"
+    end
+  ]],
+  alphabet = {
+    "<C-j>",
+    "Kanj",
+    "Kanji",
+    "Kan",
+    "a",
+    "<C-x><C-u>",
+    "<C-n>",
+    "<C-p>",
+    "<C-y>",
+    "<C-e>",
+    "<CR>",
+    "<BS>",
+    "<C-g>",
+    "<Esc>",
+    "i",
+    "<Space>",
+  },
+  inits = line_inits,
+  dict = dict,
+}
+
 -- インジケータを切ったもの（ちらつきなどの原因がインジケータかを切り分けるため）
 M.noindicator = {
   doc = "インジケータを切った既定の設定（原因の切り分け用）",

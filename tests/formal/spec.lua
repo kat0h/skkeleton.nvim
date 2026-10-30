@@ -444,6 +444,21 @@ end
 
 M.action = {}
 
+-- 組み込みの補完（<C-x><C-u>）は pre-edit の読みだけを候補で置き換え、カーソルの前にあった文字は消さない
+M.action["completion: <C-x><C-u> でカーソルの前の文字が消えない"] = function(p, key, s)
+  if key ~= "<C-x><C-u>" or not insert_mode(p) or p.buf ~= s.buf or p.cursor[1] ~= s.cursor[1] then
+    return
+  end
+  local before = cur_line(p):sub(1, p.cursor[2])
+  if cur_line(s):sub(1, #before) ~= before then
+    return ("<C-x><C-u> で、カーソルの前の %q が消えた（行 %q -> %q）"):format(
+      before,
+      cur_line(p),
+      cur_line(s)
+    )
+  end
+end
+
 -- 候補一覧（popup）で選択キーを押すと、そのページの i 番目の候補が、カーソルの位置にそのまま確定する
 local SELECT = { a = 1, s = 2, d = 3, f = 4, j = 5, k = 6, l = 7 }
 M.action["popup: 選択キーで選んだ候補が確定する"] = function(p, key, s)
@@ -708,6 +723,15 @@ M.known[#M.known + 1] = {
     return msg and msg:find("^hist ") ~= nil
   end,
   reason = "#44: 辞書登録の欄の入力の履歴に、▽ のマーカーごと pre-edit が残る",
+}
+
+-- 組み込みの補完で、カーソルの前の文字まで置き換えられる（#45）
+M.known[#M.known + 1] = {
+  property = "completion: <C-x><C-u> でカーソルの前の文字が消えない",
+  match = function()
+    return true
+  end,
+  reason = "#45: 組み込みの補完（<C-x><C-u>）で、カーソルの前の文字まで候補で置き換えられて消える",
 }
 
 function M.is_known(name, keys, msg)

@@ -357,7 +357,7 @@ function Session:stop()
 end
 
 local SETUP = [[
-  local dir, extra, init, plain = ...
+  local dir, extra, init, plain, extra_code = ...
   vim.o.textwidth = 78
   for _, k in ipairs({ "K", "Q", "gQ" }) do vim.keymap.set({ "n", "x" }, k, "<Nop>") end
   if not init.allow_q then vim.keymap.set({ "n", "x" }, "q", "<Nop>") end
@@ -400,6 +400,8 @@ local SETUP = [[
   vim.api.nvim_win_set_cursor(0, init.cursor)
   if init.cmd then vim.cmd(init.cmd) end
   vim.api.nvim_create_autocmd("CmdlineLeave", { pattern = ":", command = "let v:event.abort = v:true" })
+  -- プロファイルの追加の設定（completefunc や blink.cmp など）
+  if extra_code and not plain then assert(loadstring(extra_code))() end
 ]]
 
 local function snapshot(sess)
@@ -453,7 +455,7 @@ local function run(keys, plain)
   local ok, err = pcall(function()
     init = vim.deepcopy(init)
     init.allow_q = profile.allow_q
-    sess:lua(SETUP, { sess.dir, profile.config, init, plain or false })
+    sess:lua(SETUP, { sess.dir, profile.config, init, plain or false, profile.setup or false })
     for _, k in ipairs(tokenize(init.keys)) do
       sess:send(k)
     end
