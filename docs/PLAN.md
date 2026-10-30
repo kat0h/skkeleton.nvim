@@ -5,17 +5,17 @@
 
 決まっていること:
 - 対象は Neovim 専用（手元は v0.12.5）。設定は Lua API だけ（`require("skkeleton").setup{}`）
-- 新しいリポジトリ: `~/ghq/github.com/kat0h/skkeleton.nvim`
+- 新しいリポジトリ: kat0h/skkeleton.nvim
 - v1 の範囲: コアの変換、SKK 辞書、ユーザー辞書、**Deno KV に相当する DB**、**skkeleton_indicator.nvim の機能の内蔵**
 - v1 の範囲外: skkserv、Google 日本語入力、補完、rank file
 - ライセンスは zlib。skkeleton（© kuuote）と skkeleton_indicator（© Yasushi Jinnouchi）の著作権表示を残す
 
-**この計画で今回やるのは Phase 0（リポジトリを作って計画を記録する）と Phase 1（KV 相当が Lua で実用的な速度になるかの検証）だけ。** 本体の開発は、Phase 1 の結果を見てユーザーが判断してから始める。
+**この計画で今回やるのは Phase 0（リポジトリを作って計画を記録する）と Phase 1（KV 相当が Lua で実用的な速度になるかの検証）だけ。** 本体の開発は、Phase 1 の結果を見て判断してから始める。
 
 ---
 
 ## Phase 0: リポジトリを作り、計画を記録する
-1. `mkdir -p ~/ghq/github.com/kat0h/skkeleton.nvim && git init`（ブランチは main）
+1. リポジトリを作る（ブランチは main）
 2. この計画を `docs/PLAN.md` として置く。README は最小限、LICENSE は zlib で両方の著作権表示を入れる。`.gitignore` も置く
 3. コミットは 1 つ: `docs: add implementation plan`
 - コミットの粒度の方針（`docs/PLAN.md` にも書く）: 1 コミット = 1 つの意味のある単位（1 つの機能、1 つの修正、1 回のベンチ結果）。必ずテストが通る状態でコミットする。メッセージは Conventional Commits 風（`feat:`、`fix:`、`test:`、`bench:`、`docs:`）
@@ -52,7 +52,7 @@
 ### 結論の出し方
 - 採用は「目標を満たす実装のうち、いちばん単純でポータブルなもの」。たぶん C、C の検索が遅ければ C'
 - `bench/results/` と `docs/PLAN.md` に結論と DB の形式（v1）を書いてコミットする（`bench: ...`、`docs: decide db format`）
-- **ここで止めて、ユーザーに結果を報告する**
+- **ここで一度止め、結果を見て本体を作るかを決める**
 
 ### Phase 1 の結果（2026-10-30）
 詳しくは [bench/results/2026-10-30.md](../bench/results/2026-10-30.md)。
@@ -94,11 +94,11 @@
 1. テスト基盤 → 2. config/notation/kana の trie/state → 3. input の関数群と preedit（ひらがなの直接入力）→ 4. enable/disable とキーマップ → 5. 辞書（db/skk/user）、henkan、popup、数値変換 → 6. モード、abbrev、辞書登録、kakuteiUndo、purgeCandidate → 7. cmdline/terminal → 8. indicator → 9. doc と CI
 
 ## 確認の方法（Phase 0/1）
-- Phase 0: `git -C ~/ghq/github.com/kat0h/skkeleton.nvim log --oneline` で計画のコミットが 1 つあること
-- Phase 1: `nvim --headless -u NONE -l bench/verify.lua` がすべての実装で 0 件不一致になること、`bench/run.lua` の結果の表が目標と並べて `bench/results/` に保存されていること。その表を使ってユーザーに報告する
+- Phase 0: `git log --oneline` で計画のコミットが 1 つあること
+- Phase 1: `nvim --headless -u NONE -l bench/verify.lua` がすべての実装で 0 件不一致になること、`bench/run.lua` の結果の表が目標と並べて `bench/results/` に保存されていること
 
 ## Phase 2 の進め方（2026-10-30）
-- モジュールの担当とインターフェースは [docs/ARCHITECTURE.md](ARCHITECTURE.md) に定義した。実装はサブエージェントに分担して進め、タスクは GitHub の issue で管理する
+- モジュールの構成とインターフェースは [docs/ARCHITECTURE.md](ARCHITECTURE.md) に定義した。タスクは GitHub の issue で管理する
 - 計画からの変更点: 確定した文字列は `nvim_buf_set_text` ではなく、upstream と同様に `feedkeys` で送出する。autoindent（upstream の「new line」のテスト）、`<C-g>u` の undo point、`.` のリピート、略語展開などの挙動を維持するため。pre-edit を extmark で表示する点は変わらない
 - upstream の対象バージョン（`770b265d`）には `kakuteiUndo` が存在しないため、v1 の対象範囲から外す
 
