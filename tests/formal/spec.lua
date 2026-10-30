@@ -4,8 +4,9 @@
 -- どちらも違反なら説明の文字列を、成り立てば nil を返す
 local M = {}
 
-local SHOW_CANDIDATES = 4 -- config の showCandidatesCount の既定
-local MARKERS = { "▽", "▼" }
+local function markers(s)
+  return { s.opt.markerHenkan, s.opt.markerHenkanSelect }
+end
 
 local function width(s)
   return vim.fn.strdisplaywidth(s)
@@ -72,30 +73,59 @@ end
 
 -- 実装に依らない観測で確かめる: 画面の行は「カーソルの前 + pre-edit + 注釈 + カーソルの後」で、
 -- 端末のカーソルは pre-edit の直後にある（upstream でバッファに文字を書いていたときと同じ見え方）
+-- 文字列を画面の 1 桁ごとに分ける（全角の 2 桁目は ""）
+local function cells_of(str)
+  local out = {}
+  for _, ch in ipairs(vim.fn.split(str, "\\zs")) do
+    out[#out + 1] = ch
+    for _ = 2, width(ch) do
+      out[#out + 1] = ""
+    end
+  end
+  return out
+end
+
 M.state["screen: 画面の行はバッファに pre-edit を差し込んだもの"] = function(s)
-  if not insert_mode(s) or s.pending then
+  if not insert_mode(s) or s.pending or s.screen_row <= 0 then
     return
   end
   local line = cur_line(s)
-  -- タブなどの制御文字は画面で展開されるので比べない
   if line:find("%c") then
     return
   end
   local before, after = line:sub(1, s.cursor[2]), line:sub(s.cursor[2] + 1)
-  local expect = (before .. mark_text(s) .. annot_text(s) .. after):gsub("%s+$", "")
-  local avail = s.win_width - s.textoff
-  if width(expect) <= avail and s.screen_line ~= expect then
-    return ("画面 %q、期待 %q"):format(s.screen_line, expect)
+  local expect = cells_of(before .. mark_text(s) .. annot_text(s) .. after)
+  -- float（インジケータの枠など）が重なる桁から右は比べない
+  local left0 = s.win_pos[2] + s.textoff
+  local limit = s.win_width - s.textoff
+  for _, f in ipairs(vim.list_extend(vim.list_slice(s.popup), s.indicator)) do
+    local b = f.border and 1 or 0
+    if s.screen_row - 1 >= f.pos[1] and s.screen_row - 1 < f.pos[1] + f.height + 2 * b then
+      limit = math.min(limit, f.pos[2] - left0)
+    end
+  end
+  for i = 1, math.min(limit, #expect) do
+    local got = s.screen_cells[i] or ""
+    local want = expect[i]
+    if got ~= want and not (want == " " and got == "") then
+      return ("画面 %q、期待 %q（%d 桁目）"):format(s.screen_line, table.concat(expect), i)
+    end
+  end
+  -- 枠つきの float が出ていると、headless の screencol() は正しい値を返さない（端末では正しい。tui.lua で確かめる）
+  for _, f in ipairs(vim.list_extend(vim.list_slice(s.popup), s.indicator)) do
+    if f.border then
+      return
+    end
   end
   local col = s.win_pos[2] + s.textoff + width(before .. mark_text(s)) + 1
-  if width(before .. mark_text(s)) < avail and s.screen.col ~= col then
+  if width(before .. mark_text(s)) < limit and s.screen.col ~= col then
     return ("画面のカーソル列 %d、期待 %d"):format(s.screen.col, col)
   end
 end
 
 M.state["buffer: マーカーがバッファに漏れない"] = function(s)
   for i, l in ipairs(s.lines) do
-    for _, m in ipairs(MARKERS) do
+    for _, m in ipairs(markers(s)) do
       if l:find(m, 1, true) then
         return ("%d 行目 %q に %s"):format(i, l, m)
       end
@@ -142,7 +172,7 @@ M.state["mapping: 有効なら今のバッファにマッピングがある"] = 
   end
 end
 
--- alwaysShown（既定 true）なので、無効でも insert モードでは出る。normal では出ない
+-- alwaysShown（既定 true）なら、無効でも insert モードでは出る。normal では出ない
 M.state["indicator: insert では pre-edit の直後に 1 つ、normal では出ない"] = function(s)
   if s.vim_mode == "n" then
     if #s.indicator > 0 then
@@ -153,13 +183,22 @@ M.state["indicator: insert では pre-edit の直後に 1 つ、normal では出
   if not insert_mode(s) then
     return
   end
-  if #s.indicator ~= 1 then
-    return ("インジケータが %d 個"):format(#s.indicator)
+  local want = (s.enabled or s.ind_cfg.always_shown) and 1 or 0
+  if #s.indicator ~= want then
+    return ("インジケータが %d 個（%d のはず）"):format(#s.indicator, want)
   end
-  -- 既定の row = 1、col = 1。画面のカーソル（pre-edit の直後）の 1 行下、1 桁右
-  local expect = { s.screen.row, s.screen.col }
-  local got = s.indicator[1].pos
-  if got[1] ~= expect[1] or got[2] ~= expect[2] then
+  if want == 0 then
+    return
+  end
+  -- 画面のカーソル（pre-edit の直後）から row 行下、col 桁右。枠があれば枠の分だけ中身がずれる。
+  -- 画面の端で押し戻されるときは、位置は確かめない（「float: 画面に収まる」で確かめる）
+  local ind = s.indicator[1]
+  -- 位置は枠を含めた左上
+  local b = ind.border and 1 or 0
+  local expect = { s.screen.row - 1 + s.ind_cfg.row, s.screen.col - 1 + s.ind_cfg.col }
+  local fits = expect[2] + ind.width + 2 * b <= s.columns and expect[1] + ind.height + 2 * b <= s.editor_lines - s.cmdheight
+  local got = ind.pos
+  if fits and (got[1] ~= expect[1] or got[2] ~= expect[2]) then
     return ("インジケータ %s、期待 %s"):format(short(got), short(expect))
   end
 end
@@ -168,7 +207,7 @@ M.state["popup: 候補一覧は ▼ の 5 番目の候補から"] = function(s)
   if #s.popup > 1 then
     return ("popup が %d 個"):format(#s.popup)
   end
-  local want = s.state.type == "henkan" and (s.state.candidate_index or 0) >= SHOW_CANDIDATES
+  local want = s.state.type == "henkan" and (s.state.candidate_index or 0) >= s.opt.showCandidatesCount
   if insert_mode(s) and not s.pending and want ~= (#s.popup == 1) then
     return ("popup=%d、候補 %s"):format(#s.popup, tostring(s.state.candidate_index))
   end
@@ -199,9 +238,93 @@ M.state["g:skkeleton#state は有効なら状態と一致する"] = function(s)
   end
 end
 
+M.state["indicator: 表示は今のモードの文字列"] = function(s)
+  local ind = s.indicator[1]
+  if ind and s.want_indicator and ind.text ~= s.want_indicator then
+    return ("インジケータ %q、モード %q なら %q"):format(ind.text, s.skk_mode, s.want_indicator)
+  end
+end
+
+M.state["popup: 中身は今のページの候補"] = function(s)
+  local p = s.popup[1]
+  if not p or not s.want_popup or s.pending then
+    return
+  end
+  local got = {}
+  for _, l in ipairs(p.lines) do
+    -- "a: 候補" や "a: 候補  ;注釈" の候補の部分
+    got[#got + 1] = (l:gsub("^%S*: ", ""):gsub("%s+;.*$", ""):gsub("%s+$", ""))
+  end
+  local want = vim.tbl_map(function(c)
+    return (c:gsub(";.*$", ""))
+  end, s.want_popup)
+  if table.concat(got, "/") ~= table.concat(want, "/") then
+    return ("popup %s、ページ %s"):format(short(got), short(want))
+  end
+end
+
+-- float（popup とインジケータ）は画面の中に収まり、カーソルのセルを隠さない
+M.state["float: 画面に収まり、カーソルを隠さない"] = function(s)
+  local bottom = s.editor_lines - s.cmdheight
+  local all = {}
+  for _, f in ipairs(s.popup) do
+    all[#all + 1] = { f = f, kind = "popup" }
+  end
+  for _, f in ipairs(s.indicator) do
+    all[#all + 1] = { f = f, kind = "インジケータ" }
+  end
+  for _, e in ipairs(all) do
+    local f = e.f
+    local b = f.border and 1 or 0
+    local top, left = f.pos[1], f.pos[2]
+    local h, w = f.height + 2 * b, f.width + 2 * b
+    if top < 0 or left < 0 or left + w > s.columns or top + h > bottom then
+      return ("%s (%d,%d) %dx%d が画面 %dx%d からはみ出す"):format(e.kind, top, left, h, w, bottom, s.columns)
+    end
+    local crow, ccol = s.screen.row - 1, s.screen.col - 1
+    if s.vim_mode:sub(1, 1) == "i" and crow >= top and crow < top + h and ccol >= left and ccol < left + w then
+      return ("%s%s (%d,%d) %dx%d がカーソル (%d,%d) を隠す"):format(
+        e.kind,
+        f.border and "（枠つき）" or "",
+        top,
+        left,
+        h,
+        w,
+        crow,
+        ccol
+      )
+    end
+  end
+end
+
+-- cmdline の pre-edit は本物の文字なので、カーソルの前が pre-edit で終わる。
+-- pre-edit が無いのにマーカーが残っていたら、消し忘れ（#12 の型）
+M.state["cmdline: カーソルの前は pre-edit で終わり、マーカーを残さない"] = function(s)
+  if not s.cmdline or not s.enabled then
+    return
+  end
+  local before = s.cmdline:sub(1, s.cmdpos - 1)
+  if s.ctx_text ~= "" and before:sub(-#s.ctx_text) ~= s.ctx_text then
+    return ("cmdline %q（位置 %d）が pre-edit %q で終わらない"):format(s.cmdline, s.cmdpos, s.ctx_text)
+  end
+  if s.ctx_text == "" then
+    for _, m in ipairs(markers(s)) do
+      if s.cmdline:find(m, 1, true) then
+        return ("pre-edit が無いのに cmdline %q に %s が残っている"):format(s.cmdline, m)
+      end
+    end
+  end
+end
+
 -- 2 手以上をまたぐ性質のための履歴。各キーのあとに呼ぶ
 -- hist.before_register: 辞書登録の input() に入る直前の観測
 function M.observe(hist, prev, s)
+  -- insert から normal へ抜けたときの、有効かとモード（keepState / keepMode の確かめに使う）
+  if prev and insert_mode(prev) and s.vim_mode == "n" then
+    hist.left_insert = { enabled = prev.enabled, mode = prev.skk_mode }
+  elseif prev and prev.vim_mode == "n" and insert_mode(s) then
+    hist.left_insert = nil
+  end
   if registering(s) then
     if prev and not registering(prev) then
       hist.before_register = prev
@@ -212,6 +335,16 @@ function M.observe(hist, prev, s)
 end
 
 M.action = {}
+
+M.action["keepState: insert に戻ると、抜ける前のモードで有効になる"] = function(p, key, s, hist)
+  local l = hist and hist.left_insert
+  if not (s.opt.keepState and l and l.enabled and p.vim_mode == "n" and insert_mode(s)) then
+    return
+  end
+  if not s.enabled or s.skk_mode ~= l.mode then
+    return ("%s で insert に戻ると enabled=%s mode=%q、抜ける前は %q"):format(key, tostring(s.enabled), s.skk_mode, l.mode)
+  end
+end
 
 -- d5fc182 の型。辞書登録を <Esc> や <C-g> で取り消したら、登録に入る前の行・カーソル・pre-edit に戻る
 M.action["register: 取り消すと登録の前に戻る"] = function(p, key, s, hist)
@@ -288,7 +421,7 @@ M.known = {
     match = function(keys)
       return keys[#keys]:match("^[asdfjkl]$") ~= nil
     end,
-    reason = "一覧のページに無い選択キーを押すと、一覧の状態のまま popup だけ閉じる。"
+    reason = "#14: 一覧のページに無い選択キーを押すと、一覧の状態のまま popup だけ閉じる。"
       .. "upstream も次の skkeleton-handled で popup を閉じるので同じ動き（autoload/skkeleton/popup.vim）",
   },
 }
@@ -304,7 +437,7 @@ for _, property in ipairs({
     match = function(keys)
       return vim.tbl_contains(keys, "<Cmd>wincmd w<CR>")
     end,
-    reason = "辞書登録の input() の途中でウィンドウを移ると、WinLeave で状態とマッピングが外れる。"
+    reason = "#13: 辞書登録の input() の途中でウィンドウを移ると、WinLeave で状態とマッピングが外れる。"
       .. "取り消すと移った先で pre-edit が戻り、確定すると ▽ ごと登録・確定される",
   }
 end
@@ -322,13 +455,36 @@ M.known[#M.known + 1] = {
     end
     return false
   end,
-  reason = "辞書登録の欄で ▽ の入力中に <Left>・<C-w> などで cmdline を動かして確定すると、"
+  reason = "#12: 辞書登録の欄で ▽ の入力中に <Left>・<C-w> などで cmdline を動かして確定すると、"
     .. "▽ ごと登録・確定される（upstream も同じ）",
 }
 
-function M.is_known(name, keys)
+-- 上と同じ原因（#12）。cmdline で <C-u> などを押すと、次のキーまで状態に pre-edit が残る
+M.known[#M.known + 1] = {
+  property = "cmdline: カーソルの前は pre-edit で終わり、マーカーを残さない",
+  match = function(keys)
+    for _, k in ipairs({ "<Left>", "<Right>", "<C-w>", "<C-u>" }) do
+      if keys[#keys] == k then
+        return true
+      end
+    end
+    return false
+  end,
+  reason = "#12: cmdline のずれを次のキーまで見つけない",
+}
+
+-- 枠つきのインジケータは、画面の右端で左へ押し戻されてカーソルに重なる（#16。元の skkeleton_indicator.nvim も同じ）
+M.known[#M.known + 1] = {
+  property = "float: 画面に収まり、カーソルを隠さない",
+  match = function(_, msg)
+    return msg and msg:find("インジケータ（枠つき）", 1, true) and msg:find("隠す", 1, true)
+  end,
+  reason = "#16: 枠つきのインジケータが、画面の右端でカーソルと打った文字を隠す",
+}
+
+function M.is_known(name, keys, msg)
   for _, k in ipairs(M.known) do
-    if k.property == name and k.match(keys) then
+    if k.property == name and k.match(keys, msg) then
       return k
     end
   end

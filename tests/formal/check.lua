@@ -22,33 +22,7 @@ MiniTest = require("mini.test")
 MiniTest.setup()
 
 local spec = require("formal.spec")
-
--- 流すキー。insert モードの入力・変換、skkeleton が処理しない編集キー、モードとウィンドウの行き来
-local ALPHABET = {
-  "<C-j>", -- toggle（利用者の設定と同じく i と c に割り当てる）
-  "k",
-  "a",
-  "n",
-  "K",
-  "<Space>",
-  "x",
-  "q",
-  "<CR>",
-  "<BS>",
-  "<C-g>",
-  "<C-u>",
-  "<C-w>",
-  "<Left>",
-  "<Right>",
-  "<Esc>",
-  "i",
-  "A",
-  ":",
-  "<Cmd>wincmd w<CR>",
-  -- マクロ遷移: 深いところ（▽かん、候補一覧）へ 1 手で行く
-  "Kan",
-  "<Space><Space><Space><Space>",
-}
+local profiles = require("formal.profiles")
 
 -- 直したバグを子の中に戻す（検査がそれを見つけられるかを確かめるため）
 local MUTATIONS = {
@@ -94,7 +68,7 @@ local MUTATIONS = {
 }
 
 -- 引数
-local opts = { depth = 3, jobs = 8, mutate = nil, random = nil, length = 12, seed = 1, worker = nil, max_states = 400 }
+local opts = { profile = "default", depth = 3, jobs = 8, mutate = nil, random = nil, length = 12, seed = 1, worker = nil, max_states = 400 }
 do
   local i = 1
   while i <= #arg do
@@ -112,6 +86,13 @@ do
       opts.length, i = tonumber(v), i + 1
     elseif k == "--seed" then
       opts.seed, i = tonumber(v), i + 1
+    elseif k == "--profile" then
+      opts.profile, i = v, i + 1
+    elseif k == "--list-profiles" then
+      for _, name in ipairs(profiles.names) do
+        io.stdout:write(("%-10s %s\n"):format(name, profiles[name].doc))
+      end
+      os.exit(0)
     elseif k == "--keys" then
       opts.keys, i = vim.split(v, ",", { plain = true }), i + 1
     elseif k == "--max-states" then
@@ -129,43 +110,42 @@ do
   end
 end
 
-local dict_text = table.concat({
-  ";; okuri-ari entries.",
-  "わるk /悪/",
-  ";; okuri-nasi entries.",
-  "かん /缶/感/漢/幹/管/館/観/",
-  "かんじ /漢字/幹事/",
-  "なか /中/",
-  "",
-}, "\n")
+local profile = assert(profiles[opts.profile], "unknown profile: " .. opts.profile)
+local ALPHABET = profile.alphabet
+local INITS = profile.inits
+local INIT_NAMES = vim.tbl_keys(INITS)
+table.sort(INIT_NAMES)
 
 local SETUP = [[
-  local dir, dict, mutation, col = ...
+  local dir, dict, mutation, extra, init = ...
   vim.o.textwidth = 78
-  for _, k in ipairs({ "K", "q", "Q", "gQ" }) do vim.keymap.set("n", k, "<Nop>") end
-  require("skkeleton").setup({
+  for _, k in ipairs({ "K", "q", "Q", "gQ" }) do vim.keymap.set({ "n", "x" }, k, "<Nop>") end
+  require("skkeleton").setup(vim.tbl_deep_extend("force", {
     globalDictionaries = { { dict, "utf-8" } },
     userDictionary = dir .. "/user",
     databasePath = dir .. "/db",
     indicator = {},
-  })
+  }, extra))
   vim.keymap.set({ "i", "c" }, "<C-j>", "<Plug>(skkeleton-toggle)")
   local function sentinel()
     vim.keymap.set("i", "<C-g>", "<Nop>", { buffer = true, desc = "user-sentinel" })
   end
-  vim.api.nvim_buf_set_lines(0, 0, -1, false, { "ab cd" })
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, init.lines)
   sentinel()
   vim.cmd("botright new")
   vim.api.nvim_buf_set_lines(0, 0, -1, false, { "xy" })
   sentinel()
   vim.cmd("wincmd p")
-  vim.api.nvim_win_set_cursor(0, { 1, col })
+  vim.api.nvim_win_set_cursor(0, init.cursor)
+  if init.cmd then
+    vim.cmd(init.cmd)
+  end
   -- ":" のコマンドラインは開くだけで実行しない（:q や :n でウィンドウやバッファが変わらないように）
   vim.api.nvim_create_autocmd("CmdlineLeave", {
     pattern = ":",
     command = "let v:event.abort = v:true",
   })
-  if mutation and mutation ~= vim.NIL then
+  if mutation then
     assert(loadstring(mutation))()
   end
 ]]
@@ -174,11 +154,7 @@ local function new_child()
   return MiniTest.new_child_neovim()
 end
 
--- 初期状態（TLA+ の Init に当たる）。キー列の先頭の "#bol" などで選ぶ。無ければ "#mid"
--- 行は "ab cd"。insert モードで、カーソルは行頭・途中・行末のどれか
-local INITS =
-  { ["#bol"] = { col = 0, key = "i" }, ["#mid"] = { col = 2, key = "i" }, ["#eol"] = { col = 4, key = "a" } }
-local INIT_NAMES = { "#bol", "#mid", "#eol" }
+-- 初期状態（TLA+ の Init に当たる）は profiles.lua にある。キー列の先頭の "#mid" などで選ぶ
 
 local function start(child, mutation, init)
   child.restart({ "-u", root .. "/tests/minimal_init.lua" })
@@ -186,11 +162,11 @@ local function start(child, mutation, init)
   vim.fn.mkdir(dir, "p")
   local dict = dir .. "/dict"
   local f = assert(io.open(dict, "w"))
-  f:write(dict_text)
+  f:write(profile.dict)
   f:close()
-  local it = INITS[init] or INITS["#mid"]
-  child.lua(SETUP, { dir, dict, mutation and MUTATIONS[mutation].code or nil, it.col })
-  child.type_keys(it.key)
+  local it = INITS[init] or INITS[INIT_NAMES[1]]
+  child.lua(SETUP, { dir, dict, mutation and MUTATIONS[mutation].code or false, profile.config, it })
+  child.type_keys(it.keys)
 end
 
 -- 流したキーが全部処理されるまで待つ。入力待ち（input() など）で止まったら false
@@ -339,6 +315,8 @@ local function run_parallel(items)
         "NONE",
         "-l",
         here .. "/check.lua",
+        "--profile",
+        opts.profile,
         "--worker",
         input,
         output,
@@ -427,8 +405,8 @@ end
 local found = {}
 
 -- 反例を性質ごとに 1 つ覚える。既知のものと既知でないものは分けて覚える（既知の反例で隠れないように）
-local function slot(name, keys)
-  return spec.is_known(name, keys) and (name .. "\0known") or name
+local function slot(name, keys, msg)
+  return spec.is_known(name, keys, msg) and (name .. "\0known") or name
 end
 
 if opts.keys then
@@ -460,9 +438,12 @@ if opts.keys then
         s.wins
       )
     )
+    if os.getenv("FORMAL_DEBUG") then
+      print("  " .. vim.inspect({ screen = s.screen, popup = s.popup, indicator = s.indicator, win_pos = s.win_pos }, { newline = " ", indent = "" }))
+    end
     for _, v in ipairs(check(base, prev, key, s, hist)) do
       print("  ✗ " .. v.name .. ": " .. v.msg)
-      local k = slot(v.name, opts.keys)
+      local k = slot(v.name, opts.keys, v.msg)
       found[k] = found[k] or { keys = opts.keys, violations = { v } }
     end
     spec.observe(hist, prev, s)
@@ -483,7 +464,7 @@ elseif opts.random then
   for _, r in ipairs(run_parallel(items)) do
     if r.violations then
       local prefix = vim.list_slice(r.keys, 1, r.steps)
-      local key = slot(r.violations[1].name, prefix)
+      local key = slot(r.violations[1].name, prefix, r.violations[1].msg)
       if not found[key] then
         found[key] = shrink(prefix, opts.mutate) or r
       end
@@ -500,7 +481,7 @@ else
   end
   for _, r in ipairs(run_parallel(roots)) do
     if r.violations then
-      local k = slot(r.violations[1].name, r.keys)
+      local k = slot(r.violations[1].name, r.keys, r.violations[1].msg)
       found[k] = found[k] or r
     elseif not visited[r.abstract] then
       visited[r.abstract] = true
@@ -523,7 +504,7 @@ else
       if r.violations then
         local name = r.violations[1].name
         -- 同じ性質の反例は最初（最短）のものだけ
-        local k = slot(name, r.keys)
+        local k = slot(name, r.keys, r.violations[1].msg)
         if not found[k] then
           found[k] = r
         end
@@ -553,13 +534,14 @@ else
   print(("計 %d 遷移、%d 抽象状態"):format(transitions, vim.tbl_count(visited)))
 end
 
+print(("profile %s（%s）"):format(opts.profile, profile.doc))
 if opts.mutate then
   print(("mutation %s（%s）"):format(opts.mutate, MUTATIONS[opts.mutate].issue))
 end
 local failed = false
 for slot_name, r in vim.spairs(found) do
   local name = slot_name:gsub("%z.*", "")
-  local known = spec.is_known(name, vim.list_slice(r.keys, 1, r.steps or #r.keys))
+  local known = spec.is_known(name, vim.list_slice(r.keys, 1, r.steps or #r.keys), r.violations[1].msg)
   if known then
     print(("\n△ 既知: %s\n  %s\n  反例: %s"):format(name, known.reason, keys_str(r.keys)))
   else
