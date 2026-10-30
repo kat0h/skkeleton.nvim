@@ -142,15 +142,20 @@ function Indicator:update()
   end)
 end
 
--- カーソルに追従させる
+-- カーソルに追従させる。
+-- relative = "cursor" は画面上のカーソル位置を設定した時点で読むため、inline の pre-edit が
+-- 描かれる前後で値が変わる。バッファ位置（bufpos）に固定し、pre-edit の表示幅を足して決める
 function Indicator:move()
   if self:is_opened() then
     local mode = self.modes:detect()
+    local pos = vim.api.nvim_win_get_cursor(0)
     -- ウィンドウがすでに消えていると失敗することがある
     local ok = pcall(vim.api.nvim_win_set_config, self.winid[1], {
-      relative = "cursor",
+      relative = "win",
+      win = vim.api.nvim_get_current_win(),
+      bufpos = { pos[1] - 1, pos[2] },
       row = config.row,
-      col = config.col,
+      col = config.col + require("skkeleton.render").preedit_width(),
       width = mode.width,
     })
     if not ok then
