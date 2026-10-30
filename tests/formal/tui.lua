@@ -396,7 +396,8 @@ local function run(keys)
           if note and vim.fn.strdisplaywidth(note) > 74 then
             note = vim.fn.strcharpart(note, 0, 36) .. "…"
           end
-          rec:frame(sess, key, note, i == #keys and 3 or 1.0)
+          -- 違反が出たコマは 1 秒ほど長く止める
+          rec:frame(sess, key, note, note and 1.8 or 0.7)
           result.violations = {}
         elseif #result.violations > 0 then
           result.steps = i
