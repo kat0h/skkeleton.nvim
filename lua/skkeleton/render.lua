@@ -216,6 +216,9 @@ function M.is_stale(ctx, vim_mode)
   if pre == "" then
     return false
   end
+  if ctx.vim_mode ~= vim_mode then
+    return true
+  end
   if vim_mode == "c" then
     if not cmd_mark then
       local line = vim.fn.getcmdline():sub(1, vim.fn.getcmdpos() - 1)
@@ -234,6 +237,10 @@ function M.is_stale(ctx, vim_mode)
   end
   local pos = vim.api.nvim_win_get_cursor(0)
   if pos[1] - 1 ~= mark.row or pos[2] ~= mark.col then
+    return true
+  end
+  local em = vim.api.nvim_buf_get_extmark_by_id(buf, ns, mark.id, {})
+  if #em == 0 or em[1] ~= mark.row or em[2] ~= mark.col then
     return true
   end
   local cur_line = vim.api.nvim_buf_get_lines(buf, mark.row, mark.row + 1, false)[1] or ""
