@@ -31,12 +31,13 @@ function Indicator.new()
     { "InsertLeave", "*", self:method("close") },
     { "CursorMovedI", "*", self:method("move") },
     { "CmdlineEnter", "*", self:method("open") },
-    { "CmdlineLeave", "*", self:method("close") },
+    { "CmdlineLeave", "*", self:method("on_cmdline_leave") },
     { "CmdlineChanged", "*", self:method("move") },
     { "User", "skkeleton-mode-changed", self:method("update") },
     { "User", "skkeleton-disable-post", self:method("update") },
     { "User", "skkeleton-enable-post", self:method("update") },
     { "OptionSet", "background", self:method("refresh") },
+    { "ColorScheme", "*", self:method("refresh") },
   }
   for _, def in ipairs(defs) do
     vim.api.nvim_create_autocmd(def[1], { group = self.group, pattern = def[2], callback = def[3] })
@@ -166,7 +167,8 @@ function Indicator:win_pos_config(mode, for_open)
       border = border,
     }
   end
-  if for_open then
+  local pre_w = require("skkeleton.render").preedit_width()
+  if for_open and pre_w == 0 then
     return {
       relative = "cursor",
       row = config.row,
@@ -182,8 +184,9 @@ function Indicator:win_pos_config(mode, for_open)
     win = vim.api.nvim_get_current_win(),
     bufpos = { pos[1] - 1, pos[2] },
     row = config.row,
-    col = config.col + require("skkeleton.render").preedit_width(),
+    col = config.col + pre_w,
     width = mode.width,
+    height = 1,
     border = border,
   }
 end
@@ -195,10 +198,14 @@ local function redraw_if_cmdline()
 end
 
 function Indicator:open()
-  if self:is_opened() or self:is_disabled() or vim.fn.getcmdwintype() ~= "" then
+  if self:is_disabled() or vim.fn.getcmdwintype() ~= "" then
+    if self:is_opened() then
+      self:close()
+    end
     return
   end
-  if Modes.is_cmdline() and not config.show_in_cmdline then
+  if self:is_opened() then
+    self:update()
     return
   end
   local mode = self.modes:detect()
@@ -215,6 +222,15 @@ function Indicator:open()
   self:border_highlight(winid, mode)
   table.insert(self.winid, 1, winid)
   redraw_if_cmdline()
+end
+
+function Indicator:on_cmdline_leave()
+  self:close()
+  vim.schedule(function()
+    if Modes.is_insert() and not self:is_disabled() then
+      self:open()
+    end
+  end)
 end
 
 -- skkeleton の User イベントで呼ばれる。InsertLeave のときも mode-changed が来るので、

@@ -32,11 +32,6 @@ local function doautocmd(name)
   end
 end
 
--- Context を作り直す（使い終わった state の片付け）
-local function reset()
-  store.init_context()
-end
-
 -- g:skkeleton#state を更新する（補完ソースなどが読む）
 local function update_state_variable()
   local st = store.context().state
@@ -49,26 +44,37 @@ local function update_state_variable()
   vim.g["skkeleton#state"] = { phase = phase, henkanFeed = st.henkan_feed or "" }
 end
 
+-- Context を作り直す（使い終わった state の片付け）
+local function reset()
+  store.init_context()
+  update_state_variable()
+end
+
 -- handle の実行中か（辞書登録の input() などで誤って初期化しない）
 local handling_depth = 0
 
 -- pre-edit が出ているのにバッファやカーソルがずれたら、すぐ状態を初期化して表示を片付ける
 local function check_stale()
+  local vm = vim.api.nvim_get_mode().mode:sub(1, 1)
   if
     not vim.g["skkeleton#enabled"]
-    or handling_depth > 0
+    or handling_depth > host.in_input_depth()
     or render.is_pending()
-    or vim.api.nvim_get_mode().mode:sub(1, 1) ~= "i"
+    or (vm ~= "i" and vm ~= "c")
   then
     return
   end
   local ctx = store.context()
-  if not render.is_stale(ctx, "i") then
+  if not render.is_stale(ctx, vm) then
     return
+  end
+  if vm == "c" then
+    render.clean_stale_cmdline()
+  else
+    render.clear()
   end
   mode_mod.initialize_state_with_abbrev(ctx, { "converter" })
   ctx.preedit:output("")
-  render.clear()
   popup.close()
   update_state_variable()
   doautocmd("skkeleton-handled")
@@ -112,15 +118,19 @@ function M.init(force)
     end,
   })
   -- insert のままウィンドウやバッファを切り替えても残らないようにする
+  -- （辞書登録の input() の最中は元の状態を壊さないようスキップする）
   vim.api.nvim_create_autocmd({ "WinLeave", "BufLeave" }, {
     group = group,
     callback = function()
+      if host.is_in_input() then
+        return
+      end
       reset()
       host.disable()
     end,
   })
   -- upstream ではバッファの文字だった pre-edit が <C-u> や矢印キーで消える動きに合わせる
-  vim.api.nvim_create_autocmd({ "TextChangedI", "TextChangedP", "CursorMovedI" }, {
+  vim.api.nvim_create_autocmd({ "TextChangedI", "TextChangedP", "CursorMovedI", "CmdlineChanged" }, {
     group = group,
     callback = check_stale,
   })
@@ -164,7 +174,7 @@ local function handle_keys(opts, vim_mode)
   end
 
   -- blink.cmp のメニューで項目を選んでいるときの <CR>。選んだ項目で確定する（確定は completion の execute が行う）
-  if table.concat(keys) == "<cr>" and require("skkeleton.completion").accept_selected() then
+  if table.concat(keys) == "<cr>" and options.eggLikeNewline and require("skkeleton.completion").accept_selected() then
     return
   end
 
@@ -245,9 +255,13 @@ function M.handle_inner(func, opts)
   local ctx = store.context()
   -- 補完の後など pre-edit とバッファが合わなくなったときはリセットする
   if render.is_stale(ctx, short) then
+    if short == "c" then
+      render.clean_stale_cmdline()
+    else
+      render.clear()
+    end
     mode_mod.initialize_state_with_abbrev(ctx, { "converter" })
     ctx.preedit:output("")
-    render.clear()
   end
 
   local prefix

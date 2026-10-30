@@ -24,7 +24,13 @@ function M.register_word(ctx)
     end
     return false
   end
-  if input == nil or input == "" or input:find("__skkeleton_return__", 1, true) then
+  if
+    input == nil
+    or input == ""
+    or input:find("__skkeleton_return__", 1, true)
+    or input:find(options.markerHenkan, 1, true)
+    or input:find(options.markerHenkanSelect, 1, true)
+  then
     return false
   end
   state.candidates = { input }
