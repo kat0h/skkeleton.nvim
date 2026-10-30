@@ -605,6 +605,21 @@ M.known[#M.known + 1] = {
   reason = "#28: ダブルクリックで insert から直接 visual に移ると、skkeleton が片付けられず pre-edit が残る",
 }
 
+-- <Insert> を 2 回押して insert に戻ると、インジケータが消えたまま（#38）
+M.known[#M.known + 1] = {
+  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
+  match = function(keys, msg)
+    local n = 0
+    for _, k in ipairs(keys) do
+      if k == "<Insert>" then
+        n = n + 1
+      end
+    end
+    return n >= 2 and msg and msg:find("0 個", 1, true) ~= nil
+  end,
+  reason = "#38: <Insert> を 2 回押して insert に戻ると、インジケータが消えたままになる",
+}
+
 function M.is_known(name, keys, msg)
   for _, k in ipairs(M.known) do
     if k.property == name and k.match(keys, msg) then

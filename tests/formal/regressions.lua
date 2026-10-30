@@ -28,4 +28,5 @@ return {
     profile = "macro",
     keys = { "#mid", "qa", "A", "<C-j>", "K", "a", "n", "<Space>", "<CR>", "<Esc>", "q", "j", "@a" },
   },
+  { issue = 38, profile = "steal", keys = { "#eol", "<C-j>", "<Insert>", "<Insert>", "a" } },
 }
