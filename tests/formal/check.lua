@@ -509,6 +509,10 @@ local function shrink(keys, mutation, config)
     return r.violations and #r.violations > 0 and r or nil
   end
   local best = fails(keys)
+  if not best then
+    -- 元のキー列で流し直しても再現しない（タイミングに左右される）
+    return nil, "flaky"
+  end
   local n = 2
   while #keys >= 2 do
     local size = math.ceil(#keys / n)
@@ -826,8 +830,10 @@ elseif opts.fuzz then
         local prefix = vim.list_slice(r.keys, 1, r.steps)
         local key = slot(r.violations[1].name, prefix, r.violations[1].msg)
         if not found[key] then
-          local best = shrink(prefix, opts.mutate, item.config) or r
+          local best, why = shrink(prefix, opts.mutate, item.config)
+          best = best or r
           best.config = item.config
+          best.flaky = why == "flaky"
           found[key] = best
         end
       elseif new and rare then
@@ -866,7 +872,10 @@ elseif opts.random then
       local prefix = vim.list_slice(r.keys, 1, r.steps)
       local key = slot(r.violations[1].name, prefix, r.violations[1].msg)
       if not found[key] then
-        found[key] = shrink(prefix, opts.mutate) or r
+        local best, why = shrink(prefix, opts.mutate)
+        best = best or r
+        best.flaky = why == "flaky"
+        found[key] = best
       end
     end
   end
@@ -970,6 +979,8 @@ for slot_name, r in vim.spairs(found) do
   )
   if known then
     print(("\n△ 既知: %s\n  %s\n  反例: %s"):format(name, known.reason, keys_str(r.keys)))
+  elseif r.flaky then
+    print(("\n～ 再現せず（タイミング）: %s\n  反例: %s"):format(name, keys_str(r.keys)))
   else
     failed = true
     report(r)
