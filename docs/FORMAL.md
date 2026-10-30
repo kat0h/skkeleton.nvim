@@ -30,6 +30,7 @@ TLA+ の TLC のようなモデル検査を、仕様のモデルではなく実�
   - 2 手以上をまたぐ性質: 履歴を持って確かめます。「辞書登録を取り消すと、登録に入る前の行・カーソル・pre-edit に戻る」（d5fc182 の型）、「keepState なら、insert に戻ると抜ける前のモードで有効になる」。
 - **探索**: 観測を抽象化し（モード、有効か、skkeleton の状態、pre-edit の長さ、popup、カーソルが行のどこにあるか、など）、同じ抽象状態は 1 度しか広げない幅優先探索をします。幅優先なので、見つかった反例は最短のキー列です。深い状態にはランダムなキー列で届かせ、違反したキー列を ddmin で縮めます。
 - **本物の端末**（`tui.lua`）: tmux の中で TUI の nvim を動かし、tmux の `cursor_x`・`cursor_y` と `capture-pane` を正解にして確かめます。headless の子の `screencol()` は、枠つきの float が出ていると正しい値を返さないので、そこは端末で確かめます。
+- **入力エンジンだけの検査**（`core.lua`）: nvim の子を使わず、同じプロセスの中で core を動かします。本物のキーの振り分け（`keymap.handle_key`）を通し、UI へ出るところ（`host`）だけを差し替えます。1 キーが数十マイクロ秒で済むので、深さ 12 の幅優先や、30 キーの列を 10 万本流すランダム探索が十数秒で終わります。cmdline と terminal で使う「BS で消して書き直す」出力を仮想の行に当て、行がいつも「確定した文字列 + pre-edit」になること、確定した文字列が `<BS>` のほかで縮んだり書き換わったりしないこと、マーカーが入らないこと、状態が整っていること（▼ なら候補があり番号が範囲内、など）を確かめます。
 - **upstream との見比べ**（`upstream.lua`）: 見つけた反例のキー列を、Lua 版と denops 版の両方に流して見比べます。denops 版は起動に時間がかかるので、探索には入れず、反例を確かめるときだけ使います。
 
 ## 使い方
@@ -42,6 +43,10 @@ make verify ARGS="--list-profiles"
 make verify ARGS="--list-mutations"                      # 直したバグを戻す変異の一覧
 make verify ARGS="--depth 5 --mutate no-stale-check"
 
+# 入力エンジンだけ（速い）
+nvim --headless -u NONE -i NONE -l tests/formal/core.lua --depth 12 --max-states 20000
+nvim --headless -u NONE -i NONE -l tests/formal/core.lua --random 100000 --length 30
+nvim --headless -u NONE -i NONE -l tests/formal/core.lua --config '{eggLikeNewline=true}' --random 50000
 # 本物の端末（tmux が要る）
 nvim --headless -u NONE -i NONE -l tests/formal/tui.lua --profile edge --keys '#right,Kan'
 # upstream（deno と denops.vim が要る）
