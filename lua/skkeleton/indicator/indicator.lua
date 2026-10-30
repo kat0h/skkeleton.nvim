@@ -283,7 +283,7 @@ end
 local function redraw_if_cmdline(winid)
   if Modes.is_cmdline() then
     if winid and vim.api.nvim__redraw then
-      pcall(vim.api.nvim__redraw, { win = winid, valid = false, flush = false })
+      pcall(vim.api.nvim__redraw, { win = winid, valid = false })
     else
       pcall(vim.cmd, "redraw")
     end
@@ -314,14 +314,13 @@ function Indicator:open()
   local winid = vim.api.nvim_open_win(buf, false, win_cfg)
   self:border_highlight(winid, mode)
   table.insert(self.winid, 1, winid)
+  redraw_if_cmdline(winid)
 end
 
 function Indicator:on_cmdline_enter()
-  vim.schedule(function()
-    if Modes.is_cmdline() and not self:is_disabled() then
-      self:open()
-    end
-  end)
+  if Modes.is_cmdline() and not self:is_disabled() then
+    self:open()
+  end
 end
 
 function Indicator:on_cmdline_leave()
@@ -364,9 +363,6 @@ function Indicator:update()
       redraw_if_cmdline(winid)
     else
       self:open()
-      if self:is_opened() then
-        redraw_if_cmdline(self.winid[1])
-      end
     end
   end
   if Modes.is_cmdline() then
