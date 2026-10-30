@@ -180,4 +180,13 @@ B["is placed at the cursor, not after the tab"] = function()
   eq(r.float[2], 2 + 4 + 1)
 end
 
+T["is closed when insert is left with <C-c> (#27)"] = function()
+  start()
+  eq(positions() ~= nil, true)
+  type("<C-c>")
+  helpers.settle(child)
+  eq(child.fn.mode(), "n")
+  eq(positions(), vim.NIL)
+end
+
 return T

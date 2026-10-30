@@ -324,6 +324,10 @@ end
 function Indicator:update()
   local function do_update()
     if not Modes.is_active() then
+      -- <C-c> で insert を抜けたときは InsertLeave が来ないので、ここで閉じる
+      if self:is_opened() then
+        self:close()
+      end
       return
     end
     if self:is_disabled() then
