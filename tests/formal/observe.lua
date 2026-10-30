@@ -156,8 +156,10 @@ function M.snapshot()
     indicator = indicator,
     other_floats = #other_floats,
     -- blink.cmp 以外の float のバッファの数（bufs と同じく blink.cmp のバッファは数えない）
+    -- float に普通のバッファ（一覧に載るもの）が入っているとき（float の中で <C-^> など）は、float のバッファとして数えない
     other_float_bufs = #vim.tbl_filter(function(e)
-      return not vim.bo[vim.api.nvim_win_get_buf(e.win)].filetype:match("^blink")
+      local b = vim.api.nvim_win_get_buf(e.win)
+      return not vim.bo[b].filetype:match("^blink") and not vim.bo[b].buflisted
     end, other_floats),
     skk_maps_here = skk_maps(buf, "i"),
     skk_maps_all = all_skk_maps,

@@ -680,7 +680,7 @@ M.known[#M.known + 1] = {
   property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
   match = function(keys)
     for _, k in ipairs(keys) do
-      if k == "<C-x><C-e>" or k == "<PageDown>" or k:find("wheel", 1, true) then
+      if k == "<C-x><C-e>" or k == "<PageDown>" or k == "<WheelDown>" or k:find("wheel", 1, true) then
         return true
       end
     end
