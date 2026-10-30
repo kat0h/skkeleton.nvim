@@ -34,6 +34,8 @@ function Indicator.new()
     { "CmdlineLeave", "*", self:method("on_cmdline_leave") },
     { "TextChangedP", "*", self:method("move") },
     { "CompleteChanged", "*", self:method("move") },
+    { "WinScrolled", "*", self:method("move") },
+    { "WinResized", "*", self:method("move") },
     { "User", "skkeleton-mode-changed", self:method("update") },
     { "User", "skkeleton-disable-post", self:method("update") },
     { "User", "skkeleton-enable-post", self:method("update") },
@@ -324,6 +326,10 @@ end
 function Indicator:update()
   local function do_update()
     if not Modes.is_active() then
+      -- <C-c> で insert を抜けたときは InsertLeave が来ないので、ここで閉じる
+      if self:is_opened() then
+        self:close()
+      end
       return
     end
     if self:is_disabled() then
