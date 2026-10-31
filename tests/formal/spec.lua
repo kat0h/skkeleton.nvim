@@ -388,6 +388,28 @@ end
 
 -- マクロ（#36 の型）: 記録したレジスタには、利用者が打ったキーだけが入り、skkeleton が内部で流したもの
 -- （確定の文字列を入れたあとの finish() の呼び出し）は入らない
+-- 矩形選択の I・A は、<Esc> で入力した文字を選んだ全部の行に繰り返す（Vim の仕様）。
+-- block プロファイルの行は全部同じ文字列で始まるので、繰り返しが終わったあとも全部の行が同じになる。
+-- skkeleton の確定やマーカーの掃除が繰り返しをずらしたり、マーカーが一部の行に混ざったりしないかを見る
+M.state["block: 矩形選択の insert を抜けたら、全部の行が同じ"] = function(s)
+  -- Vim 自身が繰り返さない場合は見ない（素の Vim でも同じ）。開始位置より前を <BS> で消すと、
+  -- 繰り返しは 1 行目だけ（"XYb cd" / "aYb cd"）になる。<CR> で行が増えたときも、行をまたぐ入力は繰り返さない。
+  -- 行頭の "a" が残っていて行数が変わらないときだけ、全部の行が同じになるはず
+  if not s.block_done or not s.block_rows or #s.lines ~= 3 then
+    return
+  end
+  -- 選んだ行（block_rows）だけを比べる。k・j で選ぶ行は変わる
+  local top, bot = s.block_rows[1], s.block_rows[2]
+  if s.lines[top]:sub(1, 1) ~= "a" then
+    return
+  end
+  for i = top + 1, bot do
+    if s.lines[i] ~= s.lines[top] then
+      return ("行 %d と行 %d が違う: %s"):format(top, i, short(s.lines))
+    end
+  end
+end
+
 M.state["macro: レジスタに skkeleton が内部で流したものが入らない"] = function(s)
   if s.recording == "" and s.reg_a and s.reg_a:find("skkeleton.render", 1, true) then
     return ("レジスタ a に %q"):format(s.reg_a:sub(1, 60))

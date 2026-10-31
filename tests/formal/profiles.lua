@@ -410,6 +410,50 @@ M.aliases = {
   ["<Cols80>"] = "<Cmd>set columns=80<CR>",
 }
 
+-- マウス操作の別名（mouse プロファイル用）。位置は実行時に画面から求める
+local function mouse(code)
+  return "<Cmd>lua local function m(a, b, c, r, k) vim.api.nvim_input_mouse(a, b, '', 0, r, k) end "
+    .. "local function pos(w, l, c) local sp = vim.fn.win_screenpos(vim.api.nvim_win_get_number(w)) "
+    .. "return sp[1] - 1 + l, sp[2] - 1 + vim.fn.getwininfo(w)[1].textoff + c end "
+    .. "local function other() for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do "
+    .. "if w ~= vim.api.nvim_get_current_win() and vim.api.nvim_win_get_config(w).relative == '' then return w end end end "
+    .. "local function float(popup) for _, w in ipairs(vim.api.nvim_list_wins()) do "
+    .. "if vim.api.nvim_win_get_config(w).relative ~= '' and (vim.w[w].skkeleton_popup and true or false) == popup then return w end end end "
+    .. code
+    .. "<CR>"
+end
+local function click(r, c)
+  return ("m('left', 'press', '', %s, %s) m('left', 'release', '', %s, %s)"):format(r, c, r, c)
+end
+local cur = "local w = vim.api.nvim_get_current_win() "
+local function on_float(popup, kind)
+  return "local f = float(" .. popup .. ") if f then local p = vim.api.nvim_win_get_position(f) " .. kind .. " end"
+end
+M.aliases["<ClickMid>"] =
+  mouse(cur .. "local r, c = pos(w, vim.fn.line('.') - vim.fn.line('w0'), 2) " .. click("r", "c"))
+M.aliases["<ClickLine3>"] = mouse(cur .. "local r, c = pos(w, 2, 1) " .. click("r", "c"))
+M.aliases["<ClickOtherWin>"] =
+  mouse("local o = other() if o then local r, c = pos(o, 0, 1) " .. click("r", "c") .. " end")
+M.aliases["<DragSelect>"] = mouse(
+  cur
+    .. "local r, c = pos(w, 0, 0) local r2, c2 = pos(w, 1, 3) m('left', 'press', '', r, c) "
+    .. "m('left', 'drag', '', r, c + 1) m('left', 'drag', '', r2, c2) m('left', 'release', '', r2, c2)"
+)
+M.aliases["<DragRight>"] = mouse(
+  cur
+    .. "local r, c = pos(w, 0, 1) m('left', 'press', '', r, c) m('left', 'drag', '', r, c + 2) m('left', 'release', '', r, c + 2)"
+)
+M.aliases["<ClickPopup>"] = mouse(on_float("true", click("p[1]", "p[2]")))
+M.aliases["<ClickIndicator>"] = mouse(on_float("false", click("p[1]", "p[2]")))
+M.aliases["<WheelPopup>"] = mouse(on_float("true", "m('wheel', 'down', '', p[1], p[2])"))
+M.aliases["<WheelUp>"] = "<Cmd>lua vim.api.nvim_input_mouse('wheel', 'up', '', 0, 1, 1)<CR>"
+M.aliases["<WheelDownMid>"] = "<Cmd>lua vim.api.nvim_input_mouse('wheel', 'down', '', 0, 1, 1)<CR>"
+M.aliases["<RightClickMid>"] = mouse(
+  cur
+    .. "local r, c = pos(w, 0, 2) m('right', 'press', '', r, c) m('right', 'release', '', r, c) "
+    .. "m('middle', 'press', '', r, c) m('middle', 'release', '', r, c)"
+)
+
 -- 別名を実際のキーにする
 function M.expand(key)
   return M.aliases[key] or key
@@ -473,6 +517,43 @@ M.steal = {
     "<WheelDown>",
     "<Cols50>",
     "<Cols80>",
+  },
+  inits = {
+    ["#mid"] = { lines = { "ab cd", "ef gh", "ij" }, cursor = { 1, 2 }, keys = "i" },
+    ["#eol"] = { lines = { "ab cd", "ef gh", "ij" }, cursor = { 2, 4 }, keys = "a" },
+  },
+  dict = dict,
+}
+
+-- マウス: クリックでの移動（同じ行・別の行・別のウィンドウ）、ドラッグでの選択、候補窓とインジケータのクリック、cmdline の中でのクリックとホイール
+M.mouse = {
+  doc = "マウスのクリック・ドラッグ・ホイール（本文・別ウィンドウ・候補窓・インジケータ・cmdline）",
+  config = {},
+  wait_ms = 60,
+  alphabet = {
+    "<C-j>",
+    "Kan",
+    "K",
+    "a",
+    "<Space>",
+    "<Space><Space><Space><Space>",
+    "<CR>",
+    "<BS>",
+    "<C-g>",
+    "<Esc>",
+    "i",
+    ":",
+    "<ClickMid>",
+    "<ClickLine3>",
+    "<ClickOtherWin>",
+    "<DragSelect>",
+    "<DragRight>",
+    "<ClickPopup>",
+    "<ClickIndicator>",
+    "<WheelPopup>",
+    "<WheelUp>",
+    "<WheelDownMid>",
+    "<RightClickMid>",
   },
   inits = {
     ["#mid"] = { lines = { "ab cd", "ef gh", "ij" }, cursor = { 1, 2 }, keys = "i" },
@@ -575,6 +656,55 @@ M.native = {
     "<Space>",
   },
   inits = line_inits,
+  dict = dict,
+}
+
+-- 矩形選択（<C-v> で選んで I か A）。Vim は <Esc> で、入力した文字を選んだ全部の行に繰り返す。
+-- 全部の行が同じ文字列で、マーカーや pre-edit が混じっていないかを見る（spec.lua の block_done）
+M.block = {
+  doc = "矩形選択の I・A を skkeleton で入力して <Esc> で抜けると、全部の行に同じ確定文字が入るか",
+  config = {},
+  setup = [[
+    -- <C-v> からの insert の <Esc> で、矩形の繰り返しが終わった印を付ける
+    _G.formal_block, _G.formal_block_done = false, false
+    vim.api.nvim_create_autocmd("ModeChanged", {
+      callback = function()
+        local old, new = vim.v.event.old_mode, vim.v.event.new_mode
+        if old == "\22" and new:sub(1, 1) == "i" then
+          -- 選んだ行（k や j で動かすので、毎回違う）
+          _G.formal_block, _G.formal_block_done = true, false
+          _G.formal_block_rows = { vim.fn.line("'<"), vim.fn.line("'>") }
+        elseif old:sub(1, 1) == "i" and new:sub(1, 1) == "n" and _G.formal_block then
+          _G.formal_block, _G.formal_block_done = false, true
+        elseif new:sub(1, 1) ~= "n" then
+          _G.formal_block_done = false
+        end
+      end,
+    })
+  ]],
+  alphabet = {
+    "<C-j>",
+    "Kan",
+    "Kanji",
+    "k",
+    "a",
+    "n",
+    "<Space>",
+    "<CR>",
+    "<BS>",
+    "<C-g>",
+    "<Esc>",
+    "I",
+    "A",
+    "<C-v>",
+    "j",
+    "l",
+  },
+  inits = {
+    -- 3 行とも同じ文字列にして、繰り返したあとの全部の行が同じになるはずにする
+    ["#block"] = { lines = { "ab cd", "ab cd", "ab cd" }, cursor = { 1, 1 }, keys = "<C-v>jj" },
+    ["#wide"] = { lines = { "ab cd", "ab cd", "ab cd" }, cursor = { 1, 1 }, keys = "<C-v>jjl" },
+  },
   dict = dict,
 }
 

@@ -215,6 +215,9 @@ function M.snapshot()
     -- マクロ（レジスタ a と、記録中か）
     reg_a = vim.fn.getreg("a"),
     recording = vim.fn.reg_recording(),
+    -- 矩形選択の insert を <Esc> で抜けたところか（block プロファイル）
+    block_done = _G.formal_block_done == true,
+    block_rows = _G.formal_block_rows,
     list = vim.wo[win].list,
     editor_lines = vim.o.lines,
     cmdheight = vim.o.cmdheight,
