@@ -34,5 +34,6 @@ return {
   { issue = 45, profile = "native", keys = { "#mid", "<C-j>", "Kanj", "<C-x><C-u>" } },
   { issue = 12, profile = "cmdline", keys = { "#cmd-on", "Kan", "<C-y>" } },
   { issue = 12, profile = "cmdline", keys = { "#cmd-on", "Kan", "<C-k>a:" } },
+  { issue = 12, profile = "cmdline", keys = { "#cmd-on", "Kan", "<C-x>" } },
   { issue = 46, keys = { "#mid", "<Esc>", ":", "<C-j>", "K", "<Cmd>wincmd w<CR>", "<C-j>" } },
 }

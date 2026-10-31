@@ -680,7 +680,8 @@ M.known[#M.known + 1] = {
   property = "cmdline: pre-edit が無ければマーカーを残さない",
   match = function(keys)
     for _, k in ipairs(keys) do
-      if k == "<C-y>" or k:match("^<C%-k>") then
+      -- <C-x> も <C-y> と同じく、cmdline では ^X がそのまま入る
+      if k == "<C-y>" or k:match("^<C%-k>") or k:match("^<C%-x>") then
         return true
       end
     end
