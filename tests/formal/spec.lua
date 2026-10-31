@@ -4,6 +4,10 @@
 -- どちらも違反なら説明の文字列を、成り立てば nil を返す
 local M = {}
 
+-- インジケータの不具合は追わない（利用者の判断）。FORMAL_INDICATOR=1 のときだけ、
+-- 「indicator:」の性質と「float:」のインジケータの部分を確かめる
+local CHECK_INDICATOR = os.getenv("FORMAL_INDICATOR") == "1"
+
 -- 空のマーカー（upstream #103）は探せないので除く
 local function markers(s)
   return vim.tbl_filter(function(m)
@@ -303,7 +307,7 @@ M.state["float: 画面に収まり、カーソルを隠さない"] = function(s)
   for _, f in ipairs(s.popup) do
     all[#all + 1] = { f = f, kind = "popup" }
   end
-  for _, f in ipairs(s.indicator) do
+  for _, f in ipairs(CHECK_INDICATOR and s.indicator or {}) do
     all[#all + 1] = { f = f, kind = "インジケータ" }
   end
   for _, e in ipairs(all) do
@@ -738,6 +742,14 @@ M.known[#M.known + 1] = {
   end,
   reason = "#47: マウスで visual から insert に戻ると、インジケータがクリック前のカーソル位置に残る",
 }
+
+if not CHECK_INDICATOR then
+  for name in pairs(M.state) do
+    if name:find("^indicator:") then
+      M.state[name] = function() end
+    end
+  end
+end
 
 function M.is_known(name, keys, msg)
   for _, k in ipairs(M.known) do

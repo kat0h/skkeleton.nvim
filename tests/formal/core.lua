@@ -67,7 +67,11 @@ local DICT = {
   ["okurinasi:>てき"] = { "的" },
   ["okuriari:わるk"] = { "悪" },
   ["okuriari:かえr"] = { "帰", "返" },
+  ["okuriari:のt"] = { "乗" },
+  ["okuriari:かk"] = { "書", "掛" },
 }
+-- 変身関係の検査が、辞書の一部を差し替えるときに使う（new_run が DICT に重ねる）
+local extra_dict = {}
 
 -- UI の差し替え。辞書登録は、キー列で決めた答え（"" なら取り消し）を返す
 local register_answer = ""
@@ -165,7 +169,17 @@ end
 local function new_run(answer)
   config.set(vim.tbl_extend("force", { markerHenkan = "▽", markerHenkanSelect = "▼" }, opts.config or {}))
   local lib = Fake.new()
-  lib.data = vim.deepcopy(DICT)
+  lib.data = vim.tbl_extend("force", vim.deepcopy(DICT), vim.deepcopy(extra_dict))
+  -- 本物の辞書（dictionary.Library）と同じく、数値変換（#0〜#9）を通して引く
+  local plain = Fake.get_henkan_result
+  local wrapped = require("skkeleton.dictionary.numeral").wrap({
+    get_henkan_result = function(_, kind, word)
+      return plain(lib, kind, word)
+    end,
+  })
+  lib.get_henkan_result = function(_, kind, word)
+    return wrapped:get_henkan_result(kind, word)
+  end
   store.set_library(lib)
   kana.reset()
   keymap.reset()
@@ -180,7 +194,7 @@ local function new_run(answer)
   ctx.vim_mode = "c"
   register_answer = answer
   events = {}
-  return { ctx = ctx, line = "", committed = "" }
+  return { ctx = ctx, line = "", committed = "", lib = lib }
 end
 
 local function abstract(run)
@@ -406,6 +420,90 @@ if opts.metamorphic then
       found[kind] = { keys = keys, msg = name .. ": " .. detail }
     end
   end
+
+  -- 数値変換の正解（numeral.lua とは別に書いた規則）。作れない型・数は nil
+  local KJ = { [0] = "〇", "一", "二", "三", "四", "五", "六", "七", "八", "九" }
+  local ZEN = { [0] = "０", "１", "２", "３", "４", "５", "６", "７", "８", "９" }
+  local function classic(n)
+    local out = ""
+    for _, u in ipairs({ { 1000, "千" }, { 100, "百" }, { 10, "十" } }) do
+      local q = math.floor(n / u[1]) % 10
+      if q > 0 then
+        out = out .. (q > 1 and KJ[q] or "") .. u[2]
+      end
+    end
+    local one = n % 10
+    return one > 0 and (out .. KJ[one]) or out
+  end
+  local function roman(n)
+    local out = ("M"):rep(math.floor(n / 1000))
+    n = n % 1000
+    for _, r in ipairs({
+      { 900, "CM" },
+      { 500, "D" },
+      { 400, "CD" },
+      { 100, "C" },
+      { 90, "XC" },
+      { 50, "L" },
+      { 40, "XL" },
+      { 10, "X" },
+      { 9, "IX" },
+      { 5, "V" },
+      { 4, "IV" },
+      { 1, "I" },
+    }) do
+      while n >= r[1] do
+        out = out .. r[2]
+        n = n - r[1]
+      end
+    end
+    return out
+  end
+  local DAIJI = {
+    ["一"] = "壱",
+    ["二"] = "弐",
+    ["三"] = "参",
+    ["四"] = "肆",
+    ["五"] = "伍",
+    ["六"] = "陸",
+    ["七"] = "漆",
+    ["八"] = "捌",
+    ["九"] = "玖",
+    ["十"] = "拾",
+    ["百"] = "佰",
+    ["千"] = "阡",
+  }
+  local function numeral_oracle(ty, d)
+    local n = tonumber(d)
+    local function each(map)
+      return (d:gsub("%d", function(c)
+        return map[tonumber(c)]
+      end))
+    end
+    if ty == 0 then
+      return d
+    elseif ty == 1 then
+      return each(ZEN)
+    elseif ty == 2 then
+      return each(KJ)
+    elseif ty == 3 and n <= 9999 then
+      return classic(n)
+    elseif ty == 5 and n <= 9999 then
+      -- Lua のパターンはバイト単位なので、1 文字ずつ置き換える
+      local out = {}
+      for _, ch in ipairs(vim.fn.split(classic(n), "\\zs")) do
+        out[#out + 1] = DAIJI[ch] or ch
+      end
+      return table.concat(out)
+    elseif ty == 8 and n <= 3999 then
+      return roman(n)
+    elseif ty == 9 then
+      if d:match("^[1-9][1-9]$") then
+        return ZEN[tonumber(d:sub(1, 1))] .. KJ[tonumber(d:sub(2, 2))]
+      end
+      return d
+    end
+  end
   local checked = 0
   for _ = 1, opts.metamorphic do
     -- M1: カタカナで打った結果は、ひらがなで打った結果をカタカナにしたもの（最後に l で残りを確定する）
@@ -497,6 +595,142 @@ if opts.metamorphic then
           again_keys,
           ("%q を削除したのに、また出てきた（%s）"):format(purged, table.concat(all, " "))
         )
+      end
+    end
+
+    -- M6: 数値変換。読みの数字 d と型 #N から、候補は独立に書いた規則で決まる（#0 そのまま、#1 全角、#2 漢数字、
+    -- #3 位取りの漢数字、#5 大字、#8 ローマ数字、#9 棋譜）。; は henkanPoint（数字から読みを始めるため）
+    do
+      local d = tostring(math.random(1, 9))
+      for _ = 1, math.random(0, 3) do
+        d = d .. tostring(math.random(0, 9))
+      end
+      local ty = ({ 0, 1, 2, 3, 5, 8, 9 })[math.random(7)]
+      local want = numeral_oracle(ty, d)
+      if want then
+        extra_dict = { ["okurinasi:#ばい"] = { "#" .. ty .. "倍" } }
+        local keys = { "=", ";" }
+        for ch in d:gmatch(".") do
+          keys[#keys + 1] = ch
+        end
+        vim.list_extend(keys, { "b", "a", "i", "<space>" })
+        local n_run = line_of(keys)
+        if n_run.ctx:to_string() ~= "▼" .. want .. "倍" then
+          fail(
+            "M6 数値変換",
+            keys,
+            ("%s倍 の #%d で %q、期待 %q"):format(d, ty, n_run.ctx:to_string(), "▼" .. want .. "倍")
+          )
+        end
+        -- 数字が 2 つの読み（#と#）は、それぞれの数字で変換される
+        local d2 = tostring(math.random(1, 99))
+        extra_dict = { ["okurinasi:#と#"] = { "#1と#3" } }
+        local k2 = { "=", ";" }
+        for ch in (d .. "to" .. d2):gmatch(".") do
+          k2[#k2 + 1] = ch
+        end
+        k2[#k2 + 1] = "<space>"
+        local r2 = line_of(k2)
+        local w2 = "▼" .. numeral_oracle(1, d) .. "と" .. numeral_oracle(3, d2)
+        if r2.ctx:to_string() ~= w2 then
+          fail("M6 数値変換（数字が 2 つ）", k2, ("得た %q、期待 %q"):format(r2.ctx:to_string(), w2))
+        end
+        extra_dict = {}
+      end
+    end
+    -- M7: 送り仮名。大文字の子音で送りが始まり、続く母音で送り仮名が決まる。
+    -- 子音を重ねると「っ」が先に付く（NoTte = 乗って）。送りありの辞書の見出し（わるk など）で引く
+    do
+      local E = {
+        { head = { "W", "a", "r", "u" }, c = "k", cand = "悪" },
+        { head = { "N", "o" }, c = "t", cand = "乗" },
+        { head = { "K", "a", "e" }, c = "r", cand = "帰" },
+        { head = { "K", "a" }, c = "k", cand = "書" },
+      }
+      local KANA = {
+        k = { a = "か", i = "き", u = "く", e = "け", o = "こ" },
+        t = { a = "た", i = "ち", u = "つ", e = "て", o = "と" },
+        r = { a = "ら", i = "り", u = "る", e = "れ", o = "ろ" },
+      }
+      local e = E[math.random(#E)]
+      local v = ({ "a", "i", "u", "e", "o" })[math.random(5)]
+      local sokuon = math.random(2) == 1
+      local keys = { "=" }
+      vim.list_extend(keys, e.head)
+      keys[#keys + 1] = e.c:upper()
+      if sokuon then
+        keys[#keys + 1] = e.c
+      end
+      keys[#keys + 1] = v
+      keys[#keys + 1] = "<c-j>"
+      local o_run, oerr = line_of(keys)
+      local want = e.cand .. (sokuon and "っ" or "") .. KANA[e.c][v]
+      if not oerr and o_run.line ~= want then
+        fail("M7 送り仮名", keys, ("得た %q、期待 %q"):format(o_run.line, want))
+      end
+    end
+    -- M8: abbrev（/）。入れた文字はローマ字に変えずそのまま読みになり、<C-j> で確定すると文字のまま入って、
+    -- ひらがなのモードに戻る。<C-g> で抜けると何も入らずひらがなのモードに戻る
+    do
+      local w = {}
+      for _ = 1, math.random(1, 6) do
+        w[#w + 1] = ({ "a", "b", "k", "n", "z", "1", "-", "w" })[math.random(8)]
+      end
+      local ws = table.concat(w)
+      local k_commit = concat({ "/" }, w, { "<c-j>", "a" })
+      local r1 = line_of(k_commit)
+      if r1.line ~= ws .. "あ" then
+        fail("M8 abbrev の確定", k_commit, ("得た %q、期待 %q"):format(r1.line, ws .. "あ"))
+      end
+      local k_exit = concat({ "/" }, w, { "<c-g>", "a" })
+      local r2 = line_of(k_exit)
+      if r2.line ~= "あ" or r2.ctx.mode ~= "hira" then
+        fail(
+          "M8 abbrev を <C-g> で抜ける",
+          k_exit,
+          ('得た %q（モード %s）、期待 "あ"'):format(r2.line, r2.ctx.mode)
+        )
+      end
+      local k_conv = { "=", "/", "a", "b", "c", "<space>", "<c-j>", "a" }
+      local r3 = line_of(k_conv)
+      if r3.line ~= "ＡＢＣあ" then
+        fail("M8 abbrev の変換", k_conv, ("得た %q、期待 %q"):format(r3.line, "ＡＢＣあ"))
+      end
+    end
+    -- M9: 接頭辞・接尾辞。し> を引くと「新」、>てき（henkanPoint のあと）を引くと「的」
+    do
+      local k_pre = { "=", "S", "h", "i", ">", "<c-j>" }
+      local r1 = line_of(k_pre)
+      if r1.line ~= "新" then
+        fail("M9 接頭辞", k_pre, ('得た %q、期待 "新"'):format(r1.line))
+      end
+      local k_suf = { "=", ";", ">", "t", "e", "k", "i", "<space>", "<c-j>" }
+      local r2 = line_of(k_suf)
+      if r2.line ~= "的" then
+        fail("M9 接尾辞", k_suf, ('得た %q、期待 "的"'):format(r2.line))
+      end
+    end
+    -- M10: 削除（X）と再登録。1 つしかない候補を削除すると辞書から消え、同じ読みを引くと登録の欄になる。
+    -- そこで答えた語（w）は先頭の候補になり、確定した行にも入る。もう一度引くと w が出る
+    do
+      local w = ({ "語", "中", "仲", "名" })[math.random(4)]
+      local nak = { "N", "a", "k", "a" }
+      local k = concat(nak, { "<space>", "X" }, nak, { "<space>" })
+      k[1] = "=" .. w
+      local r1, e1 = line_of(k)
+      local k2 = vim.list_slice(k)
+      vim.list_extend(k2, nak)
+      vim.list_extend(k2, { "<space>" })
+      local r2 = line_of(k2)
+      local data = r1.lib.data["okurinasi:なか"] or {}
+      if not e1 and (r1.line ~= w or data[1] ~= w or (w ~= "中" and vim.tbl_contains(data, "中"))) then
+        fail(
+          "M10 削除と再登録",
+          k,
+          ("行 %q、辞書 %s（行も辞書の先頭も %q のはず）"):format(r1.line, vim.inspect(data), w)
+        )
+      elseif not e1 and r2.ctx:to_string() ~= "▼" .. w then
+        fail("M10 再登録した語が出ない", k2, ("得た %q、期待 %q"):format(r2.ctx:to_string(), "▼" .. w))
       end
     end
     checked = checked + 1
