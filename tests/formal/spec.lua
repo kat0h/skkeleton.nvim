@@ -256,11 +256,15 @@ M.state["resource: ウィンドウとバッファが漏れない"] = function(s,
   if s.wins - floats ~= base_wins then
     return ("普通のウィンドウが %d（元は %d）"):format(s.wins - floats, base_wins)
   end
-  -- float のバッファは float と一緒に消える（bufhidden=wipe）ので、普通のバッファの数は変わらない
-  local base_bufs = base.bufs - #base.popup - #base.indicator - (base.other_float_bufs or 0)
-  local float_bufs = #s.popup + #s.indicator + (s.other_float_bufs or 0)
-  if s.bufs - float_bufs ~= base_bufs then
-    return ("float 以外のバッファが %d（元は %d）"):format(s.bufs - float_bufs, base_bufs)
+  -- バッファの漏れは「どのウィンドウにも出ていない unlisted バッファ」の増加で見る。
+  -- 全バッファの数で比べると、検査の <StealFloat> で作った float や、その中の <C-^> が開く普通のバッファを
+  -- 漏れと取り違える（#steal のファジングで見つかった誤検出）。skkeleton の popup・インジケータは unlisted の
+  -- スクラッチで bufhidden=wipe なので、漏れればここに出る
+  if (s.hidden_scratch or 0) > (base.hidden_scratch or 0) then
+    return ("表示されていない unlisted バッファが %d（元は %d）"):format(
+      s.hidden_scratch,
+      base.hidden_scratch or 0
+    )
   end
 end
 

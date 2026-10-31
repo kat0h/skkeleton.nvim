@@ -164,6 +164,14 @@ function M.snapshot()
     popup = popup,
     indicator = indicator,
     other_floats = #other_floats,
+    -- どのウィンドウにも表示されていない、一覧に載らない（unlisted）バッファの数。skkeleton が作って消し忘れたバッファはここに出る
+    -- （blink.cmp のバッファは数えない）。検査の float や <C-^> で開く普通のバッファはここに入らない
+    hidden_scratch = #vim.tbl_filter(function(b)
+      return vim.api.nvim_buf_is_loaded(b)
+        and not vim.bo[b].buflisted
+        and not vim.bo[b].filetype:match("^blink")
+        and #vim.fn.win_findbuf(b) == 0
+    end, vim.api.nvim_list_bufs()),
     -- blink.cmp 以外の float のバッファの数（bufs と同じく blink.cmp のバッファは数えない）
     -- float に普通のバッファ（一覧に載るもの）が入っているとき（float の中で <C-^> など）は、float のバッファとして数えない
     other_float_bufs = #vim.tbl_filter(function(e)
