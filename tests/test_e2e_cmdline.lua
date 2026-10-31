@@ -128,4 +128,15 @@ T["visual から入った cmdline で有効にして抜けると無効になる 
   eq(child.g["skkeleton#state"].phase, "input")
 end
 
+T["<C-c> does not leave markers in command line history (#44)"] = function()
+  enable_in_cmdline()
+  type("Kan")
+  eq(child.fn.getcmdline(), "▽かn")
+  child.type_keys("<C-c>")
+  helpers.settle(child)
+  local hist = child.fn.histget("cmd", -1)
+  eq(hist:find("▽", 1, true), nil)
+  eq(hist:find("▼", 1, true), nil)
+end
+
 return T

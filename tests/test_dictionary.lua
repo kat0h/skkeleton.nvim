@@ -618,6 +618,35 @@ T["skk.split_candidates"]["ignores trailing empty or whitespace tokens"] = funct
   eq(run([[return skk.split_candidates("/a/b/")]], {}), { "a", "b" })
 end
 
+T["skk.split_candidates"]["decodes concat expressions with octal and character escapes"] = function()
+  eq(
+    run([=[
+      return {
+        skk.split_candidates([[/(concat "and\057or")/]]),
+        skk.split_candidates([[/(concat "DOS\057V")/]]),
+        skk.split_candidates([[/(concat "and\057or");annotation/]]),
+        skk.split_candidates([[/(concat "a\057b");(concat "c\057d")/]]),
+        skk.split_candidates([[/(concat "foo" "bar")/]]),
+        skk.split_candidates([[/(concat "a\"b\\c")/]]),
+        skk.split_candidates([[/(concat "semi\073colon")/]]),
+        skk.split_candidates([[/ao/(concat "and\057or")/]]),
+        skk.split_candidates([[/GNU General Public License;(concat "http:\057\057www.gnu.org\057licenses\057gpl.ja.html")/]]),
+      }
+    ]=]),
+    {
+      { "and/or" },
+      { "DOS/V" },
+      { "and/or;annotation" },
+      { "a/b;c/d" },
+      { "foobar" },
+      { 'a"b\\c' },
+      { "semi;colon" },
+      { "ao", "and/or" },
+      { "GNU General Public License;http://www.gnu.org/licenses/gpl.ja.html" },
+    }
+  )
+end
+
 T["skk.parse trims trailing whitespace on candidate lines"] = function()
   local maps = run([[
     local text = table.concat({

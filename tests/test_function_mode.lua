@@ -184,4 +184,26 @@ T["katakana from zenkaku goes back to the configured table"] = function()
   eq(child.lua_get([[kana.current_name]]), "rom")
 end
 
+T["hankatakana -> zenkaku -> hankatakana restores configured table"] = function()
+  init()
+  child.lua(
+    [[ctx = Context.new(); mode.hankatakana(ctx); mode.zenkaku(ctx); mode.hankatakana(ctx); H.dispatch(ctx, "a")]]
+  )
+  eq(child.lua_get([[ctx.preedit:output("")]]), "ｱ")
+  eq(child.lua_get([[kana.current_name]]), "rom")
+  eq(child.lua_get([[ctx.mode]]), "hankata")
+end
+
+T["katakana and hankatakana do nothing in abbrev mode"] = function()
+  init()
+  child.lua([[
+    ctx = Context.new()
+    mode.abbrev(ctx)
+    mode.katakana(ctx)
+  ]])
+  eq(child.lua_get([[ctx.mode]]), "abbrev")
+  child.lua([[mode.hankatakana(ctx)]])
+  eq(child.lua_get([[ctx.mode]]), "abbrev")
+end
+
 return T

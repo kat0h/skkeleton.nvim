@@ -760,6 +760,29 @@ T["native_completefunc"]["CompleteDone cleans up state and registers in user dic
   )
 end
 
+T["native_completefunc"]["preserves preceding and succeeding text when completing with completefunc"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "ab cd" })
+  child.api.nvim_win_set_cursor(0, { 1, 2 })
+  child.type_keys("i")
+  type("<Plug>(skkeleton-enable)")
+  type("Kanj")
+  eq(helpers.preedit(child), "▽かんj")
+
+  -- findstart returns cursor column (2) without subtracting pre_edit
+  local start_col = child.lua_get([[require("skkeleton.completion").completefunc(1, "")]])
+  eq(start_col, 2)
+
+  -- completefunc による実際の補完実行
+  child.lua([[vim.bo.completefunc = "v:lua.require'skkeleton.completion'.completefunc"]])
+  type("<C-x><C-u>")
+  eq(child.lua_get("vim.fn.pumvisible()"), 1)
+  type("<C-y>")
+  helpers.settle(child)
+
+  eq(helpers.buffer(child), { "ab漢字 cd" })
+  eq(helpers.preedit(child), "")
+end
+
 -- =========================================================================
 -- 8. Converter application on completion
 -- =========================================================================

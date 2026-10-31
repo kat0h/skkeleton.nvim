@@ -112,6 +112,100 @@ function M.decode(data, encoding)
   return text
 end
 
+-- 文字列内の (concat "...") 式を展開する。
+-- 8進エスケープ（\057 -> /、\073 -> ; など）や \"、\\ をデコードする
+---@param tok string
+---@return string
+function M.decode_concat(tok)
+  if not tok:find("(concat", 1, true) then
+    return tok
+  end
+  local pos = 1
+  local len = #tok
+  local out = {}
+  while pos <= len do
+    local s_start, s_end = tok:find("%(concat%s+", pos)
+    if not s_start then
+      out[#out + 1] = tok:sub(pos)
+      break
+    end
+    if s_start > pos then
+      out[#out + 1] = tok:sub(pos, s_start - 1)
+    end
+
+    local p = s_end + 1
+    local concat_parts = {}
+    local valid = false
+    while p <= len do
+      local non_space = tok:find("[^%s]", p)
+      if not non_space then
+        break
+      end
+      p = non_space
+      local b = tok:byte(p)
+      if b == 41 then -- ')'
+        p = p + 1
+        valid = true
+        break
+      elseif b == 34 then -- '"'
+        p = p + 1
+        local str_parts = {}
+        local closed = false
+        while p <= len do
+          local ch = tok:sub(p, p)
+          if ch == "\\" then
+            p = p + 1
+            if p <= len then
+              local oct = tok:match("^[0-7][0-7]?[0-7]?", p)
+              if oct then
+                local code = tonumber(oct, 8)
+                if code and code <= 255 then
+                  str_parts[#str_parts + 1] = string.char(code)
+                else
+                  str_parts[#str_parts + 1] = oct
+                end
+                p = p + #oct
+              else
+                local next_c = tok:sub(p, p)
+                if next_c == "n" then
+                  str_parts[#str_parts + 1] = "\n"
+                elseif next_c == "t" then
+                  str_parts[#str_parts + 1] = "\t"
+                else
+                  str_parts[#str_parts + 1] = next_c
+                end
+                p = p + 1
+              end
+            end
+          elseif ch == '"' then
+            p = p + 1
+            closed = true
+            break
+          else
+            str_parts[#str_parts + 1] = ch
+            p = p + 1
+          end
+        end
+        if not closed then
+          break
+        end
+        concat_parts[#concat_parts + 1] = table.concat(str_parts)
+      else
+        break
+      end
+    end
+
+    if valid then
+      out[#out + 1] = table.concat(concat_parts)
+      pos = p
+    else
+      out[#out + 1] = tok:sub(s_start, s_start)
+      pos = s_start + 1
+    end
+  end
+  return table.concat(out)
+end
+
 -- "/a/[b/c]/d/" を { "a", "[b/c]", "d" } に分ける（ブロックは中に "/" があっても 1 つにする）。
 -- 最後の "/" のあとの空文字や空白のみのトークンは無視する
 ---@param value string
@@ -136,7 +230,7 @@ function M.split_candidates(value)
       end
       local tok = value:sub(a, b)
       if b < len or not tok:match("^%s*$") then
-        out[#out + 1] = tok
+        out[#out + 1] = M.decode_concat(tok)
       end
       i = b + 1
     end
