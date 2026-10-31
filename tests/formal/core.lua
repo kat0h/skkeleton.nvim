@@ -87,9 +87,28 @@ host.keep_state_on_insert_enter = function() end
 host.confirm = function()
   return true
 end
+-- 入れ子の辞書登録を模すための答えの列。空でなければ host.input は先頭から 1 つ取る。
+-- 文字列ならその語を答え、キーの表なら、入力欄の中でそのキーを新しい Context に打って、確定した行を答える
+-- （本物の host.input も、入力欄の中は store.init_context() した新しい Context で、終わると元の Context に戻す）
+local register_queue = {}
+local step_in_prompt
 host.input = function()
   events[#events + 1] = "input"
-  return register_answer
+  if #register_queue == 0 then
+    return register_answer
+  end
+  local a = table.remove(register_queue, 1)
+  if type(a) == "string" then
+    return a
+  end
+  local outer = store.context()
+  local inner = { ctx = store.init_context(), line = "", committed = "" }
+  inner.ctx.vim_mode = "c"
+  for _, k in ipairs(a) do
+    step_in_prompt(inner, k)
+  end
+  store.set_context(outer)
+  return inner.line
 end
 
 local function markers()
@@ -193,6 +212,7 @@ local function new_run(answer)
   local ctx = store.init_context()
   ctx.vim_mode = "c"
   register_answer = answer
+  register_queue = {}
   events = {}
   return { ctx = ctx, line = "", committed = "", lib = lib }
 end
@@ -302,6 +322,8 @@ local function step(run, key)
   end
   return check_state(run, key, prev_committed)
 end
+
+step_in_prompt = step
 
 -- キー列の最初の要素は登録の答え（"=" なら取り消し、"=語" ならその語を登録する）
 local function run_keys(keys)
@@ -731,6 +753,107 @@ if opts.metamorphic then
         )
       elseif not e1 and r2.ctx:to_string() ~= "▼" .. w then
         fail("M10 再登録した語が出ない", k2, ("得た %q、期待 %q"):format(r2.ctx:to_string(), "▼" .. w))
+      end
+    end
+    -- M11: 入れ子の辞書登録。登録の入力欄の中で、辞書に無い読みを変換すると、もう一段の登録の入力欄になる。
+    -- 内側の語 wi を答え、入力欄の続きに「あ」を打って外側の語 wi.."あ" を登録すると、
+    -- 辞書には内側の読み -> wi、外側の読み -> wi.."あ" の両方が入り、バッファには外側の語だけが残る（マーカーは残らない）
+    do
+      local READ = {
+        { { "H", "a" }, "は" },
+        { { "M", "e" }, "め" },
+        { { "S", "e" }, "せ" },
+        { { "Y", "u" }, "ゆ" },
+        { { "Z", "a" }, "ざ" },
+      }
+      local WORDS = { "内", "外", "葉", "目", "湯" }
+      local o = READ[math.random(#READ)]
+      local i = READ[math.random(#READ)]
+      if o[2] ~= i[2] then
+        local wi = WORDS[math.random(#WORDS)]
+        local inner_keys = vim.list_slice(i[1])
+        vim.list_extend(inner_keys, { "<space>", "a" })
+        local keys = vim.list_slice(o[1])
+        keys[#keys + 1] = "<space>"
+        local run = new_run("")
+        register_queue = { inner_keys, wi }
+        local nerr
+        for idx, key in ipairs(keys) do
+          nerr = step(run, key)
+          if nerr then
+            nerr = ("%d キー目: %s"):format(idx, nerr)
+            break
+          end
+        end
+        local full = { "=" }
+        vim.list_extend(full, keys)
+        local out = wi .. "あ"
+        local od = run.lib.data["okurinasi:" .. o[2]] or {}
+        local id = run.lib.data["okurinasi:" .. i[2]] or {}
+        if nerr then
+          fail("M11 入れ子の登録（違反）", full, nerr)
+        elseif od[1] ~= out or id[1] ~= wi then
+          fail(
+            "M11 入れ子の登録が辞書に入らない",
+            full,
+            ("%s -> %s、%s -> %s（外側 %q、内側 %q のはず）"):format(
+              o[2],
+              vim.inspect(od),
+              i[2],
+              vim.inspect(id),
+              out,
+              wi
+            )
+          )
+        elseif run.line ~= out or run.ctx:to_string() ~= "" then
+          fail(
+            "M11 入れ子の登録のあとのバッファ",
+            full,
+            ("行 %q、pre-edit %q（外側の語 %q だけのはず）"):format(run.line, run.ctx:to_string(), out)
+          )
+        end
+      end
+    end
+    -- M12: 送り仮名つきの辞書登録。辞書に無い送りありの読み（ひk に送り仮名）を変換して語 w を登録すると、
+    -- 行には w と送り仮名が入り、辞書の送りありの見出し（ひk）の先頭に w が入る。同じ読みをもう一度変換すると w が先頭に出る
+    do
+      local HEAD = { { { "H", "i" }, "ひ" }, { { "M", "i" }, "み" }, { { "S", "a" }, "さ" } }
+      local OK = {
+        k = { a = "か", i = "き", u = "く", e = "け", o = "こ" },
+        r = { a = "ら", i = "り", u = "る", e = "れ", o = "ろ" },
+        t = { a = "た", i = "ち", u = "つ", e = "て", o = "と" },
+      }
+      local h = HEAD[math.random(#HEAD)]
+      local c = ({ "k", "r", "t" })[math.random(3)]
+      local v = ({ "a", "i", "u", "e", "o" })[math.random(5)]
+      local w = ({ "見", "引", "差", "日" })[math.random(4)]
+      local conv = vim.list_slice(h[1])
+      -- 送りの母音を打った時点で変換が始まる（<Space> は要らない）
+      vim.list_extend(conv, { c:upper(), v })
+      local k1 = { "=" .. w }
+      vim.list_extend(k1, conv)
+      local r1, e1 = line_of(k1)
+      local key = "okuriari:" .. h[2] .. c
+      local d = r1.lib.data[key] or {}
+      local want = w .. OK[c][v]
+      if not e1 and (r1.line ~= want or d[1] ~= w) then
+        fail(
+          "M12 送り仮名つきの登録",
+          k1,
+          ("行 %q（期待 %q）、%s -> %s（先頭が %q のはず）"):format(r1.line, want, key, vim.inspect(d), w)
+        )
+      elseif not e1 then
+        -- 2 回目も答えは w のままなので、w が先頭に出なければ、また登録の欄になって「▼w」でなく確定した状態になる
+        local k2 = vim.list_slice(k1)
+        vim.list_extend(k2, conv)
+        local r2 = line_of(k2)
+        if r2.ctx:to_string() ~= "▼" .. want then
+          fail(
+            "M12 送り仮名つきで登録した語が出ない",
+            k2,
+            ("得た %q、期待 %q"):format(r2.ctx:to_string(), "▼" .. want)
+          )
+        end
       end
     end
     checked = checked + 1
