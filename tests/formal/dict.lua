@@ -81,6 +81,125 @@ local function compare(dict, model, where)
   end
 end
 
+-- 補完（Library:get_completion_result）の正解。upstream の Library.getCompletionResult（dictionary.ts）と同じ規則を、
+-- 辞書の中身から独立に書く:
+--   - 読みが空なら空。1 文字なら送りなしの完全一致だけ。2 文字以上は前方一致（読みのバイト順）
+--   - 辞書ごとに順に集め、同じ読みの候補は重複なしで先の辞書の順に並べる
+--   - 数字の入った読み（1ば）は、数字を # に替えた読み（#ば）でも引く（NumberConvertWrapper.getCompletionResult。
+--     候補の数値変換はここでは見ない）。ユーザー辞書の [ で始まるブロックは候補に出ない
+local GLOBAL = {
+  { "a", { "ア" } },
+  { "abc", { "ＡＢＣ" } },
+  { "#ばい", { "#1倍", "#3倍" } },
+  { "かん", { "缶", "感", "漢" } },
+  { "かんじ", { "漢字", "幹事;取りまとめ役" } },
+  { "なか", { "中" } },
+  { "ん", { "ン" } },
+}
+local PREFIXES = { "a", "ab", "か", "かん", "かんじ", "#ば", "1ば", "12ば", "な", "ん", "んx" }
+
+local function global_dict()
+  local g = {}
+  function g:get_henkan_result(kind, w)
+    if kind == "okurinasi" then
+      for _, e in ipairs(GLOBAL) do
+        if e[1] == w then
+          return vim.deepcopy(e[2])
+        end
+      end
+    end
+    return {}
+  end
+  function g:get_prefix(kind, p)
+    local out = {}
+    if kind == "okurinasi" then
+      for _, e in ipairs(GLOBAL) do
+        if vim.startswith(e[1], p) then
+          out[#out + 1] = { e[1], vim.deepcopy(e[2]) }
+        end
+      end
+      table.sort(out, function(a, b)
+        return a[1] < b[1]
+      end)
+    end
+    return out
+  end
+  return g
+end
+
+local function model_completion(model, prefix)
+  local function base(p)
+    if p == "" then
+      return {}
+    end
+    local order, map = {}, {}
+    local function add(k, cands)
+      if #cands == 0 then
+        return
+      end
+      if not map[k] then
+        map[k] = {}
+        order[#order + 1] = k
+      end
+      for _, c in ipairs(cands) do
+        if not vim.tbl_contains(map[k], c) then
+          map[k][#map[k] + 1] = c
+        end
+      end
+    end
+    local user = {}
+    for k, list in pairs(model.okurinasi) do
+      user[#user + 1] = { k, visible(list) }
+    end
+    local glob = {}
+    for _, e in ipairs(GLOBAL) do
+      glob[#glob + 1] = e
+    end
+    for _, src in ipairs({ user, glob }) do
+      table.sort(src, function(a, b)
+        return a[1] < b[1]
+      end)
+      for _, e in ipairs(src) do
+        local hit = vim.fn.strchars(p) == 1 and e[1] == p or (vim.fn.strchars(p) > 1 and vim.startswith(e[1], p))
+        if hit then
+          add(e[1], e[2])
+        end
+      end
+    end
+    return order
+  end
+  local real = prefix:gsub("%d+", "#")
+  local keys = base(real)
+  if real ~= prefix then
+    keys = vim.list_extend(base(prefix), keys)
+  end
+  return keys
+end
+
+local function compare_completion(dict, model, where)
+  local lib = require("skkeleton.dictionary").Library.new({ global_dict() }, dict)
+  for _, p in ipairs(PREFIXES) do
+    local got = vim.tbl_map(function(e)
+      return e[1]
+    end, lib:get_completion_result(p, ""))
+    local want = model_completion(model, p)
+    -- 数字の入った読みは先に # の読みの候補が並ぶので、順は見ずに集合で比べる
+    if p:find("%d") then
+      table.sort(got)
+      table.sort(want)
+      want = vim.fn.uniq(want)
+    end
+    if table.concat(got, "\0") ~= table.concat(want, "\0") then
+      return ("%s: 補完 %q の読み %s、モデル %s"):format(
+        where,
+        p,
+        vim.inspect(got, { newline = " ", indent = "" }),
+        vim.inspect(want, { newline = " ", indent = "" })
+      )
+    end
+  end
+end
+
 local function run(ops)
   local dir = vim.fn.tempname()
   vim.fn.mkdir(dir, "p")
@@ -106,7 +225,7 @@ local function run(ops)
       end
       dict = fresh
     end
-    local msg = compare(dict, model, "操作のあと")
+    local msg = compare(dict, model, "操作のあと") or compare_completion(dict, model, "操作のあと")
     if msg then
       vim.fn.delete(dir, "rf")
       return i, msg
@@ -196,9 +315,19 @@ end
 -- 見つかったが、まだ直っていないもの（issue の番号と、反例の操作で見分ける）
 local KNOWN = {
   {
+    -- 数字の入った読み（1ば）の補完が空になる。upstream は # の読み（#ばい）でも引く（#50）
+    issue = 50,
+    match = function(f)
+      return f.msg:find("補完", 1, true) and (f.msg:find('"1ば"', 1, true) or f.msg:find('"12ば"', 1, true))
+    end,
+  },
+  {
     -- (concat "…") という文字列そのものを語として登録すると、読み直したときに式として読まれる（#37 の残り）
     issue = 37,
     match = function(f)
+      if f.msg:find("補完", 1, true) then
+        return false
+      end
       for _, o in ipairs(f.ops) do
         if o[1] == "reg" and o[4]:find("^%(concat") then
           return true
@@ -209,6 +338,9 @@ local KNOWN = {
   {
     issue = 37,
     match = function(f)
+      if f.msg:find("補完", 1, true) then
+        return false
+      end
       for _, o in ipairs(f.ops) do
         if o[1] == "reg" and o[4]:find("/", 1, true) then
           return true

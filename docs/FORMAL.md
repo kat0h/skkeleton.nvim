@@ -57,6 +57,7 @@ make verify ARGS="--depth 5 --mutate no-stale-check"
 # 入力エンジンだけ（速い）
 nvim --headless -u NONE -i NONE -l tests/formal/core.lua --depth 12 --max-states 20000
 nvim --headless -u NONE -i NONE -l tests/formal/core.lua --random 100000 --length 30
+nvim --headless -u NONE -i NONE -l tests/formal/core.lua --differential 60000 --length 40   # insert と cmdline で確定・pre-edit が同じか
 nvim --headless -u NONE -i NONE -l tests/formal/core.lua --config '{eggLikeNewline=true}' --random 50000
 # 本物の端末（tmux が要る）
 nvim --headless -u NONE -i NONE -l tests/formal/tui.lua --profile edge --keys '#right,Kan'

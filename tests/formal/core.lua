@@ -31,6 +31,8 @@ do
       opts.seed, i = tonumber(v), i + 1
     elseif k == "--max-states" then
       opts.max_states, i = tonumber(v), i + 1
+    elseif k == "--differential" then
+      opts.differential, i = tonumber(v), i + 1
     elseif k == "--metamorphic" then
       opts.metamorphic, i = tonumber(v), i + 1
     elseif k == "--kanatable" then
@@ -390,6 +392,118 @@ end
 
 local t0 = vim.uv.hrtime()
 
+-- 差分の検査: 同じキー列を insert（"i"）と cmdline（"c"）の Context に流すと、確定した文字列と pre-edit は同じになる。
+-- なぜ成り立つか: 入力エンジンは vim_mode を見て変わるところが 2 つしかない（c の <C-g> が ^C を足す、i の確定に undo point
+-- "\x07u" を足す）。どちらも表示の都合なので、取り除けば同じ。upstream の preedit.ts も、確定と pre-edit を作る側は
+-- モードを見ない。cmdline（`:` と `/`）と terminal は同じ出力（BS で書き直す）なので、c で代表させる。
+if opts.differential then
+  math.randomseed(opts.seed)
+  local function trace(keys, vm)
+    local run = new_run("")
+    run.ctx.vim_mode = vm
+    local line, out = "", {}
+    for i, key in ipairs(keys) do
+      local ok, err = pcall(keymap.handle_key, run.ctx, notation.normalize(key))
+      if not ok then
+        return out, "Lua のエラー: " .. tostring(err)
+      end
+      run.ctx = store.context()
+      run.ctx.vim_mode = vm
+      local pre
+      if run.ctx.state.type == "escape" then
+        local o = vm == "c" and (run.ctx.preedit:output(""):gsub("\3", ""))
+          or (run.ctx.preedit:take_kakutei():gsub("\7u", ""))
+        line = apply(line, o)
+        kana.set_current(config.options.kanaTable or "rom")
+        run.ctx = store.init_context()
+        run.ctx.vim_mode = vm
+        pre = ""
+      else
+        pre = run.ctx:to_string()
+        if vm == "c" then
+          -- ^C は cmdline を閉じるキーで、文字として残らない（BS に消されないよう外す）
+          line = apply(line, (run.ctx.preedit:output(pre):gsub("\3", "")))
+        else
+          -- undo point（<C-g>u）はキーであって文字ではない。BS に消されないよう、先に外す
+          line = apply(line, (run.ctx.preedit:take_kakutei():gsub("\7u", "")))
+        end
+      end
+      local base = vm == "c" and line:sub(1, #line - #pre) or line
+      local committed = base:gsub("\3", ""):gsub("\7u", "")
+      out[i] = { committed = committed, pre = pre, abs = abstract(run) }
+    end
+    return out
+  end
+  local function differs(keys)
+    local a, ea = trace(keys, "i")
+    local b, eb = trace(keys, "c")
+    if ea or eb then
+      return #keys, ("Lua のエラー i=%s c=%s"):format(tostring(ea), tostring(eb))
+    end
+    for i = 1, #keys do
+      local x, y = a[i], b[i]
+      if x.committed ~= y.committed or x.pre ~= y.pre or x.abs ~= y.abs then
+        return i,
+          ("insert と cmdline で違う: insert 確定 %q pre-edit %q / cmdline 確定 %q pre-edit %q"):format(
+            x.committed,
+            x.pre,
+            y.committed,
+            y.pre
+          )
+      end
+    end
+  end
+  local checked = 0
+  for _ = 1, opts.differential do
+    local ks = {}
+    for j = 1, opts.length do
+      ks[j] = ALPHABET[math.random(#ALPHABET)]
+    end
+    local at, msg = differs(ks)
+    if at then
+      local prefix = vim.list_slice(ks, 1, at)
+      local n = 2
+      while #prefix >= 2 do
+        local size = math.ceil(#prefix / n)
+        local reduced = false
+        for i = 1, #prefix, size do
+          local rest = {}
+          for j, k in ipairs(prefix) do
+            if j < i or j >= i + size then
+              rest[#rest + 1] = k
+            end
+          end
+          if #rest > 0 and differs(rest) then
+            prefix, n, reduced = rest, math.max(n - 1, 2), true
+            break
+          end
+        end
+        if not reduced then
+          if n >= #prefix then
+            break
+          end
+          n = math.min(n * 2, #prefix)
+        end
+      end
+      local _, m = differs(prefix)
+      local kind = msg:gsub('%b""', "…")
+      if not found[kind] then
+        found[kind] = { keys = prefix, msg = m or msg }
+      end
+    end
+    checked = checked + 1
+  end
+  print(("differential: %d 本 × %d キー、%.1f 秒"):format(checked, opts.length, (vim.uv.hrtime() - t0) / 1e9))
+  if vim.tbl_isempty(found) then
+    print("✓ 違反なし")
+    vim.cmd("qall!")
+  end
+  for _, f in pairs(found) do
+    print(("\n✗ 反例（%d キー）: %s\n    %s"):format(#f.keys, fmt(f.keys), f.msg))
+  end
+  vim.cmd("cquit 1")
+end
+
 if opts.keys then
   local run = new_run(opts.keys[1]:sub(1, 1) == "=" and table.remove(opts.keys, 1):sub(2) or "")
   for _, key in ipairs(opts.keys) do
@@ -660,6 +774,41 @@ if opts.metamorphic then
         extra_dict = {}
       end
     end
+    -- M13: 辞書の本文の 1 つの候補（"/…/" の 1 要素）を読み込んで変換すると、▼ の候補は「語」になり、注釈は出ない。
+    -- SKK の辞書の形式では、語や注釈に ; や / を含めるときは (concat "\073") のように書く（skk-jisyo の仕様）。
+    -- だから (concat "a\073b") の語は "a;b" で、注釈の区切りではない。注釈の区切りは式の外の最初の ; だけ。
+    -- 読み込んだ結果（skk.split_candidates）を、語と注釈を分ける前の文字列 "a;b" のまま渡すと、
+    -- 語の ; まで注釈と見なして "a" になる。expected は独立に書いた規則（式の外の ; で分け、式は後で展開）。
+    do
+      local skk = require("skkeleton.dictionary.skk")
+      local RAW = {
+        { [[plain]], "plain" },
+        { [[w;注釈]], "w" },
+        { [[(concat "a\073b")]], "a;b" },
+        { [[(concat "a\073b");注釈]], "a;b" },
+        { [[x;(concat "n\073m")]], "x" },
+        { [[(concat "p\057q");(concat "r\057s")]], "p/q" },
+        { [[(concat "\057")]], "/" },
+      }
+      local r = RAW[math.random(#RAW)]
+      local cands = skk.split_candidates("/" .. r[1] .. "/")
+      extra_dict = { ["okurinasi:てす"] = cands }
+      local keys = { "=", ";", "t", "e", "s", "u", "<space>" }
+      local run = line_of(keys)
+      if run.ctx:to_string() ~= "▼" .. r[2] then
+        fail(
+          "M13 辞書の候補の語と注釈",
+          keys,
+          ("辞書の %s が %q に読まれ、▼ は %q（期待 %q）"):format(
+            r[1],
+            cands[1],
+            run.ctx:to_string(),
+            "▼" .. r[2]
+          )
+        )
+      end
+      extra_dict = {}
+    end
     -- M7: 送り仮名。大文字の子音で送りが始まり、続く母音で送り仮名が決まる。
     -- 子音を重ねると「っ」が先に付く（NoTte = 乗って）。送りありの辞書の見出し（わるk など）で引く
     do
@@ -863,10 +1012,16 @@ if opts.metamorphic then
     print("✓ 違反なし")
     vim.cmd("qall!")
   end
+  local failed = false
   for _, f in pairs(found) do
-    print(("\n✗ 反例（%d キー）: %s\n    %s"):format(#f.keys, fmt(f.keys), f.msg))
+    if f.msg:find("M13", 1, true) then
+      print(("\n△ 既知 #49: %s\n    %s"):format(fmt(f.keys), f.msg)) -- (concat "\073") の語の ; が注釈の区切りになる
+    else
+      failed = true
+      print(("\n✗ 反例（%d キー）: %s\n    %s"):format(#f.keys, fmt(f.keys), f.msg))
+    end
   end
-  vim.cmd("cquit 1")
+  vim.cmd(failed and "cquit 1" or "qall!")
 end
 
 local answers = { "=", "=語" }

@@ -189,6 +189,16 @@ function M.snapshot()
       return i.label
     end, require("blink.cmp").get_items()) or nil,
     pum = vim.fn.pumvisible() == 1,
+    -- 組み込みの補完のメニューの項目（word と menu = 読み）と、そのときの▽の読み
+    pum_items = vim.api.nvim_get_mode().mode:sub(1, 2) == "ic" and vim.tbl_map(function(i)
+      return { word = i.word, menu = i.menu }
+    end, vim.fn.complete_info({ "items" }).items) or nil,
+    reading = (function()
+      local ok, st = pcall(function()
+        return require("skkeleton.store").context().state
+      end)
+      return ok and st and st.type == "input" and st.henkan_feed or nil
+    end)(),
     textwidth = vim.bo[buf].textwidth,
     opt = {
       showCandidatesCount = options.showCandidatesCount,

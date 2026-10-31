@@ -489,6 +489,45 @@ M.action["completion: <C-x><C-u> でカーソルの前の文字が消えない"]
   end
 end
 
+-- 組み込みの補完のメニューの項目は、▽ の読みで前方一致した辞書の読み（menu）の候補で、語に注釈の ; やマーカーが残らない。
+-- Library:get_completion_result（upstream の getCompletionResult）は、読みが 1 文字なら完全一致、2 文字以上なら前方一致。
+-- completefunc は語と注釈を分けて word に語だけを入れる（info が注釈）。読みに数字があるときは # の読みでも引くので比べない
+-- （<C-x><C-u> を押した直後は、先頭の項目が入って pre-edit が空になるので、読みは押す前の状態から取る）
+M.action["completion: メニューの項目は読みで前方一致し、語に注釈とマーカーが残らない"] = function(
+  p,
+  key,
+  s
+)
+  local reading = p.reading
+  if
+    key ~= "<C-x><C-u>"
+    or not s.pum_items
+    or #s.pum_items == 0
+    or not reading
+    or reading == ""
+    or reading:find("%d")
+  then
+    return
+  end
+  for _, it in ipairs(s.pum_items) do
+    if it.menu ~= "" and not vim.startswith(it.menu, reading) then
+      return ("メニューの項目 %q の読み %q が、▽ の読み %q で始まらない"):format(
+        it.word,
+        it.menu,
+        reading
+      )
+    end
+    if it.word:find(";", 1, true) then
+      return ("メニューの語 %q に注釈の ; が残っている"):format(it.word)
+    end
+    for _, m in ipairs(markers(s)) do
+      if it.word:find(m, 1, true) then
+        return ("メニューの語 %q に %s が入っている"):format(it.word, m)
+      end
+    end
+  end
+end
+
 -- 候補一覧（popup）で選択キーを押すと、そのページの i 番目の候補が、カーソルの位置にそのまま確定する
 local SELECT = { a = 1, s = 2, d = 3, f = 4, j = 5, k = 6, l = 7 }
 M.action["popup: 選択キーで選んだ候補が確定する"] = function(p, key, s)
