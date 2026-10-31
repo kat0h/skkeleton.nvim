@@ -36,4 +36,6 @@ return {
   { issue = 12, profile = "cmdline", keys = { "#cmd-on", "Kan", "<C-k>a:" } },
   { issue = 12, profile = "cmdline", keys = { "#cmd-on", "Kan", "<C-x>" } },
   { issue = 46, keys = { "#mid", "<Esc>", ":", "<C-j>", "K", "<Cmd>wincmd w<CR>", "<C-j>" } },
+  { issue = 47, profile = "mouse", keys = { "#eol", "<ClickOtherWin>", "<DragRight>", "<ClickLine3>" } },
+  { issue = 12, profile = "mouse", keys = { "#mid", "<Esc>", ":", "<C-j>", "Kan", "<RightClickMid>" } },
 }

@@ -703,7 +703,8 @@ M.known[#M.known + 1] = {
   match = function(keys)
     for _, k in ipairs(keys) do
       -- <C-x> も <C-y> と同じく、cmdline では ^X がそのまま入る
-      if k == "<C-y>" or k:match("^<C%-k>") or k:match("^<C%-x>") then
+      -- マウスの中ボタン（貼り付け）も同じ
+      if k == "<C-y>" or k:match("^<C%-k>") or k:match("^<C%-x>") or k == "<RightClickMid>" then
         return true
       end
     end
@@ -719,6 +720,23 @@ M.known[#M.known + 1] = {
     return vim.tbl_contains(keys, "<Cmd>wincmd w<CR>") or vim.tbl_contains(keys, "<StealWin>")
   end,
   reason = "#46: : の cmdline で ▽ の入力中にウィンドウを移ると、cmdline に ▽ が残る",
+}
+
+-- マウスのドラッグやダブルクリックで visual に入り、クリックで insert に戻ると、インジケータが前の位置に残る（#47）
+M.known[#M.known + 1] = {
+  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
+  match = function(keys)
+    local drag = false
+    for _, k in ipairs(keys) do
+      if k == "<DragRight>" or k == "<DragSelect>" or k == "<ClickIndicator>" then
+        drag = true
+      elseif drag and k:match("^<Click") then
+        return true
+      end
+    end
+    return false
+  end,
+  reason = "#47: マウスで visual から insert に戻ると、インジケータがクリック前のカーソル位置に残る",
 }
 
 function M.is_known(name, keys, msg)
