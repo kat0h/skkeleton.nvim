@@ -196,6 +196,17 @@ end
 -- 見つかったが、まだ直っていないもの（issue の番号と、反例の操作で見分ける）
 local KNOWN = {
   {
+    -- (concat "…") という文字列そのものを語として登録すると、読み直したときに式として読まれる（#37 の残り）
+    issue = 37,
+    match = function(f)
+      for _, o in ipairs(f.ops) do
+        if o[1] == "reg" and o[4]:find("^%(concat") then
+          return true
+        end
+      end
+    end,
+  },
+  {
     issue = 37,
     match = function(f)
       for _, o in ipairs(f.ops) do

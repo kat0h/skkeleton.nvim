@@ -689,6 +689,15 @@ M.known[#M.known + 1] = {
   reason = "#12: cmdline の pre-edit の後ろに skkeleton を通らずに文字が入ると、▽ が残る",
 }
 
+-- : の cmdline で ▽ の入力中にウィンドウを移ると、cmdline に ▽ が残る（#46）
+M.known[#M.known + 1] = {
+  property = "cmdline: pre-edit が無ければマーカーを残さない",
+  match = function(keys)
+    return vim.tbl_contains(keys, "<Cmd>wincmd w<CR>") or vim.tbl_contains(keys, "<StealWin>")
+  end,
+  reason = "#46: : の cmdline で ▽ の入力中にウィンドウを移ると、cmdline に ▽ が残る",
+}
+
 function M.is_known(name, keys, msg)
   for _, k in ipairs(M.known) do
     if k.property == name and k.match(keys, msg) then
