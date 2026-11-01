@@ -780,31 +780,6 @@ end
 -- 当てはまる違反は「既知」として出し、失敗にしない
 M.known = {}
 
--- cmdline の pre-edit の後ろに skkeleton を通らずに文字が入ると、▽ が残る（#12 の残り）
-M.known[#M.known + 1] = {
-  property = "cmdline: pre-edit が無ければマーカーを残さない",
-  match = function(keys)
-    for _, k in ipairs(keys) do
-      -- <C-x> も <C-y> と同じく、cmdline では ^X がそのまま入る
-      -- マウスの中ボタン（貼り付け）も同じ
-      if k == "<C-y>" or k:match("^<C%-k>") or k:match("^<C%-x>") or k == "<RightClickMid>" then
-        return true
-      end
-    end
-    return false
-  end,
-  reason = "#12: cmdline の pre-edit の後ろに skkeleton を通らずに文字が入ると、▽ が残る",
-}
-
--- : の cmdline で ▽ の入力中にウィンドウを移ると、cmdline に ▽ が残る（#46）
-M.known[#M.known + 1] = {
-  property = "cmdline: pre-edit が無ければマーカーを残さない",
-  match = function(keys)
-    return vim.tbl_contains(keys, "<Cmd>wincmd w<CR>") or vim.tbl_contains(keys, "<StealWin>")
-  end,
-  reason = "#46: : の cmdline で ▽ の入力中にウィンドウを移ると、cmdline に ▽ が残る",
-}
-
 -- カタカナ系のモードの ▽ で q を押すと、upstream はひらがなで確定するが、半角カタカナモードでは全角カタカナになる（#51）
 M.known[#M.known + 1] = {
   property = "mode: カタカナ系のモードの ▽ で q を押すと、ひらがなの読みで確定する",
@@ -812,23 +787,6 @@ M.known[#M.known + 1] = {
     return true
   end,
   reason = "#51: 半角カタカナモードの ▽ で q を押すと、upstream はひらがなで確定するが、全角カタカナになる",
-}
-
--- マウスのドラッグやダブルクリックで visual に入り、クリックで insert に戻ると、インジケータが前の位置に残る（#47）
-M.known[#M.known + 1] = {
-  property = "indicator: insert では pre-edit の直後に 1 つ、normal では出ない",
-  match = function(keys)
-    local drag = false
-    for _, k in ipairs(keys) do
-      if k == "<DragRight>" or k == "<DragSelect>" or k == "<ClickIndicator>" then
-        drag = true
-      elseif drag and k:match("^<Click") then
-        return true
-      end
-    end
-    return false
-  end,
-  reason = "#47: マウスで visual から insert に戻ると、インジケータがクリック前のカーソル位置に残る",
 }
 
 if not CHECK_INDICATOR then
