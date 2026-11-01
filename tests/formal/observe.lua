@@ -230,6 +230,29 @@ function M.snapshot()
       end
       return g
     end)(),
+    -- 辞書登録のプロンプトの深さ（入れ子で増える）と、ユーザー辞書の中身（register の性質）
+    cmdwin = vim.fn.getcmdwintype(),
+    input_depth = (function()
+      local ok, d = pcall(function()
+        return require("skkeleton.host").in_input_depth()
+      end)
+      return ok and d or 0
+    end)(),
+    user_dict = (function()
+      local ok, maps = pcall(function()
+        return require("skkeleton.store").library().user_dict.maps
+      end)
+      if not ok or type(maps) ~= "table" then
+        return nil
+      end
+      local out = {}
+      for kind, m in pairs(maps) do
+        for w, c in pairs(m) do
+          out[kind .. " " .. w] = vim.deepcopy(c)
+        end
+      end
+      return out
+    end)(),
     -- マクロ（レジスタ a と、記録中か）
     reg_a = vim.fn.getreg("a"),
     recording = vim.fn.reg_recording(),

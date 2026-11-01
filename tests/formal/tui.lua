@@ -32,6 +32,9 @@ do
     elseif k == "--flicker" then
       -- 1 キーごとに、端末に出したフレームの数とカーソルの寄り道を数える（#25）
       opts.flicker = true
+    elseif k == "--config" then
+      -- プロファイルの設定に足す（Lua の表の形。check.lua の --config と同じ）
+      opts.config, i = assert(loadstring("return " .. v))(), i + 1
     elseif k == "--verbose" then
       opts.verbose = true
     end
@@ -40,6 +43,9 @@ do
 end
 
 local profile = assert(profiles[opts.profile], "unknown profile")
+if opts.config then
+  profile = vim.tbl_extend("force", profile, { config = vim.tbl_extend("force", profile.config, opts.config) })
+end
 local flick
 local mini = os.getenv("MINI_PATH") or (root .. "/.tests/mini.nvim")
 

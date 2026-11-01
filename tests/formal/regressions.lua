@@ -40,6 +40,14 @@ return {
   { issue = 12, profile = "mouse", keys = { "#mid", "<Esc>", ":", "<C-j>", "Kan", "<RightClickMid>" } },
   -- 半角カタカナモードの ▽ で q: denops 版はひらがなで確定する（性質では見つからず、upstream.lua で見比べる）
   { issue = 51, keys = { "<C-j>", "<C-q>", "Te", "q" } },
+  -- 辞書登録の欄の <C-f>（register プロファイル）
+  { issue = 54, profile = "register", keys = { "#mid", "<C-j>", "A", "<Space>", "<C-f>" } },
+  {
+    issue = 55,
+    profile = "register",
+    config = { markerHenkan = "" },
+    keys = { "#mid", "<C-j>", "Ka", "<Space>", "ka", "<CR>" },
+  },
   -- core.lua・dict.lua の検査で見つかったもの。checker にスクリプトの名前、args に引数（シード固定）を書く。
   -- 開いている issue は「△ 既知 #N」が出れば未修正、閉じたあとにまた出たら失敗になる
   { issue = 49, checker = "core", args = { "--metamorphic", "300", "--seed", "1" } },

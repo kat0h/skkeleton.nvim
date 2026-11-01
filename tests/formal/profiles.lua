@@ -480,6 +480,7 @@ local function later(code)
   -- 少し遅れて起きる（落ち着くのを待つあいだに起きるように、wait_ms より短くする）
   return ("<Cmd>lua vim.defer_fn(function() %s end, 15)<CR>"):format(code)
 end
+local later_stop = later("vim.cmd.stopinsert()")
 M.steal = {
   doc = "抜け方・insert の中の移動・タイマーでカーソルやウィンドウを奪う・マウス・画面の幅",
   config = {},
@@ -725,6 +726,56 @@ M.block = {
   dict = dict,
 }
 
+-- 辞書登録の入力（host.input の input() のプロンプト）。辞書を小さくして、<Space> がほとんどの読みで外れ、
+-- すぐ登録に入るようにする。プロンプトの中では、かなの入力、入れ子の変換と登録、確定と取り消し、
+-- 空のプロンプトの <BS>、<C-r> でのレジスタの貼り付け、cmdline window（<C-f>）、遅れて来る :stopinsert や
+-- ウィンドウの移動を流す
+M.aliases["<StopinsertLater>"] = later_stop
+M.register = {
+  doc = "辞書登録のプロンプト: かな入力・入れ子の変換と登録・確定と取り消し・<C-r>・<C-f>・:stopinsert やウィンドウの移動",
+  config = {},
+  wait_ms = 60,
+  alphabet = {
+    "<C-j>",
+    "A",
+    "Ka",
+    "Kan",
+    "Kaer",
+    "ka",
+    "a",
+    "k",
+    "<Space>",
+    "<CR>",
+    "<Esc>",
+    "<C-c>",
+    "<C-g>",
+    "<BS>",
+    "<C-u>",
+    '<C-r>"',
+    "<C-r>a",
+    "<C-f>",
+    "<Left>",
+    "i",
+    "yiw",
+    "<StopinsertLater>",
+    "<StealWin>",
+    "<StealCursor>",
+    "<StealFloat>",
+    "<CloseFloats>",
+  },
+  inits = {
+    ["#mid"] = { lines = { "ab cd", "ef" }, cursor = { 1, 2 }, keys = "i" },
+    ["#eol"] = { lines = { "ab cd", "ef" }, cursor = { 1, 4 }, keys = "a" },
+  },
+  dict = table.concat({
+    ";; okuri-ari entries.",
+    "かえr /帰/",
+    ";; okuri-nasi entries.",
+    "かん /缶/感/",
+    "",
+  }, "\n"),
+}
+
 -- インジケータを切ったもの（ちらつきなどの原因がインジケータかを切り分けるため）
 M.noindicator = {
   doc = "インジケータを切った既定の設定（原因の切り分け用）",
@@ -748,6 +799,7 @@ M.names = {
   "blink",
   "wrap",
   "okuri",
+  "register",
 }
 
 return M

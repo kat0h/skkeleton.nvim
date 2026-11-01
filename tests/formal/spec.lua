@@ -61,7 +61,9 @@ M.state["preedit: extmark は insert モードの今のバッファのカーソ�
     if m.buf ~= s.buf then
       return ("extmark が別のバッファ %d にある（今は %d）"):format(m.buf, s.buf)
     end
-    if m.row ~= s.cursor[1] - 1 or m.col ~= s.cursor[2] then
+    -- 辞書登録のプロンプトの中でタイマーがカーソルを動かしても、pre-edit は元の位置に残す
+    -- （host.input が終わったときにカーソルを戻す）。register プロファイルの <StealCursor>
+    if not registering(s) and (m.row ~= s.cursor[1] - 1 or m.col ~= s.cursor[2]) then
       return ("extmark (%d,%d) がカーソル (%d,%d) からずれている"):format(
         m.row,
         m.col,
@@ -96,6 +98,11 @@ M.state["screen: 画面の行はバッファに pre-edit を差し込んだも�
   -- float の中では headless の screenrow()/screencol() が正しい値を返さない
   -- 'list' のときは listchars（タブや行末の空白の記号）で画面が変わるので比べない
   if not insert_mode(s) or s.pending or s.screen_row <= 0 or s.win_float or s.list then
+    return
+  end
+  -- 検査の <StealFloat> が開いた float（skkeleton のものではない）が、カーソルの行の右側を覆うことがある。
+  -- 位置を観測していないので、そのあいだは比べない（steal・register の fuzz の誤検出）
+  if (s.other_floats or 0) > 0 then
     return
   end
   local line = cur_line(s)
@@ -249,6 +256,10 @@ end
 M.state["resource: ウィンドウとバッファが漏れない"] = function(s, base)
   -- 今のウィンドウが float（検査で開いたもの）のときは、その中でバッファが入れ替わることがあるので比べない
   if s.win_float then
+    return
+  end
+  -- 辞書登録のプロンプトの <C-f> で開く cmdline window は、閉じるまでの普通のウィンドウ（register プロファイル）
+  if s.cmdwin ~= nil and s.cmdwin ~= "" then
     return
   end
   local floats = #s.popup + #s.indicator + (s.other_floats or 0)
@@ -425,11 +436,28 @@ M.state["macro: レジスタに skkeleton が内部で流したものが入ら�
 end
 
 -- #36・#44 の型: Vim のレジスタと履歴に、pre-edit のマーカーや skkeleton の内部のコマンドが漏れない
+-- 辞書登録のプロンプトは、開いているあいだだけ input_depth が 1 以上になる。プロンプト（cmdline の "@"）も
+-- cmdline window（<C-f>）も無いのに深さが残っていたら、入れ子が巻き戻っていない
+M.state["register: プロンプトが無いのに登録の深さが残らない"] = function(s)
+  if (s.input_depth or 0) > 0 and s.cmdtype ~= "@" and s.cmdwin == "" then
+    return ("input_depth=%d だが、プロンプトも cmdline window も無い（mode %s）"):format(
+      s.input_depth,
+      s.vim_mode
+    )
+  end
+  if (s.input_depth or 0) == 0 and s.cmdtype == "@" then
+    return "input() の中なのに input_depth=0"
+  end
+end
+
 M.state["global: レジスタと履歴にマーカーや内部のコマンドが漏れない"] = function(s)
   if not s.globals or s.recording ~= "" then
     return
   end
   for where, text in vim.spairs(s.globals) do
+    if where:find("^hist @") and text:find("__skkeleton_return__", 1, true) then
+      return ("%s に登録の取り消しの内部の語 %q"):format(where, text)
+    end
     if text:find("skkeleton.render", 1, true) then
       return ("%s に skkeleton の内部のコマンド %q"):format(where, vim.fn.strtrans(text):sub(1, 60))
     end
@@ -462,6 +490,24 @@ function M.observe(hist, prev, s)
     hist.left_insert = { enabled = prev.enabled, mode = prev.skk_mode, buf = prev.buf, by_esc = s.key == "<Esc>" }
   elseif prev and prev.vim_mode == "n" and insert_mode(s) then
     hist.left_insert = nil
+  end
+  -- 入れ子の登録の外側に戻れるよう、プロンプトに入る直前の観測を積む（register の性質）
+  hist.reg_stack = hist.reg_stack or {}
+  local pd, sd = prev and prev.input_depth or 0, s.input_depth or 0
+  if sd > pd and prev then
+    -- 1 つのキーで開いたときだけ、直前の観測を「開く前」とみなす。Kan のようなマクロ遷移は、途中の
+    -- 状態を観測していないので、false にして性質を確かめない
+    -- 送り仮名で開く A A のようなキーは、開いたキーが外側の状態も変えるので、<Space> で開いたときだけ確かめる
+    local k = s.key or ""
+    if k ~= "<Space>" then
+      hist.reg_stack[sd] = false
+    else
+      hist.reg_stack[sd] = prev
+    end
+  elseif sd < pd then
+    for d = sd + 1, pd do
+      hist.reg_stack[d] = nil
+    end
   end
   if registering(s) then
     if prev and not registering(prev) then
@@ -715,6 +761,12 @@ M.action["register: 取り消すと登録の前に戻る"] = function(p, key, s,
   if s.buftype == "terminal" then
     return
   end
+  -- 登録の最中に :stopinsert が走ると（register プロファイルの <StopinsertLater>）、取り消したあとで insert を抜ける。
+  -- カーソルは normal の位置（1 つ左）になり、skkeleton は無効になる。登録の前と比べない（normal に戻ったあとの
+  -- 片付けは、ほかの性質が見る）
+  if b.vim_mode:sub(1, 1) == "i" and s.vim_mode:sub(1, 1) ~= "i" then
+    return
+  end
   -- 取り消したら ▼ の前の ▽ に戻る（upstream と同じ）。行とカーソルは変わらない
   if s.cursor[1] ~= b.cursor[1] or s.cursor[2] ~= b.cursor[2] then
     return ("カーソル %s、登録の前は %s"):format(short(s.cursor), short(b.cursor))
@@ -730,6 +782,183 @@ M.action["register: 取り消すと登録の前に戻る"] = function(p, key, s,
       b.ctx_text,
       b.vim_mode
     )
+  end
+end
+
+-- 辞書登録のプロンプトが 1 つ閉じた直後（深さが 1 減った）の前後の観測を返す。
+-- b は、そのプロンプトを開く直前の観測。typed は、閉じる直前のプロンプトの中身
+local function closed_prompt(p, key, s, hist)
+  if not (p.input_depth and s.input_depth and p.input_depth == s.input_depth + 1) then
+    return
+  end
+  local b = hist and hist.reg_stack and hist.reg_stack[p.input_depth]
+  if not b or s.buftype == "terminal" or b.buftype == "terminal" then
+    return
+  end
+  local typed = p.cmdline
+  local clean = typed and typed ~= "" and p.ctx_text == ""
+  if clean then
+    for _, m in ipairs(markers(p)) do
+      if typed:find(m, 1, true) or typed:find("__skkeleton_return__", 1, true) then
+        clean = false
+      end
+    end
+  end
+  -- 確定: <CR> で、プロンプトに pre-edit もマーカーも無い文字列があるとき。取り消し: <Esc>・<C-g>・<C-c>、
+  -- 空のプロンプトの <CR>（空の確定は取り消しと同じ。upstream も同じ）
+  local confirm = key == "<CR>" and clean
+  local cancel = key == "<Esc>"
+    or key == "<C-g>"
+    or key == "<C-c>"
+    or (key == "<CR>" and (typed or "") == "" and p.ctx_text == "")
+  return b, (confirm and typed or nil), cancel
+end
+
+-- 登録のプロンプトが閉じたあと、バッファは登録した語（確定）か元の読みの ▽（取り消し）になり、
+-- マーカーは入らない。入れ子の内側が閉じたときは、外側のプロンプトの cmdline も同じ規則で戻る
+M.action["register: 閉じたあとのバッファは登録した語か元の ▽ の読み"] = function(
+  p,
+  key,
+  s,
+  hist
+)
+  local b, word, cancel = closed_prompt(p, key, s, hist)
+  if not b or p.cmdwin ~= "" or not (word or cancel) or s.buf ~= b.buf then
+    return
+  end
+  -- 閉じる操作と同じ 1 キーの中で、タイマーが行を書き換えることは無い（StealLine は alphabet に入れない）
+  local inner_insert = b.vim_mode:sub(1, 1) == "i"
+  if cancel then
+    if table.concat(s.lines, "\n") ~= table.concat(b.lines, "\n") then
+      return ("取り消し（%s）のあとに行が変わった: %q -> %q"):format(key, cur_line(b), cur_line(s))
+    end
+    -- <Space> は打ちかけのローマ字（かk の k）を捨てて変換するので、そのときは pre-edit が 1 文字短くなる
+    if inner_insert and b.state.feed == "" and s.ctx_text ~= b.ctx_text then
+      return ("取り消し（%s）のあとの pre-edit が %q（登録の前は %q）"):format(
+        key,
+        s.ctx_text,
+        b.ctx_text
+      )
+    end
+    if b.cmdtype == "@" and s.cmdtype == "@" and s.cmdline ~= b.cmdline then
+      return ("取り消しのあとの外側のプロンプトが %q（内側を開く前は %q）"):format(
+        s.cmdline,
+        b.cmdline
+      )
+    end
+    return
+  end
+  if inner_insert and b.cursor[1] == s.cursor[1] then
+    local bl = b.lines[b.cursor[1]] or ""
+    -- 送り仮名の登録では、語のあとに送り仮名が続く（"か" を登録した か*か は "かか"）
+    local head, tail = bl:sub(1, b.cursor[2]) .. word, bl:sub(b.cursor[2] + 1)
+    local l = cur_line(s)
+    if
+      s.vim_mode:sub(1, 1) == "i"
+      and (l:sub(1, #head) ~= head or (#tail > 0 and l:sub(-#tail) ~= tail) or #l < #head + #tail)
+    then
+      return ("確定した語 %q が入っていない: %q（期待 %q + 送り仮名 + %q）"):format(
+        word,
+        l,
+        head,
+        tail
+      )
+    end
+  elseif b.cmdtype == "@" and s.cmdtype == "@" then
+    local pre = b.ctx_text or ""
+    if pre ~= "" and b.cmdline:sub(-#pre) == pre then
+      local want = b.cmdline:sub(1, #b.cmdline - #pre) .. word
+      if s.cmdline ~= want then
+        return ("外側のプロンプトが %q（期待 %q）"):format(s.cmdline, want)
+      end
+    end
+  end
+  for _, m in ipairs(markers(s)) do
+    if cur_line(s):find(m, 1, true) or (s.cmdline and s.cmdline:find(m, 1, true) and s.ctx_text == "") then
+      return ("閉じたあとに %s が残っている（行 %q）"):format(m, cur_line(s))
+    end
+  end
+end
+
+-- ユーザー辞書に新しい見出しが増えるのは、空でない確定のときだけ。取り消しと空の確定では、中身が変わらない。
+-- 確定したら、登録した語が先頭の候補としてどれかの見出しに入る
+M.action["register: ユーザー辞書は空でない確定のときだけ増える"] = function(p, key, s, hist)
+  if not p.user_dict or not s.user_dict then
+    return
+  end
+  local b, word, cancel = closed_prompt(p, key, s, hist)
+  local grown = {}
+  for k in pairs(s.user_dict) do
+    if not p.user_dict[k] then
+      grown[#grown + 1] = k
+    end
+  end
+  -- 普通の変換（▼ の確定）でも、辞書にある語の見出しは作られる。ここで見るのはプロンプトの取り消しや空の確定
+  -- 打ちかけのローマ字（"えr" の r）が残ったままの <CR> も、cmdline の中身を登録する（upstream も同じ）
+  local dirty_confirm = key == "<CR>" and (p.cmdline or "") ~= "" and (p.input_depth or 0) == (s.input_depth or 0) + 1
+  if #grown > 0 and not word and not dirty_confirm and p.state.type ~= "henkan" then
+    return ("プロンプトの確定でも変換の確定でもないのに辞書の見出し %s が増えた（%s）"):format(
+      short(grown),
+      key
+    )
+  end
+  if b and cancel and not vim.deep_equal(p.user_dict, s.user_dict) then
+    return ("取り消し（%s）でユーザー辞書が変わった"):format(key)
+  end
+  if b and word then
+    for _, c in pairs(s.user_dict) do
+      if c[1] == word then
+        return
+      end
+    end
+    return ("確定した語 %q がユーザー辞書の先頭の候補に無い"):format(word)
+  end
+end
+
+-- 登録が終わったら、skkeleton の有効・モードは登録の前と同じ（登録の中の別の Context は捨てられている）。
+-- 確定のあとは pre-edit が空になる
+M.action["register: 閉じたあとのモードと状態が登録の前と同じ"] = function(p, key, s, hist)
+  local b, word, cancel = closed_prompt(p, key, s, hist)
+  if not b or p.cmdwin ~= "" or s.buf ~= b.buf or not (word or cancel) then
+    return
+  end
+  -- 登録の最中の :stopinsert は、閉じたあとに insert を抜ける（Vim の動き）。そのときは skkeleton も無効になる
+  if s.vim_mode:sub(1, 1) ~= b.vim_mode:sub(1, 1) then
+    if s.enabled and b.vim_mode:sub(1, 1) == "i" and s.vim_mode:sub(1, 1) == "n" then
+      return ("insert を抜けたのに skkeleton が有効のまま（mode %s）"):format(s.vim_mode)
+    end
+    return
+  end
+  if s.enabled ~= b.enabled or s.skk_mode ~= b.skk_mode then
+    return ("閉じたあと enabled=%s mode=%s（登録の前は %s / %s）"):format(
+      tostring(s.enabled),
+      s.skk_mode,
+      tostring(b.enabled),
+      b.skk_mode
+    )
+  end
+  if word and b.vim_mode:sub(1, 1) == "i" and s.ctx_text ~= "" then
+    return ("確定したのに pre-edit %q が残っている"):format(s.ctx_text)
+  end
+  -- プロンプトの中でタイマーなどがウィンドウを移しても、終わったら登録を始めたウィンドウに戻る（#13）
+  if s.win ~= b.win then
+    return ("登録が終わったのにウィンドウ %d にいる（始めたのは %d）"):format(s.win, b.win)
+  end
+end
+
+-- マーカーが空の設定（markerHenkan = ""）で起きる登録の不具合は、メッセージに印を付けて既知と見分ける（#55）
+for _, name in ipairs({
+  "register: 閉じたあとのバッファは登録した語か元の ▽ の読み",
+  "register: ユーザー辞書は空でない確定のときだけ増える",
+  "register: 閉じたあとのモードと状態が登録の前と同じ",
+}) do
+  local f = M.action[name]
+  M.action[name] = function(p, key, s, hist)
+    local msg = f(p, key, s, hist)
+    if msg and (p.opt.markerHenkan == "" or p.opt.markerHenkanSelect == "") then
+      return msg .. " [空のマーカー]"
+    end
+    return msg
   end
 end
 
@@ -788,6 +1017,31 @@ M.known[#M.known + 1] = {
   end,
   reason = "#51: 半角カタカナモードの ▽ で q を押すと、upstream はひらがなで確定するが、全角カタカナになる",
 }
+
+-- 辞書登録の欄で <C-f> を押すと、host.input の WinEnter の autocmd が cmdline window から元のウィンドウへ戻して、
+-- 登録が取り消され、同じバッファの余分なウィンドウが残る（#54。upstream は cmdline window が開く）
+M.known[#M.known + 1] = {
+  property = "resource: ウィンドウとバッファが漏れない",
+  match = function(keys)
+    return vim.tbl_contains(keys, "<C-f>")
+  end,
+  reason = "#54: 辞書登録の欄で <C-f> を押すと cmdline window が開かず、ウィンドウが残る",
+}
+
+-- markerHenkan か markerHenkanSelect が "" だと、辞書登録の入力が全部取り消し扱いになる（#55。upstream は登録できる）
+for _, name in ipairs({
+  "register: 閉じたあとのバッファは登録した語か元の ▽ の読み",
+  "register: ユーザー辞書は空でない確定のときだけ増える",
+  "register: 閉じたあとのモードと状態が登録の前と同じ",
+}) do
+  M.known[#M.known + 1] = {
+    property = name,
+    match = function(_, msg)
+      return msg ~= nil and msg:find("[空のマーカー]", 1, true) ~= nil
+    end,
+    reason = "#55: マーカーが空の設定だと、辞書登録の確定が取り消し扱いになる",
+  }
+end
 
 if not CHECK_INDICATOR then
   for name in pairs(M.state) do
