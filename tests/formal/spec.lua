@@ -489,6 +489,42 @@ M.action["completion: <C-x><C-u> でカーソルの前の文字が消えない"]
   end
 end
 
+-- upstream #51（mode.ts の katakana）: カタカナ・半角カタカナモードで ▽ の読みがあるとき q を押すと、
+-- 変換せずにひらがなの読みのまま確定する（ひらがなモードのときだけ、読みをカタカナにして確定する）。
+-- 確定した文字に、カタカナ（全角も半角も）が入らない
+M.action["mode: カタカナ系のモードの ▽ で q を押すと、ひらがなの読みで確定する"] = function(
+  p,
+  key,
+  s
+)
+  if key ~= "q" or not insert_mode(p) or not insert_mode(s) or p.buf ~= s.buf or p.cursor[1] ~= s.cursor[1] then
+    return
+  end
+  if p.skk_mode ~= "kata" and p.skk_mode ~= "hankata" then
+    return
+  end
+  local st = p.state
+  if st.type ~= "input" or st.mode ~= "okurinasi" or st.feed ~= "" or st.henkan_feed == "" then
+    return
+  end
+  local pl, sl = cur_line(p), cur_line(s)
+  local before, after = pl:sub(1, p.cursor[2]), pl:sub(p.cursor[2] + 1)
+  if sl:sub(1, #before) ~= before or (#after > 0 and sl:sub(-#after) ~= after) or #sl < #before + #after then
+    return
+  end
+  local inserted = sl:sub(#before + 1, #sl - #after)
+  for _, c in ipairs(vim.fn.split(inserted, "\zs")) do
+    local n = vim.fn.char2nr(c)
+    if (n >= 0x30A1 and n <= 0x30FA) or (n >= 0xFF66 and n <= 0xFF9F) then
+      return ("モード %q の ▽%q で q を押したら、ひらがなで確定するはずが %q になった"):format(
+        p.skk_mode,
+        st.henkan_feed,
+        inserted
+      )
+    end
+  end
+end
+
 -- 組み込みの補完のメニューの項目は、▽ の読みで前方一致した辞書の読み（menu）の候補で、語に注釈の ; やマーカーが残らない。
 -- Library:get_completion_result（upstream の getCompletionResult）は、読みが 1 文字なら完全一致、2 文字以上なら前方一致。
 -- completefunc は語と注釈を分けて word に語だけを入れる（info が注釈）。読みに数字があるときは # の読みでも引くので比べない
@@ -767,6 +803,15 @@ M.known[#M.known + 1] = {
     return vim.tbl_contains(keys, "<Cmd>wincmd w<CR>") or vim.tbl_contains(keys, "<StealWin>")
   end,
   reason = "#46: : の cmdline で ▽ の入力中にウィンドウを移ると、cmdline に ▽ が残る",
+}
+
+-- カタカナ系のモードの ▽ で q を押すと、upstream はひらがなで確定するが、半角カタカナモードでは全角カタカナになる（#51）
+M.known[#M.known + 1] = {
+  property = "mode: カタカナ系のモードの ▽ で q を押すと、ひらがなの読みで確定する",
+  match = function()
+    return true
+  end,
+  reason = "#51: 半角カタカナモードの ▽ で q を押すと、upstream はひらがなで確定するが、全角カタカナになる",
 }
 
 -- マウスのドラッグやダブルクリックで visual に入り、クリックで insert に戻ると、インジケータが前の位置に残る（#47）

@@ -69,6 +69,19 @@ nvim --headless -u NONE -i NONE -l tests/formal/upstream.lua 'A<Space>A<Left><CR
 
 `--keys` の先頭の `#mid` などは初期状態の名前です。`make test` には入れていません。
 
+### 回帰の見張り（`--regress`）
+
+これまで issue にした反例を `tests/formal/regressions.lua` に書き、`make verify ARGS="--regress"` で流し直します。issue が開いていて `M.known` にある反例は `△ #N 未修正`、直っていれば `✓`、直ったのに戻ると `✗` です。
+
+`check.lua` のキー列のほかに、`core.lua`・`dict.lua` で見つけたものは、スクリプトの名前と引数（シード固定）で書きます。
+
+```lua
+{ issue = 49, checker = "core", args = { "--metamorphic", "300", "--seed", "1" } },
+{ issue = 50, checker = "dict", args = { "--random", "2000", "--seed", "1" } },
+```
+
+そのスクリプトを引数つきで流し、出力に `△ 既知 #N` があれば `△`、終了コードが 0 なら `✓`、1 なら `✗` と数えます。issue を閉じて core.lua・dict.lua の既知の項目を外すと、同じ反例がまた出たときに `✗` になります。
+
 ## 確かめたこと
 
 直したバグを子の nvim の中に戻す変異（`--mutate`）を 7 種類作り、どれも深さ 5 までの探索で、3〜6 キーの反例として見つかりました。

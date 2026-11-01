@@ -556,12 +556,35 @@ if opts.regress and not opts.regress_sub then
   -- プロファイルごとに自分を起こして流す（並列のワーカーはプロファイルを 1 つしか持たないため）
   local list = dofile(here .. "/regressions.lua")
   local by = {}
-  for _, e in ipairs(list) do
-    local p = e.profile or "default"
-    by[p] = by[p] or {}
-    table.insert(by[p], e)
-  end
   local bad = 0
+  for _, e in ipairs(list) do
+    if e.checker then
+      -- core.lua・dict.lua の検査は、決まった引数（シード）で流し直す。出力に「△ 既知 #N」があれば未修正、
+      -- 終了コードが 0 なら直ったまま。閉じた issue の既知の項目を外したあとに戻ったら、終了コードが 1 になる
+      local r = vim
+        .system(
+          vim.list_extend(
+            { vim.v.progpath, "--headless", "-u", "NONE", "-i", "NONE", "-l", here .. "/" .. e.checker .. ".lua" },
+            e.args
+          ),
+          { env = { MINI_PATH = mini }, text = true }
+        )
+        :wait()
+      local out = (r.stdout or "") .. (r.stderr or "")
+      if r.code ~= 0 then
+        bad = bad + 1
+        io.stdout:write(("✗ #%d（%s）\n%s\n"):format(e.issue, e.checker, out))
+      elseif out:find("△ 既知 #" .. e.issue, 1, true) then
+        io.stdout:write(("△ #%d（%s）未修正\n"):format(e.issue, e.checker))
+      else
+        io.stdout:write(("✓ #%d（%s）\n"):format(e.issue, e.checker))
+      end
+    else
+      local p = e.profile or "default"
+      by[p] = by[p] or {}
+      table.insert(by[p], e)
+    end
+  end
   for p in vim.spairs(by) do
     local r = vim
       .system({
@@ -595,7 +618,7 @@ if opts.regress_sub then
   local list = dofile(here .. "/regressions.lua")
   local items, meta = {}, {}
   for _, e in ipairs(list) do
-    if (e.profile or "default") == opts.profile then
+    if not e.checker and (e.profile or "default") == opts.profile then
       items[#items + 1] = { keys = e.keys, every = true, config = e.config }
       meta[#meta + 1] = e
     end
