@@ -44,4 +44,5 @@ return {
   -- 開いている issue は「△ 既知 #N」が出れば未修正、閉じたあとにまた出たら失敗になる
   { issue = 49, checker = "core", args = { "--metamorphic", "300", "--seed", "1" } },
   { issue = 50, checker = "dict", args = { "--random", "2000", "--seed", "1" } },
+  { issue = 53, checker = "dict", args = { "--random", "5000", "--seed", "2" } },
 }

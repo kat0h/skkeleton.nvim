@@ -171,13 +171,21 @@ local function model_completion(model, prefix)
   local real = prefix:gsub("%d+", "#")
   local keys = base(real)
   if real ~= prefix then
+    -- #50 の直しで、# の読みで見つかった見出しの # は、入力した数字に置き換えて返す（"#ばい" → "1ばい"）。
+    -- upstream は # のまま返すが、補完の見出しとしては入力に合わせた形の方が自然なので、この違いは仕様とする
+    local digits = prefix:match("%d+")
+    keys = vim.tbl_map(function(k)
+      return (k:gsub("#", digits, 1))
+    end, keys)
     keys = vim.list_extend(base(prefix), keys)
   end
   return keys
 end
 
 local function compare_completion(dict, model, where)
-  local lib = require("skkeleton.dictionary").Library.new({ global_dict() }, dict)
+  -- 本物の組み立て（dictionary/init.lua）と同じく、全体辞書も数値変換のラッパーで包む
+  local lib =
+    require("skkeleton.dictionary").Library.new({ require("skkeleton.dictionary.numeral").wrap(global_dict()) }, dict)
   for _, p in ipairs(PREFIXES) do
     local got = vim.tbl_map(function(e)
       return e[1]
@@ -312,37 +320,15 @@ if vim.tbl_isempty(found) then
   print("✓ 違反なし")
   vim.cmd("qall!")
 end
--- 見つかったが、まだ直っていないもの（issue の番号と、反例の操作で見分ける）
+-- 見つかったが、まだ直っていないもの（issue の番号と、反例の操作で見分ける）。
+-- #37・#49・#50 は直った。新しい未修正の件はここに { issue = N, match = function(f) … end } で足す
 local KNOWN = {
   {
-    -- 数字の入った読み（1ば）の補完が空になる。upstream は # の読み（#ばい）でも引く（#50）
-    issue = 50,
+    -- (concat で始まる語そのものを登録すると、読み直したときに式として展開される（#53。#37 の残り）
+    issue = 53,
     match = function(f)
-      return f.msg:find("補完", 1, true) and (f.msg:find('"1ば"', 1, true) or f.msg:find('"12ば"', 1, true))
-    end,
-  },
-  {
-    -- (concat "…") という文字列そのものを語として登録すると、読み直したときに式として読まれる（#37 の残り）
-    issue = 37,
-    match = function(f)
-      if f.msg:find("補完", 1, true) then
-        return false
-      end
       for _, o in ipairs(f.ops) do
         if o[1] == "reg" and o[4]:find("^%(concat") then
-          return true
-        end
-      end
-    end,
-  },
-  {
-    issue = 37,
-    match = function(f)
-      if f.msg:find("補完", 1, true) then
-        return false
-      end
-      for _, o in ipairs(f.ops) do
-        if o[1] == "reg" and o[4]:find("/", 1, true) then
           return true
         end
       end

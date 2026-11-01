@@ -1014,12 +1014,9 @@ if opts.metamorphic then
   end
   local failed = false
   for _, f in pairs(found) do
-    if f.msg:find("M13", 1, true) then
-      print(("\n△ 既知 #49: %s\n    %s"):format(fmt(f.keys), f.msg)) -- (concat "\073") の語の ; が注釈の区切りになる
-    else
-      failed = true
-      print(("\n✗ 反例（%d キー）: %s\n    %s"):format(#f.keys, fmt(f.keys), f.msg))
-    end
+    -- M13 の #49（(concat "\073") の語の ; が注釈の区切りになる）は直ったので、既知の扱いをやめた
+    failed = true
+    print(("\n✗ 反例（%d キー）: %s\n    %s"):format(#f.keys, fmt(f.keys), f.msg))
   end
   vim.cmd(failed and "cquit 1" or "qall!")
 end
@@ -1091,7 +1088,7 @@ local function known(f)
   if f.msg:find("2 個増えた", 1, true) and opts.kanatable then
     return 41 -- かなテーブルで henkanFirst を割り当てたキーのあとの記号が 2 つ入る
   end
-  -- #42・#43 はかなテーブルやキーマップを変えたときの変換のキーの扱いで、今の性質では違反にならない
+  -- #42・#43（かなテーブルやキーマップを変えたときの変換のキーの扱い）は直った。今の性質では違反にならない
   -- （再現は issue の --keys の手順で確かめる）
 end
 local failed = false
