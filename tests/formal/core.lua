@@ -560,16 +560,35 @@ if opts.metamorphic then
   -- 数値変換の正解（numeral.lua とは別に書いた規則）。作れない型・数は nil
   local KJ = { [0] = "〇", "一", "二", "三", "四", "五", "六", "七", "八", "九" }
   local ZEN = { [0] = "０", "１", "２", "３", "４", "５", "６", "７", "８", "９" }
-  local function classic(n)
-    local out = ""
-    for _, u in ipairs({ { 1000, "千" }, { 100, "百" }, { 10, "十" } }) do
-      local q = math.floor(n / u[1]) % 10
-      if q > 0 then
-        out = out .. (q > 1 and KJ[q] or "") .. u[2]
+  -- 位取りの漢数字。10 進の文字列を上の桁から 1 桁ずつ見る（numeral.lua の「4 桁ずつの数に直して」とは別の書き方）。
+  -- 十・百・千の前の 1 は書かない（十、百二）。万・億・兆の前は、その 4 桁が 1 だけのとき「一」を書く（一万、一億）。
+  -- upstream（@geolonia/japanese-numeral）の number2kanji と 600 個の乱数で突き合わせて同じになることを確かめた。
+  -- 15 桁までなら JavaScript の数で正確に表せる（それより上は upstream の側が丸める）ので、検査もそこまで
+  local function classic(d)
+    d = d:gsub("^0+", "")
+    if d == "" then
+      return KJ[0]
+    end
+    local PLACE = { [0] = "", "十", "百", "千" }
+    local BIG = { [0] = "", "万", "億", "兆" }
+    local n, out = #d, ""
+    for g = math.ceil(n / 4) - 1, 0, -1 do
+      local chunk = d:sub(math.max(1, n - g * 4 - 3), n - g * 4)
+      local piece = ""
+      for i = 1, #chunk do
+        local dg, pos = tonumber(chunk:sub(i, i)), #chunk - i
+        if dg > 0 then
+          piece = piece .. ((dg == 1 and pos > 0) and "" or KJ[dg]) .. PLACE[pos]
+        end
+      end
+      if piece ~= "" then
+        if g > 0 and chunk:gsub("^0+", "") == "1" then
+          piece = KJ[1]
+        end
+        out = out .. piece .. BIG[g]
       end
     end
-    local one = n % 10
-    return one > 0 and (out .. KJ[one]) or out
+    return out
   end
   local function roman(n)
     local out = ("M"):rep(math.floor(n / 1000))
@@ -608,36 +627,47 @@ if opts.metamorphic then
     ["十"] = "拾",
     ["百"] = "佰",
     ["千"] = "阡",
+    ["万"] = "萬",
+    ["〇"] = "零",
   }
+  -- 数字の列 d（先頭の 0 を含みうる）と型 #ty から、候補の中の #ty が置き換わる文字列。作れない（upstream の結果が
+  -- 決まっていない）ときは nil。upstream は parseInt(d) の値で変換するので、#0〜#9 のうち数として読む型は先頭の 0 を落とす。
+  -- 落とさないのは #0 と #4（そのまま）だけ。決まっていないのは、ローマ数字の 0（upstream は文章を返す）と
+  -- 6 桁以上（upstream は M を 10 万個作ろうとして止まる）
   local function numeral_oracle(ty, d)
-    local n = tonumber(d)
-    local function each(map)
-      return (d:gsub("%d", function(c)
+    local s = d:gsub("^0+", "")
+    if s == "" then
+      s = "0"
+    end
+    local n = tonumber(s)
+    local function each(map, str)
+      return (str:gsub("%d", function(c)
         return map[tonumber(c)]
       end))
     end
-    if ty == 0 then
+    if ty == 0 or ty == 4 then
       return d
     elseif ty == 1 then
-      return each(ZEN)
+      return each(ZEN, s)
     elseif ty == 2 then
-      return each(KJ)
-    elseif ty == 3 and n <= 9999 then
-      return classic(n)
-    elseif ty == 5 and n <= 9999 then
+      return each(KJ, s)
+    elseif ty == 3 then
+      return classic(s)
+    elseif ty == 5 then
       -- Lua のパターンはバイト単位なので、1 文字ずつ置き換える
       local out = {}
-      for _, ch in ipairs(vim.fn.split(classic(n), "\\zs")) do
+      for _, ch in ipairs(vim.fn.split(classic(s), "\\zs")) do
         out[#out + 1] = DAIJI[ch] or ch
       end
       return table.concat(out)
-    elseif ty == 8 and n <= 3999 then
+    elseif ty == 8 and n >= 1 and #s <= 5 then
       return roman(n)
     elseif ty == 9 then
-      if d:match("^[1-9][1-9]$") then
-        return ZEN[tonumber(d:sub(1, 1))] .. KJ[tonumber(d:sub(2, 2))]
+      -- 棋譜は 11〜99（どちらの桁も 1〜9）だけ「３四」にし、ほかは数の文字列のまま（先頭の 0 は落ちる）
+      if s:match("^[1-9][1-9]$") then
+        return ZEN[tonumber(s:sub(1, 1))] .. KJ[tonumber(s:sub(2, 2))]
       end
-      return d
+      return s
     end
   end
   local checked = 0
@@ -734,14 +764,24 @@ if opts.metamorphic then
       end
     end
 
-    -- M6: 数値変換。読みの数字 d と型 #N から、候補は独立に書いた規則で決まる（#0 そのまま、#1 全角、#2 漢数字、
-    -- #3 位取りの漢数字、#5 大字、#8 ローマ数字、#9 棋譜）。; は henkanPoint（数字から読みを始めるため）
+    -- M6: 数値変換。読みの数字 d と型 #N から、候補は独立に書いた規則（numeral_oracle）で決まる
+    -- （#0・#4 そのまま、#1 全角、#2 漢数字、#3 位取りの漢数字、#5 大字、#8 ローマ数字、#9 棋譜）。
+    -- 数字は 1〜15 桁で、0 そのもの・先頭の 0（007）・大きな数（万・億・兆の位取り）を含む。
+    -- 読みに数字が 2 つ以上あるとき（#と#）は、候補の i 番目の # が読みの i 番目の数字で置き換わる。
+    -- ; は henkanPoint（数字から読みを始めるため）
     do
-      local d = tostring(math.random(1, 9))
-      for _ = 1, math.random(0, 3) do
-        d = d .. tostring(math.random(0, 9))
+      local function digits()
+        local len = ({ 1, 1, 2, 3, 4, 5, 8, 12, 15 })[math.random(9)]
+        local t = {}
+        for i = 1, len do
+          -- 0 を多めに混ぜる（0 だけ・先頭の 0・位の抜け）
+          t[i] = math.random(3) == 1 and "0" or tostring(math.random(0, 9))
+        end
+        return table.concat(t)
       end
-      local ty = ({ 0, 1, 2, 3, 5, 8, 9 })[math.random(7)]
+      local TYPES = { 0, 1, 2, 3, 4, 5, 8, 9 }
+      local d = digits()
+      local ty = TYPES[math.random(#TYPES)]
       local want = numeral_oracle(ty, d)
       if want then
         extra_dict = { ["okurinasi:#ばい"] = { "#" .. ty .. "倍" } }
@@ -758,21 +798,29 @@ if opts.metamorphic then
             ("%s倍 の #%d で %q、期待 %q"):format(d, ty, n_run.ctx:to_string(), "▼" .. want .. "倍")
           )
         end
-        -- 数字が 2 つの読み（#と#）は、それぞれの数字で変換される
-        local d2 = tostring(math.random(1, 99))
-        extra_dict = { ["okurinasi:#と#"] = { "#1と#3" } }
+      end
+      -- 数字が 2 つの読み（#と#）は、それぞれの数字がそれぞれの型で変換される（#1月#1日 のように型が同じでもよい）
+      local d1, d2 = digits(), digits()
+      local t1, t2 = TYPES[math.random(#TYPES)], TYPES[math.random(#TYPES)]
+      local w1, w2 = numeral_oracle(t1, d1), numeral_oracle(t2, d2)
+      if w1 and w2 then
+        extra_dict = { ["okurinasi:#と#"] = { ("#%dと#%d"):format(t1, t2) } }
         local k2 = { "=", ";" }
-        for ch in (d .. "to" .. d2):gmatch(".") do
+        for ch in (d1 .. "to" .. d2):gmatch(".") do
           k2[#k2 + 1] = ch
         end
         k2[#k2 + 1] = "<space>"
         local r2 = line_of(k2)
-        local w2 = "▼" .. numeral_oracle(1, d) .. "と" .. numeral_oracle(3, d2)
-        if r2.ctx:to_string() ~= w2 then
-          fail("M6 数値変換（数字が 2 つ）", k2, ("得た %q、期待 %q"):format(r2.ctx:to_string(), w2))
+        local want2 = "▼" .. w1 .. "と" .. w2
+        if r2.ctx:to_string() ~= want2 then
+          fail(
+            "M6 数値変換（数字が 2 つ）",
+            k2,
+            ("#%dと#%d の %s と %s で %q、期待 %q"):format(t1, t2, d1, d2, r2.ctx:to_string(), want2)
+          )
         end
-        extra_dict = {}
       end
+      extra_dict = {}
     end
     -- M13: 辞書の本文の 1 つの候補（"/…/" の 1 要素）を読み込んで変換すると、▼ の候補は「語」になり、注釈は出ない。
     -- SKK の辞書の形式では、語や注釈に ; や / を含めるときは (concat "\073") のように書く（skk-jisyo の仕様）。
@@ -1138,6 +1186,124 @@ if opts.metamorphic then
             ("得た %q、期待 %q"):format(r2.ctx:to_string(), "▼" .. want)
           )
         end
+      end
+    end
+    -- M16: 送り仮名の端のケース。読み R（ひらがな）を大文字で始めて打ち、そのあとに「打ちかけの子音 p」（なくてもよい）と
+    -- 大文字で始まる送り仮名 O を打つ。期待する結果は、次の規則だけで書いた独立の表（okuri_model）で決める。
+    --   1. 送りありの辞書の見出しは「読み + 送りの子音」。子音は送り仮名の最初の「っ以外の仮名」の行で決まる
+    --      （る は r、って は て の t、んだ は ん の n、ぁ は x）。送り仮名が「っ」だけのときは t とみなす。
+    --      upstream の okuri.ts の getOkuriStr と同じ。例: SiNda は しn、KiTte は きt、TuKka は つk、KaXtu は かt
+    --   2. 打ちかけの子音 p が、大文字の子音と同じなら、p は読みに入って促音「っ」になる（n なら「ん」）。
+    --      n が違う子音の前に残っていたら「ん」になる（KanKa）。t・k・s が違う子音の前に残っていたら捨てられる（KakTa）
+    --   3. 打ちかけの t・k・s のあとの大文字の母音は、子音と母音で 1 つの仮名になる（KatA は た）
+    --   4. 送り仮名の打ちかけがなくなった時点（仮名が全部できた）で、辞書を引いて ▼ になる。N だけのときは <Space> で ん になる
+    -- 辞書には期待する見出し 1 つだけを置くので、見出しの子音か読みがずれると、▼ にならずに辞書登録の欄になる
+    do
+      local READ = {
+        { "Ka", "か" },
+        { "Si", "し" },
+        { "Ha", "は" },
+        { "Ki", "き" },
+        { "Tu", "つ" },
+        { "Mi", "み" },
+      }
+      -- { 打つキー, 送り仮名, 打ちかけの子音と同じ子音で始まらない（p を前に置ける） , 末尾に <Space> が要るか }
+      local UNIT = {
+        { "Ru", "る" },
+        { "Ki", "き" },
+        { "Ta", "た" },
+        { "Shi", "し" },
+        { "Tsu", "つ" },
+        { "Cha", "ちゃ" },
+        { "Kya", "きゃ" },
+        { "Nu", "ぬ" },
+        { "Nn", "ん" },
+        { "Nda", "んだ" },
+        { "Tte", "って" },
+        { "Kka", "っか" },
+        { "Sshi", "っし" },
+        { "Xa", "ぁ" },
+        { "Xya", "ゃ" },
+        { "Xtu", "っ" },
+        { "Xtsu", "っ" },
+        { "N", "ん", true },
+        { "A", "あ" },
+        { "I", "い" },
+      }
+      local ROW = {
+        ["る"] = "r",
+        ["き"] = "k",
+        ["か"] = "k",
+        ["た"] = "t",
+        ["し"] = "s",
+        ["さ"] = "s",
+        ["つ"] = "t",
+        ["ち"] = "t",
+        ["ぬ"] = "n",
+        ["ん"] = "n",
+        ["て"] = "t",
+        ["あ"] = "a",
+        ["い"] = "i",
+        ["ぁ"] = "x",
+        ["ゃ"] = "x",
+      }
+      local function okuri_row(okuri)
+        if okuri == "っ" then
+          return "t"
+        end
+        for _, ch in ipairs(vim.fn.split(okuri, "\\zs")) do
+          if ch ~= "っ" then
+            return ROW[ch]
+          end
+        end
+      end
+      local rd = READ[math.random(#READ)]
+      local u = UNIT[math.random(#UNIT)]
+      local lead = u[1]:sub(1, 1):lower()
+      local vowel_start = lead:match("[aiueo]") ~= nil
+      -- 打ちかけの子音（母音で始まる送り仮名の前には t・k・s だけ。ん の前の n は規則 2 の場合だけ）
+      local p = ""
+      local roll = math.random(1, 4)
+      if roll == 1 then
+        p = ({ "t", "k", "s", "n" })[math.random(4)]
+      end
+      local reading, okuri_typed, okuri = rd[2], u[1], u[2]
+      local skip = false
+      if p ~= "" then
+        if vowel_start then
+          -- 規則 3。母音は あ・い のうち a だけを使う（ta・ka・sa）。n は na で「な」になる経路が別なので使わない
+          if p == "n" or u[1] ~= "A" then
+            skip = true
+          else
+            okuri = ({ t = "た", k = "か", s = "さ" })[p]
+          end
+        elseif u[1]:sub(2, 2):lower() == lead then
+          skip = true -- Tte・Kka・Sshi は二重子音の組み立てが変わるので、p は付けない
+        elseif p == lead then
+          reading = reading .. (p == "n" and "ん" or "っ")
+        elseif p == "n" then
+          reading = reading .. "ん"
+        elseif not ("trkn"):find(lead, 1, true) then
+          -- ts・sh・ky のように、p と合わせて 1 つのローマ字の頭になる組は、別の経路（打ちかけがつながる）なので避ける
+          skip = true
+        end -- 違う子音の t・k・s は捨てられる（読みはそのまま）
+      end
+      if not skip then
+        local key = reading .. okuri_row(okuri)
+        extra_dict = { ["okuriari:" .. key] = { "語" } }
+        local keys = { "=" }
+        for ch in (rd[1] .. p .. okuri_typed):gmatch(".") do
+          keys[#keys + 1] = ch
+        end
+        if u[3] then
+          keys[#keys + 1] = "<space>"
+        end
+        local want = "▼語" .. okuri
+        local r = line_of(keys)
+        if r.ctx:to_string() ~= want then
+          fail("M16 送り仮名", keys, ("見出し %s で %q、期待 %q"):format(key, r.ctx:to_string(), want))
+        end
+        extra_dict = {}
       end
     end
     checked = checked + 1
