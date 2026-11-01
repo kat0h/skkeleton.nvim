@@ -151,6 +151,8 @@ local function code_hash()
   for _, f in ipairs(files) do
     parts[#parts + 1] = f:sub(#root + 2) .. "\0" .. table.concat(vim.fn.readfile(f, "b"), "\n")
   end
+  -- --config が違えば探索の中身も違うので、同じキャッシュを使わない
+  parts[#parts + 1] = "config\0" .. vim.inspect(opts.config)
   return vim.fn.sha256(table.concat(parts, "\0")):sub(1, 16)
 end
 local function cache_read(name)
