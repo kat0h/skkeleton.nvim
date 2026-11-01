@@ -45,4 +45,6 @@ return {
   { issue = 49, checker = "core", args = { "--metamorphic", "300", "--seed", "1" } },
   { issue = 50, checker = "dict", args = { "--random", "2000", "--seed", "1" } },
   { issue = 53, checker = "dict", args = { "--random", "5000", "--seed", "2" } },
+  -- jisyo.lua（辞書ファイルの読み込み）。#48 は同じ見出しが複数行ある辞書で、今は先の行だけが使われる
+  { issue = 48, checker = "jisyo", args = { "--random", "4000", "--seed", "11" } },
 }
