@@ -809,6 +809,141 @@ if opts.metamorphic then
       end
       extra_dict = {}
     end
+    -- M14: 候補の選び方（ページ送りと選択キー）。候補が showCandidatesCount を超えると、<Space> は 7 個ずつ進み、
+    -- 7 個の一覧が出る。そこでは selectCandidateKeys（asdfjkl）の n 番目のキーが、一覧の n 番目を確定する。
+    -- x は 7 個戻り、showCandidatesCount − 1 より前には戻らない。正解は henkan.lua を見ずに、この規則だけで書いた
+    -- 「今の候補の番号 p」の表で決める（p = -1 は ▽）。一覧の中身（host.show_candidates に渡る行）も同じ表と比べる。
+    -- 候補を使い切った <Space> は辞書登録の欄になる（ここでは取り消しの答えなので p は変わらない）。
+    do
+      local n = math.random(1, 20)
+      local C = ({ 1, 2, 3, 4, 4, 5, 7, 9 })[math.random(8)]
+      local K = ({ "asdfjkl", "asdfjkl", "1234567", "hjklasd" })[math.random(4)]
+      local keys7 = vim.split(K, "")
+      local cands, words = {}, {}
+      for i = 1, n do
+        words[i] = ("候%02d"):format(i)
+        -- 奇数番目には注釈をつける（確定する語は注釈を含まない）
+        cands[i] = i % 2 == 1 and (words[i] .. ";注" .. i) or words[i]
+      end
+      extra_dict = { ["okurinasi:てす"] = cands }
+      local saved = opts.config
+      opts.config = vim.tbl_extend("force", saved or {}, { showCandidatesCount = C, selectCandidateKeys = K })
+      local run = new_run("")
+      local shown
+      local orig_show = host.show_candidates
+      host.show_candidates = function(lines)
+        shown = lines
+      end
+      local trace = {}
+      local function go(key)
+        trace[#trace + 1] = key
+        shown = nil
+        return step(run, key)
+      end
+      local ok = true
+      for _, k in ipairs({ "T", "e", "s", "u", "<space>" }) do
+        ok = go(k) == nil and ok
+      end
+      local p = 0
+      local committed_word
+      local ops = {}
+      for _ = 1, math.random(1, 10) do
+        local r = math.random(10)
+        ops[#ops + 1] = r <= 5 and "<space>" or r <= 7 and "x" or keys7[math.random(7)]
+      end
+      for _, op in ipairs(ops) do
+        if not ok or committed_word then
+          break
+        end
+        local want_p, shown_expected = p, false
+        if op == "<space>" then
+          want_p = p >= C and p + 7 or p + 1
+          if want_p >= n then
+            want_p = p -- 使い切ったら登録の欄（取り消し）で、番号は変わらない
+          end
+          shown_expected = want_p >= C and want_p ~= p
+        elseif op == "x" then
+          want_p = p >= C and math.max(p - 7, C - 1) or p - 1
+          shown_expected = want_p >= C
+        elseif p >= C then
+          local idx = p + (vim.fn.stridx(K, op)) -- 選択キーの 0 始まりの位置
+          if idx < n then
+            committed_word = words[idx + 1]
+          else
+            shown_expected = true -- 候補が足りないキーは、何も確定せず一覧を出し直す
+          end
+        else
+          -- 一覧が出ていないとき、選択キーは普通のキー（今の候補を確定して打ち込まれる）。この検査では扱わない
+          break
+        end
+        local msg = go(op)
+        if msg then
+          fail("M14 候補の選択", concat(trace), msg)
+          ok = false
+          break
+        end
+        local st = run.ctx.state
+        if committed_word then
+          if not (run.line:sub(1, #committed_word) == committed_word) then
+            fail(
+              "M14 候補の選択",
+              concat(trace),
+              ("showCandidatesCount=%d キー %s、候補 %d 個、番号 %d から %s で %q が確定するはずが、行は %q"):format(
+                C,
+                K,
+                n,
+                p,
+                op,
+                committed_word,
+                run.line
+              )
+            )
+          end
+        elseif want_p < 0 then
+          if st.type ~= "input" then
+            fail("M14 候補の選択", concat(trace), ("x で ▽ に戻るはずが状態は %s"):format(st.type))
+          end
+          ok = false -- ▽ に戻ったので、ここで終わり
+        elseif st.type ~= "henkan" or st.candidate_index ~= want_p then
+          fail(
+            "M14 候補の選択",
+            concat(trace),
+            ("showCandidatesCount=%d 候補 %d 個、%s のあとの番号は %s（期待 %d）"):format(
+              C,
+              n,
+              op,
+              st.type == "henkan" and st.candidate_index or st.type,
+              want_p
+            )
+          )
+          ok = false
+        else
+          if want_p >= C and (shown_expected or op ~= "<space>") then
+            local want_lines = {}
+            for i = 0, 6 do
+              if want_p + i >= n then
+                break
+              end
+              want_lines[#want_lines + 1] = ("%s: %s"):format(keys7[i + 1], words[want_p + i + 1])
+            end
+            -- 注釈つきの候補は、一覧に出る語から注釈を除いた形（候補の表示は注釈を別に持つ）
+            if shown ~= nil and not vim.deep_equal(shown, want_lines) then
+              fail(
+                "M14 候補の一覧",
+                concat(trace),
+                ("番号 %d の一覧が %s（期待 %s）"):format(want_p, vim.inspect(shown), vim.inspect(want_lines))
+              )
+            elseif shown == nil and shown_expected then
+              fail("M14 候補の一覧", concat(trace), ("番号 %d で一覧が出ていない"):format(want_p))
+            end
+          end
+        end
+        p = want_p
+      end
+      host.show_candidates = orig_show
+      opts.config = saved
+      extra_dict = {}
+    end
     -- M7: 送り仮名。大文字の子音で送りが始まり、続く母音で送り仮名が決まる。
     -- 子音を重ねると「っ」が先に付く（NoTte = 乗って）。送りありの辞書の見出し（わるk など）で引く
     do
