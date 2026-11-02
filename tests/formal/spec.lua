@@ -1279,25 +1279,6 @@ end
 -- 当てはまる違反は「既知」として出し、失敗にしない
 M.known = {}
 
--- カタカナ系のモードの ▽ で q を押すと、upstream はひらがなで確定するが、半角カタカナモードでは全角カタカナになる（#51）
-M.known[#M.known + 1] = {
-  property = "mode: カタカナ系のモードの ▽ で q を押すと、ひらがなの読みで確定する",
-  match = function()
-    return true
-  end,
-  reason = "#51: 半角カタカナモードの ▽ で q を押すと、upstream はひらがなで確定するが、全角カタカナになる",
-}
-
--- 辞書登録の欄で <C-f> を押すと、host.input の WinEnter の autocmd が cmdline window から元のウィンドウへ戻して、
--- 登録が取り消され、同じバッファの余分なウィンドウが残る（#54。upstream は cmdline window が開く）
-M.known[#M.known + 1] = {
-  property = "resource: ウィンドウとバッファが漏れない",
-  match = function(keys)
-    return vim.tbl_contains(keys, "<C-f>")
-  end,
-  reason = "#54: 辞書登録の欄で <C-f> を押すと cmdline window が開かず、ウィンドウが残る",
-}
-
 -- markerHenkan か markerHenkanSelect が "" だと、辞書登録の入力が全部取り消し扱いになる（#55。upstream は登録できる）
 for _, name in ipairs({
   "register: 閉じたあとのバッファは登録した語か元の ▽ の読み",
