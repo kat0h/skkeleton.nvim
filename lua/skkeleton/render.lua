@@ -18,6 +18,10 @@ M.count = 0
 -- 今出している extmark。line は描いたときの行の文字列
 ---@type { buf: integer, id: integer, annot_id?: integer, row: integer, col: integer, line: string }?
 local mark
+-- pre-edit の行が外部から書き換えられたフラグ
+local mark_bytes_changed = false
+---@type integer?
+local attached_buf = nil
 -- cmdline に書いた pre-edit の位置と、書いた直後の cmdline 全体
 ---@type { text: string, start_pos: integer, end_pos: integer, line: string }?
 local cmd_mark
@@ -134,6 +138,7 @@ end
 -- pre-edit の extmark を消す
 function M.clear()
   pending = false
+  mark_bytes_changed = false
   if mark then
     if vim.api.nvim_buf_is_valid(mark.buf) then
       pcall(vim.api.nvim_buf_del_extmark, mark.buf, ns, mark.id)
@@ -153,6 +158,42 @@ function M.clean_stale(mode)
   if mode == "c" then
     M.clean_stale_cmdline()
   end
+end
+
+-- pre-edit を出している間、バッファの書き換えを on_bytes で受ける
+local function attach_buf(buf)
+  if attached_buf == buf then
+    return
+  end
+  attached_buf = buf
+  pcall(vim.api.nvim_buf_attach, buf, false, {
+    on_bytes = function(_, _, b, start_row, _, _, old_end_row, _, _, new_end_row, _, _)
+      if attached_buf ~= b then
+        return true
+      end
+      if not mark or mark.buf ~= b then
+        attached_buf = nil
+        return true
+      end
+      if pending then
+        return
+      end
+      local max_end_row = start_row + math.max(old_end_row, new_end_row)
+      if start_row <= mark.row and mark.row <= max_end_row then
+        mark_bytes_changed = true
+        vim.schedule(function()
+          if M.on_stale then
+            M.on_stale()
+          end
+        end)
+      end
+    end,
+    on_detach = function(_, b)
+      if attached_buf == b then
+        attached_buf = nil
+      end
+    end,
+  })
 end
 
 local function draw(text, chunks, annot)
@@ -195,6 +236,8 @@ local function draw(text, chunks, annot)
   end
   local cur_line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1] or ""
   mark = { buf = buf, id = id, annot_id = annot_id, row = row, col = col, line = cur_line }
+  mark_bytes_changed = false
+  attach_buf(buf)
 end
 
 -- いま出している pre-edit（注釈を含む）の文字列（カーソルがまだ指している行・列のときだけ。なければ ""）。
@@ -229,6 +272,9 @@ function M.is_stale(ctx, vim_mode)
   local pre = ctx:to_string()
   if pre == "" then
     return false
+  end
+  if mark_bytes_changed then
+    return true
   end
   if ctx.vim_mode ~= vim_mode then
     return true

@@ -244,6 +244,7 @@ function M.init(force)
       require("skkeleton").save_user_dict()
     end,
   })
+  render.on_stale = check_stale
   doautocmd("skkeleton-initialize-post")
 end
 

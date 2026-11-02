@@ -465,4 +465,18 @@ T["symbol after henkanFirst in kanatable is not duplicated (#41)"] = function()
   eq(helpers.buffer(child), { "z&" })
 end
 
+T["stale preedit: on_bytes detects line modification during pre-edit (#66)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "line1" })
+  start()
+  type("Kan")
+  eq(helpers.preedit(child), "▽かn")
+  -- 外部から現在行が書き換えられた場合
+  child.lua([[vim.api.nvim_buf_set_lines(0, 0, 1, false, { "modified" })]])
+  helpers.settle(child)
+  local marks =
+    child.lua_get([[vim.api.nvim_buf_get_extmarks(0, vim.api.nvim_get_namespaces()["skkeleton-preedit"], 0, -1, {})]])
+  eq(#marks, 0)
+  eq(helpers.preedit(child), "")
+end
+
 return T
