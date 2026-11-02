@@ -14,6 +14,7 @@ local NAME = "skkeleton-indicator"
 ---@field timer uv.uv_timer_t
 ---@field winid integer[]
 ---@field group integer
+---@field insert_cursor? integer[] insert に入ったときのカーソル位置
 local Indicator = {}
 Indicator.__index = Indicator
 
@@ -27,7 +28,7 @@ function Indicator.new()
   }, Indicator)
   self.group = vim.api.nvim_create_augroup(NAME, {})
   local defs = {
-    { "InsertEnter", "*", self:method("update") },
+    { "InsertEnter", "*", self:method("on_insert_enter") },
     { "InsertLeave", "*", self:method("close") },
     { "CursorMovedI", "*", self:method("on_cursor_moved") },
     { "CmdlineEnter", "*", self:method("on_cmdline_enter") },
@@ -229,6 +230,13 @@ function Indicator:open()
   redraw_if_cmdline(winid)
 end
 
+-- insert に入ったときのカーソルを覚えておく。マッピングなどで insert に入ってすぐ
+-- 文字が入ったときは、予約した描き直しの時点でカーソルが動いているので出さない
+function Indicator:on_insert_enter()
+  self.insert_cursor = vim.api.nvim_win_get_cursor(0)
+  self:update()
+end
+
 function Indicator:on_cmdline_enter()
   if Modes.is_cmdline() and not self:is_disabled() then
     self:open()
@@ -293,6 +301,11 @@ function Indicator:on_mode_changed()
   if new_mode:sub(1, 1) ~= "i" or old_mode:sub(1, 1) == "i" then
     return
   end
+  -- visual などから insert に戻ると、ModeChanged のあとにカーソルが動く。
+  -- その移動は入力ではないので、insert に入ったときの位置とは比べない
+  if old_mode:sub(1, 1) ~= "n" then
+    self.insert_cursor = nil
+  end
   self:update()
 end
 
@@ -304,6 +317,8 @@ function Indicator:update()
   self.update_pending = true
   vim.schedule(function()
     self.update_pending = false
+    local insert_cursor = self.insert_cursor
+    self.insert_cursor = nil
     if not Modes.is_active() or self:is_disabled() or has_preedit() then
       -- <C-c> で insert を抜けたときは InsertLeave が来ないので、ここで閉じる
       if self:is_opened() then
@@ -319,7 +334,7 @@ function Indicator:update()
       self:border_highlight(winid, mode)
       self.opened_cursor = vim.api.nvim_win_get_cursor(0)
       redraw_if_cmdline(winid)
-    else
+    elseif not insert_cursor or vim.deep_equal(insert_cursor, vim.api.nvim_win_get_cursor(0)) then
       self:open()
     end
   end)

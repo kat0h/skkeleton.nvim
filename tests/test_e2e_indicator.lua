@@ -222,4 +222,13 @@ T["opens at the cursor when returning from visual to insert (#47)"] = function()
   expect_at_cursor()
 end
 
+T["does not show after text is inserted right after insert starts"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "hello" })
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.type_keys("Afoo")
+  helpers.settle(child)
+  eq(helpers.buffer(child), { "hellofoo" })
+  eq(positions(), vim.NIL)
+end
+
 return T

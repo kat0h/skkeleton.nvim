@@ -124,7 +124,7 @@ DB の形式 v1（`lua/skkeleton/dictionary/db.lua`）:
 require("skkeleton.indicator").setup(opts)  -- opts は skkeleton_indicator と同じキー（camelCase）。false で無効化
 ```
 インジケータは本体から切り離す。本体が公開する状態（`g:skkeleton#mode`、`g:skkeleton#enabled`、`g:skkeleton#state`）と User イベント（`skkeleton-mode-changed`、`skkeleton-enable-post`、`skkeleton-disable-post`、`skkeleton-handled`）だけを読み、`skkeleton.render` などを `require` しない。本体からインジケータを呼ぶのは `init.lua` の `setup` だけにする。
-インジケータは、挿入モード・コマンドラインモードに入ったときと、skkeleton のモードが変わったときにカーソルの右下に出す。入力が始まったとき（`g:skkeleton#state.preedit` が空でない）、文字が入ったとき、カーソルが動いたとき、`fadeOutMs` がたったときに消す（#63）。
+インジケータは、挿入モード・コマンドラインモードに入ったときと、skkeleton のモードが変わったときにカーソルの右下に出す。入力が始まったとき（`g:skkeleton#state.preedit` が空でない）、文字が入ったとき、カーソルが動いたとき、`fadeOutMs` がたったときに消す（#63）。挿入に入ってすぐ文字が入ったとき（`Afoo` のようなマッピング）は出さない。
 
 ### 公開インターフェース（UI、upstream と互換）
 - 変数: `g:skkeleton#enabled`、`g:skkeleton#mode`
