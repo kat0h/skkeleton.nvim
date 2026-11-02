@@ -112,6 +112,10 @@ local function reset_if_stale(vm)
   if not render.is_stale(ctx, vm) then
     return false
   end
+  -- カーソルだけが動いたときは捨てずに、元の位置に確定する (#111)
+  if render.is_cursor_only_stale(ctx, vm) then
+    commit_preedit()
+  end
   render.clear()
   if vm == "c" then
     cmdline.clean()
@@ -192,6 +196,8 @@ function M.init(force)
       end
       if action == "reset" then
         if not host.is_in_input() then
+          -- insert から置換・visual・select へ移るときも、捨てずに <Esc> と同じく確定する (#111)
+          commit_preedit()
           reset()
           host.disable()
         end
