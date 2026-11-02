@@ -104,7 +104,7 @@ gh run view <run の番号> -R kat0h/skkeleton.nvim --log-failed   # 落ちた C
 
   ブランチの名前は `<種類>/<内容>`（「ブランチ」の節）にします。同じブランチを 2 つの作業ツリーでチェックアウトすることはできないので、ブランチも人ごとに分けます。
 - **リポジトリの最上位（main の作業ツリー）では作業しない。** そこは `git pull` で最新にしておくだけの場所にします。ファイルを変えたり、ブランチを切り替えたりしないでください。
-- **issue は担当を決めてから直す。** 直す issue を決めたら、手を付ける前に、その issue に自分を assignee にする（`gh issue edit <番号> -R kat0h/skkeleton.nvim --add-assignee @me`）か、「担当します」とコメントします。assignee やそのコメントがある issue と、すでに PR が出ている issue（`gh pr list -R kat0h/skkeleton.nvim --search "<番号>"`）は飛ばします。
+- **issue は担当を決めてから直す。** 直す issue を決めたら、手を付ける前に、その issue に「担当します（<作業者の名前>）」とコメントします。エージェントはみな同じ GitHub のアカウントを使うので、assignee では区別できません。担当のコメントがあってまだ閉じていない issue と、すでに PR が出ている issue（`gh pr list -R kat0h/skkeleton.nvim --search "<番号>"`）は飛ばします。
 - **PR は作った人の担当。** PR が閉じるまでは、作った人だけがそのブランチに push します。ほかの人は、直してほしい点をレビューのコメントで伝えます。
 - **`tests/formal/` と `poc/formal-ui` は手元だけで扱う。** モデル検査の道具は PR にしません（[docs/MODEL_CHECKING.md](docs/MODEL_CHECKING.md)）。issue を巡回するときも、これを直す issue は担当しません。
 - **ほかの人の作業ツリーに触らない。** ファイルを変える、checkout する、コミットする、のどれもしません。
