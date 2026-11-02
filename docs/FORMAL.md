@@ -88,6 +88,11 @@ nvim --headless -u NONE -i NONE -l tests/formal/upstream.lua 'A<Space>A<Left><CR
 
 `--keys` の先頭の `#mid` などは初期状態の名前です。`make test` には入れていません。
 
+### ユーザー辞書（`dict.lua`）
+
+登録・削除・検索を Lua の表で書いたモデルと並べてランダムに流します。保存まわりの操作は、`reload`（`save` / `save_ranks` で書いて新しいユーザー辞書に読み直す）、`libsave`（`Library:save()` で書く。`immediatelyDictionaryRW` は真と偽の両方）、`rwreg`・`rwpurge`（`immediatelyDictionaryRW` が真の Library で登録・削除し、`save` は呼ばない）です。`completionRankFile` は一時ファイルにします。
+性質: 書いて読み直したあと、どの読みの候補と順も、補完の読みも、モデルと同じ（注釈つき、`/`・`;` を含む語、`(concat ...)` 形式、`[` で始まるブロックを含む）。補完のランクの順（登録した候補が最新、削除で消える）が、保存の前後で同じ。正解は登録と削除の規則だけで書き、読み込みの実装は写していません。
+
 ### 行カバレッジ（`--coverage`）
 
 `check.lua`・`core.lua`・`dict.lua`・`jisyo.lua` に `--coverage <名前>` を付けると、`lua/skkeleton/` の通った行を `.tests/formal-cov/<名前>/` に書きます（同じ名前なら足し合わせます。キャッシュは使わず流し直します）。`coverage.lua` で集計し、ファイルごとの割合（低い順）と通っていない行のまとまりを出します。分母は LuaJIT のバイトコードから取った実行できる行です。
