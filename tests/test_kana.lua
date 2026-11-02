@@ -180,4 +180,66 @@ T["key mapped to henkanFirst in keymap does not duplicate following characters (
   eq(child.lua_get([[ctx.preedit:output("")]]), "&@")
 end
 
+T["globalKanaTableFiles loads two files with their encodings"] = function()
+  init()
+  child.lua([[
+    p1 = vim.fn.tempname()
+    vim.fn.writefile({ "xx,ほ" }, p1)
+    p2 = vim.fn.tempname()
+    local f = assert(io.open(p2, "wb"))
+    f:write(vim.iconv("yy,へ\n", "utf-8", "euc-jp"))
+    f:close()
+    require("skkeleton.config").set({
+      globalKanaTableFiles = { { p1, "utf-8" }, { p2, "euc-jp" } },
+    })
+  ]])
+  eq(child.lua_get([[H.output("xxyy")]]), "ほへ")
+end
+
+T["register_kanatable_file loads and switches the table"] = function()
+  init()
+  child.lua([[
+    path = vim.fn.tempname()
+    vim.fn.writefile({ "xx,ほ" }, path)
+    require("skkeleton").register_kanatable_file("mine", path, "utf-8", true)
+    kana.set_current("mine")
+    require("skkeleton.config").set({ kanaTable = "mine" })
+  ]])
+  eq(child.lua_get([[H.output("xx")]]), "ほ")
+  eq(
+    child.lua_get([[select(2, pcall(require("skkeleton").register_kanatable_file, "nothing", path, "utf-8", false))]]),
+    "table nothing is not found."
+  )
+end
+
+T["load_file with invalid utf-8 keeps loading the valid lines"] = function()
+  init()
+  child.lua([[
+    path = vim.fn.tempname()
+    local f = assert(io.open(path, "wb"))
+    f:write("\255\nxx,ほ\n")
+    f:close()
+    ok1 = pcall(kana.load_file, "bad1", path, "utf-8", true)
+    ok2 = pcall(kana.load_file, "bad2", path, "", true)
+  ]])
+  eq(child.lua_get("ok1"), true)
+  eq(child.lua_get("ok2"), true)
+  eq(child.lua_get([[kana.get_table("bad1"):find("xx")]]), { "ほ", "" })
+  -- 文字コードの指定が無い場合は、UTF-8 として不正なので EUC-JP とみなす。
+  -- そのため UTF-8 の「ほ」は化けるが、エラーにはならず読み込みは続く
+  eq(child.lua_get([[kana.get_table("bad2"):find("xx") ~= nil]]), true)
+end
+
+T["a line without a comma becomes an entry with an empty result"] = function()
+  init()
+  child.lua([[
+    path = vim.fn.tempname()
+    vim.fn.writefile({ "bad", "xx,ほ" }, path)
+    kana.load_file("mal", path, "utf-8", true)
+  ]])
+  -- 今の動き: 読めない行はエラーにせず、キー全体を from、結果を "" として足す
+  eq(child.lua_get([[kana.get_table("mal"):find("bad")]]), { "", "" })
+  eq(child.lua_get([[kana.get_table("mal"):find("xx")]]), { "ほ", "" })
+end
+
 return T
