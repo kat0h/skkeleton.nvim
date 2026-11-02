@@ -6,7 +6,7 @@ STYLUA ?= $(if $(wildcard .tests/bin/stylua),.tests/bin/stylua,stylua)
 # make test FILE=tests/test_kana.lua で 1 ファイルだけ動かす
 FILE ?=
 
-.PHONY: test deps lint fmt bench difftest bench-keys
+.PHONY: test deps lint fmt bench difftest bench-keys jisyotest
 
 test: deps
 	MINI_PATH=$(MINI_PATH) $(NVIM) --headless --noplugin -u tests/minimal_init.lua \
@@ -35,3 +35,8 @@ difftest: deps
 # キー 1 回ごとの処理時間を測る
 bench-keys: deps
 	MINI_PATH=$(MINI_PATH) $(NVIM) --headless -u NONE -i NONE -l bench/keys.lua $(ARGS)
+
+# SKK-JISYO.L の全候補が変換で出るか確かめる（重いので make test には入れない）。
+# make jisyotest ARGS="--sample 2000" のように絞れる
+jisyotest: deps
+	MINI_PATH=$(MINI_PATH) $(NVIM) --headless -u NONE -i NONE -l tests/jisyo/run.lua $(ARGS)
