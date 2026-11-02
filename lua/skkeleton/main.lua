@@ -33,16 +33,18 @@ local function doautocmd(name)
   end
 end
 
--- g:skkeleton#state を更新する（補完ソースなどが読む）
+-- g:skkeleton#state を更新する（補完ソースやインジケータが読む）
 local function update_state_variable()
-  local st = store.context().state
+  local ctx = store.context()
+  local st = ctx.state
   local phase
   if st.type == "input" then
     phase = st.mode == "okurinasi" and "input:okurinasi" or st.mode == "okuriari" and "input:okuriari" or "input"
   else
     phase = st.type
   end
-  vim.g["skkeleton#state"] = { phase = phase, henkanFeed = st.henkan_feed or "" }
+  local preedit = st.type ~= "escape" and ctx:to_string() or ""
+  vim.g["skkeleton#state"] = { phase = phase, henkanFeed = st.henkan_feed or "", preedit = preedit }
 end
 
 -- Context を作り直す（使い終わった state の片付け）
@@ -110,7 +112,6 @@ local function reset_if_stale(vm)
   popup.close()
   update_state_variable()
   doautocmd("skkeleton-handled")
-  require("skkeleton.indicator").move()
   -- 折り返した pre-edit でウィンドウに収まらず @ になっていた行は、extmark を消しても描き直されない
   if vm == "i" and vim.api.nvim__redraw then
     pcall(vim.api.nvim__redraw, { win = 0, valid = false })

@@ -426,8 +426,6 @@ function M.finish()
     draw(current_text, current_chunks, current_annot)
     adjust_scroll()
     popup.open()
-    -- pre-edit の幅が変わったので、インジケータを画面上のカーソルに寄せ直す
-    require("skkeleton.indicator").move()
   elseif vm == "c" then
     M.clear()
     if current_cmd_text ~= "" then
