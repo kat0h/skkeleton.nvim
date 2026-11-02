@@ -454,6 +454,12 @@ setUndoPoint                                   *skkeleton-config-setUndoPoint*
 	(既定値: true)
 	真にすると、変換確定時にアンドゥポイント（|<C-g>u|）を設定します。
 
+setUndoPointOnPaste                     *skkeleton-config-setUndoPointOnPaste*
+	(既定値: true)
+	真にすると、skkeleton が有効な挿入モードでの貼り付け（|vim.paste()| を
+	通る操作）の直前にアンドゥを区切ります。貼り付けた文字だけを一度の
+	アンドゥで取り消せるようになります。
+
 showCandidatesCount                     *skkeleton-config-showCandidatesCount*
 	(既定値: 4)
 	変換候補をポップアップ一覧で表示するまでに、インラインで 1 つずつ表示

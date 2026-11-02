@@ -26,6 +26,7 @@ T["defaults"] = function()
     registerConvertResult = false,
     selectCandidateKeys = "asdfjkl",
     setUndoPoint = true,
+    setUndoPointOnPaste = true,
     showCandidatesCount = 4,
     skkServerHost = "127.0.0.1",
     skkServerPort = 1178,

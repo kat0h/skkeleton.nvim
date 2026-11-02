@@ -17,6 +17,7 @@ function M.setup(opts)
     indicator = {}
   end
   require("skkeleton.indicator").setup(indicator)
+  require("skkeleton.paste").init()
 end
 
 function M.enable()
