@@ -666,4 +666,24 @@ T["core"]["items returns structured items sharing candidates and annotations"] =
   eq(items[3].annotation, nil)
 end
 
+T["core"]["confirm commits the word, registers it, and is one undo unit"] = function()
+  enable()
+  type("Kanj")
+
+  child.lua([[require("skkeleton.completion").confirm("かんじ", "漢字;annotation")]])
+  helpers.settle(child)
+
+  eq(helpers.buffer(child), { "漢字" })
+  eq(helpers.preedit(child), "")
+  eq(child.lua_get([[require("skkeleton.store").context().last_candidate.candidate]]), "漢字;annotation")
+  eq(
+    child.lua_get([=[require("skkeleton.store").library():get_henkan_result("okurinasi", "かんじ")[1]]=]),
+    "漢字;annotation"
+  )
+
+  -- 確定は 1 回の undo で戻る
+  type("<Esc>u")
+  eq(helpers.buffer(child), { "" })
+end
+
 return T

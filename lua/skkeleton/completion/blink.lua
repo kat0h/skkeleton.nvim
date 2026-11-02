@@ -58,7 +58,7 @@ end
 function source:execute(_, item, callback)
   local data = item.data or {}
   if data.skkeleton and data.kana and data.word then
-    require("skkeleton").complete(data.kana, data.word)
+    completion.confirm(data.kana, data.word)
   end
   if callback then
     callback()

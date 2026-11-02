@@ -25,7 +25,7 @@ skkeleton.nvim のモジュールの構成と、モジュールのあいだの�
 | `lua/skkeleton/function/{init,common,input,henkan,mode,disable,dictionary}.lua` | コア | upstream の `function/*.ts` に対応する各機能 |
 | `lua/skkeleton/dictionary/{init,skk,db,user,numeral}.lua` | 辞書 | 辞書管理（Library、SKK 辞書、DB キャッシュ、ユーザー辞書、数値変換） |
 | `lua/skkeleton/indicator/{init,indicator,config,modes,strings}.lua` | インジケータ | `skkeleton_indicator.nvim` の移植。本体の中を見ない（下の indicator） |
-| `lua/skkeleton/completion/{init,blink,sort}.lua` | 補完 | blink.cmp の source と、候補作り・判定の共通の処理（`can_complete()`、`items()`）。補完は blink.cmp だけ（#69） |
+| `lua/skkeleton/completion/{init,blink,sort}.lua` | 補完 | blink.cmp の source と、候補作り・判定・確定の共通の処理（`can_complete()`、`items()`、`confirm()`）。補完は blink.cmp だけ（#69） |
 | `lua/skkeleton/{init,main,render,popup,map}.lua`、`plugin/skkeleton.lua`、`autoload/skkeleton.vim`、`host.lua` の UI 部分 | UI | Neovim との結合。`main.lua` が enable/disable/toggle/handle と autocmd、`render.lua` が描画、`popup.lua` が候補ポップアップ、`map.lua` がマッピングとオプションの退避・復元を担当 |
 | `tests/helpers.lua` のキー入力ドライバ、E2E テスト | UI | 結合テスト・E2E テスト基盤 |
 

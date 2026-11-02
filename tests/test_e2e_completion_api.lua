@@ -1,4 +1,4 @@
--- 補完の Lua API（get_prefix、get_preedit、get_completion_result、complete_callback、complete）
+-- 補完の Lua API（get_prefix、get_preedit、get_completion_result、complete）
 local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 
@@ -60,19 +60,6 @@ T["get_completion_result lists the readings that start with the pre-edit"] = fun
   })
 end
 
-T["complete_callback registers the word and sets the last candidate"] = function()
-  enable()
-  child.lua("require('skkeleton').complete_callback('かんじ', '感じ')")
-  eq(
-    api("return require('skkeleton.store').library():get_henkan_result('okurinasi', 'かんじ')"),
-    { "感じ", "漢字", "幹事" }
-  )
-  eq(
-    api("return require('skkeleton.store').context().last_candidate"),
-    { type = "okurinasi", word = "かんじ", candidate = "感じ" }
-  )
-end
-
 T["complete discards the pre-edit and commits the word"] = function()
   enable()
   type("Kanj")
@@ -86,6 +73,10 @@ T["complete discards the pre-edit and commits the word"] = function()
   eq(
     api("return require('skkeleton.store').library():get_henkan_result('okurinasi', 'かんじ')[1]"),
     "漢字;annotation"
+  )
+  eq(
+    api("return require('skkeleton.store').context().last_candidate"),
+    { type = "okurinasi", word = "かんじ", candidate = "漢字;annotation" }
   )
   -- そのまま続けて打てる（モードは変わらない）
   eq(helpers.mode(child), "hira")

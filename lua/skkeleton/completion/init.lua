@@ -84,9 +84,9 @@ function M.setup(opts)
   })
 end
 
--- ▽ の入力中（送りなしで、読みが空でない）か。補完の候補を返してよい状態
+-- ▽ の入力中（送りなしで、読みが空でない）か
 ---@return boolean
-function M.is_pending()
+local function is_pending()
   if vim.api.nvim_get_mode().mode:sub(1, 1) ~= "i" then
     return false
   end
@@ -101,7 +101,7 @@ function M.can_complete()
   if not require("skkeleton").is_enabled() then
     return false
   end
-  return M.is_pending()
+  return is_pending()
 end
 
 ---@class skkeleton.CompletionItem
@@ -136,6 +136,16 @@ function M.items()
     }
   end
   return items
+end
+
+-- 補完で選んだ語を確定する。補完の入口（いまは blink.cmp だけ）は、候補の形を詰め替えてからここを通す。
+-- 状態の片付け、ユーザー辞書への登録、確定文字列の出力、undo point は main.complete が一括して行う。
+-- kana は読み、word は辞書の候補（注釈つきでもよい）、kind は変換の種類（既定は "okurinasi"）
+---@param kana string
+---@param word string
+---@param kind? skkeleton.HenkanType
+function M.confirm(kana, word, kind)
+  require("skkeleton.main").complete(kana, word, kind)
 end
 
 -- 利用者が providers に書いた skkeleton の source の id。書いていなければ nil
@@ -180,7 +190,7 @@ function M.refresh()
   if not opts.enabled then
     return hide()
   end
-  if not M.is_pending() then
+  if not M.can_complete() then
     return hide()
   end
   local st = require("skkeleton.store").context().state
@@ -208,7 +218,7 @@ end
 -- 回したら true。upstream の handleCompleteKey に当たる
 ---@return boolean
 function M.accept_selected()
-  if not M.options.enabled or not M.is_pending() then
+  if not M.options.enabled or not M.can_complete() then
     return false
   end
   local blink = package.loaded["blink.cmp"]
