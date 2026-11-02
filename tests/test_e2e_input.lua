@@ -394,6 +394,15 @@ T["<C-o>zz in the middle of pre-edit keeps it (#117)"] = function()
   eq(helpers.preedit(child), "▽かn")
 end
 
+T["an unmapped special key that commits also closes the candidate popup (#115)"] = function()
+  start()
+  type("Kan<Space><Space><Space><Space><Space>")
+  eq(helpers.popup(child) ~= nil, true)
+  type("<Right>")
+  eq(helpers.buffer(child), { "管" })
+  eq(helpers.popup(child), vim.NIL)
+end
+
 T["<Insert> during pre-edit keeps the reading as text (#111)"] = function()
   child.api.nvim_buf_set_lines(0, 0, -1, false, { "" })
   child.api.nvim_win_set_cursor(0, { 1, 0 })

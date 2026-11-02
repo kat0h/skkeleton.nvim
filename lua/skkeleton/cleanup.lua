@@ -161,7 +161,7 @@ end
 function M.setup()
   local group = vim.api.nvim_create_augroup("skkeleton-internal", { clear = true })
   -- モード遷移に伴う後片付けの遷移表 (#62)
-  -- 移る前と後のモードに応じて、片付け方（"reset"、"safe_reset"、"none"）を引く
+  -- 移る前と後のモードに応じて、片付け方（"reset"、"safe_reset"、"stale"、"none"）を引く
   local MODE_TRANSITIONS = {
     -- 1. insert / completion 中から visual / select モードへの直接遷移（マウス選択など）
     { from = "^i", to = "^[vV\022sS\019]", action = "reset" },

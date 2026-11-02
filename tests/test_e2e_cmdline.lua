@@ -56,6 +56,15 @@ T["candidate popup is shown above the command line"] = function()
   eq(helpers.popup(child), vim.NIL)
 end
 
+T["an unmapped special key that commits closes the candidate popup (#115)"] = function()
+  enable_in_cmdline()
+  type("Kan<Space><Space><Space><Space><Space>")
+  eq(helpers.popup(child) ~= nil, true)
+  type("<Right>")
+  eq(child.fn.getcmdline(), "管")
+  eq(helpers.popup(child), vim.NIL)
+end
+
 T["a command typed with skkeleton runs"] = function()
   enable_in_cmdline()
   type("<Plug>(skkeleton-disable)")
