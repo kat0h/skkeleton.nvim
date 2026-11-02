@@ -145,6 +145,16 @@ function M.clear()
   end
 end
 
+-- pre-edit が stale になったときに、残骸を片付ける
+---@param mode? string
+function M.clean_stale(mode)
+  M.clear()
+  mode = mode or (vim.api.nvim_get_mode().mode:sub(1, 1))
+  if mode == "c" then
+    M.clean_stale_cmdline()
+  end
+end
+
 local function draw(text, chunks, annot)
   M.clear()
   if text == "" then

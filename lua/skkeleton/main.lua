@@ -75,25 +75,18 @@ end
 -- handle の実行中か（辞書登録の input() などで誤って初期化しない）
 local handling_depth = 0
 
--- pre-edit が出ているのにバッファやカーソルがずれたら、すぐ状態を初期化して表示を片付ける
-local function check_stale()
-  local vm = vim.api.nvim_get_mode().mode:sub(1, 1)
-  if
-    not vim.g["skkeleton#enabled"]
-    or handling_depth > host.in_input_depth()
-    or render.is_pending()
-    or (vm ~= "i" and vm ~= "c")
-  then
-    return
+-- pre-edit が出ているのにバッファやカーソルがずれたら、状態を初期化して表示を片付ける。
+-- 戻り値: ずれていてリセットしたかどうか
+local function reset_if_stale(vm)
+  vm = vm or vim.api.nvim_get_mode().mode:sub(1, 1)
+  if vm ~= "i" and vm ~= "c" then
+    return false
   end
   local ctx = store.context()
   if not render.is_stale(ctx, vm) then
-    return
+    return false
   end
-  render.clear()
-  if vm == "c" then
-    render.clean_stale_cmdline()
-  end
+  render.clean_stale(vm)
   mode_mod.initialize_state_with_abbrev(ctx, { "converter" })
   ctx.preedit:output("")
   popup.close()
@@ -104,6 +97,21 @@ local function check_stale()
   if vm == "i" and vim.api.nvim__redraw then
     pcall(vim.api.nvim__redraw, { win = 0, valid = false })
   end
+  return true
+end
+
+-- autocmd などから非同期に呼ばれるチェック
+local function check_stale()
+  local vm = vim.api.nvim_get_mode().mode:sub(1, 1)
+  if
+    not vim.g["skkeleton#enabled"]
+    or handling_depth > host.in_input_depth()
+    or render.is_pending()
+    or (vm ~= "i" and vm ~= "c")
+  then
+    return
+  end
+  reset_if_stale(vm)
 end
 
 -- 最初に使うときに一度だけ呼ぶ。autocmd を作り、skkeleton-initialize-pre/post を発火する
@@ -347,16 +355,8 @@ function M.handle_inner(func, opts)
   end
   popup.close()
 
-  local ctx = store.context()
   -- 補完の後など pre-edit とバッファが合わなくなったときはリセットする
-  if render.is_stale(ctx, short) then
-    render.clear()
-    if short == "c" then
-      render.clean_stale_cmdline()
-    end
-    mode_mod.initialize_state_with_abbrev(ctx, { "converter" })
-    ctx.preedit:output("")
-  end
+  reset_if_stale(short)
 
   local prefix
   if func == "handleKey" then
