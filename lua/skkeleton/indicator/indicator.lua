@@ -27,13 +27,16 @@ function Indicator.new()
   }, Indicator)
   self.group = vim.api.nvim_create_augroup(NAME, {})
   local defs = {
-    { "InsertEnter", "*", self:method("open") },
+    { "InsertEnter", "*", self:method("update") },
     { "InsertLeave", "*", self:method("close") },
     { "CursorMovedI", "*", self:method("on_cursor_moved") },
     { "CmdlineEnter", "*", self:method("on_cmdline_enter") },
     { "CmdlineLeave", "*", self:method("on_cmdline_leave") },
     { "CmdlineChanged", "*", self:method("on_cmdline_changed") },
     { "TextChangedI", "*", self:method("on_text_changed") },
+    { "TextChangedP", "*", self:method("on_text_changed") },
+    { "WinScrolled", "*", self:method("close") },
+    { "WinResized", "*", self:method("close") },
     { "ModeChanged", "*", self:method("on_mode_changed") },
     { "User", "skkeleton-handled", self:method("on_handled") },
     { "User", "skkeleton-mode-changed", self:method("update") },
@@ -223,19 +226,6 @@ function Indicator:open()
   table.insert(self.winid, 1, winid)
   -- 出したときのカーソル位置。ここから動いたら閉じる
   self.opened_cursor = vim.api.nvim_win_get_cursor(0)
-  -- A や o では InsertEnter のあとにカーソルや文字が動くことがある。落ち着いてから覚え直す
-  self.open_epoch = (self.open_epoch or 0) + 1
-  local epoch = self.open_epoch
-  self.just_opened = true
-  vim.schedule(function()
-    if self.open_epoch ~= epoch then
-      return
-    end
-    self.just_opened = false
-    if self:is_opened() then
-      self.opened_cursor = vim.api.nvim_win_get_cursor(0)
-    end
-  end)
   redraw_if_cmdline(winid)
 end
 
@@ -260,9 +250,9 @@ function Indicator:on_cmdline_changed()
   end
 end
 
--- 文字が入ったら閉じる。o や A で出したときの文字の変化は入力ではないので無視する
+-- 文字が入ったら閉じる
 function Indicator:on_text_changed()
-  if not self.just_opened and self:is_opened() then
+  if self:is_opened() then
     self:close()
   end
 end
@@ -274,22 +264,16 @@ function Indicator:on_handled()
   end
 end
 
--- 出したときのカーソル位置から動いたら閉じる。A や o で insert に入った直後は、
--- 同じイベントの中でカーソルが動くことがあるので、次のループで比べる
+-- 出したときのカーソル位置から動いたら閉じる
 function Indicator:on_cursor_moved()
   if not self:is_opened() then
     return
   end
-  vim.schedule(function()
-    if not self:is_opened() then
-      return
-    end
-    local pos = vim.api.nvim_win_get_cursor(0)
-    local opened = self.opened_cursor
-    if not opened or pos[1] ~= opened[1] or pos[2] ~= opened[2] then
-      self:close()
-    end
-  end)
+  local pos = vim.api.nvim_win_get_cursor(0)
+  local opened = self.opened_cursor
+  if not opened or pos[1] ~= opened[1] or pos[2] ~= opened[2] then
+    self:close()
+  end
 end
 
 -- <C-c> で insert を抜けたときなど InsertLeave が来ない場合も閉じる。
@@ -297,10 +281,16 @@ end
 -- 来ない場合にも開き直す (#38)。visual などから insert に戻ると、ModeChanged の
 -- あとにカーソルが動くので、落ち着いてから出す (#47)
 function Indicator:on_mode_changed()
+  local old_mode = vim.v.event.old_mode
+  local new_mode = vim.v.event.new_mode
   if not Modes.is_active() then
     if self:is_opened() then
       self:close()
     end
+    return
+  end
+  -- insert の中の細かいモード（i と ic / ix）の行き来では出し直さない
+  if new_mode:sub(1, 1) ~= "i" or old_mode:sub(1, 1) == "i" then
     return
   end
   self:update()
@@ -308,7 +298,12 @@ end
 
 -- skkeleton の User イベントで呼ばれる。描き直しは次のイベントループでまとめて行う
 function Indicator:update()
+  if self.update_pending then
+    return
+  end
+  self.update_pending = true
   vim.schedule(function()
+    self.update_pending = false
     if not Modes.is_active() or self:is_disabled() or has_preedit() then
       -- <C-c> で insert を抜けたときは InsertLeave が来ないので、ここで閉じる
       if self:is_opened() then
@@ -317,9 +312,16 @@ function Indicator:update()
       return
     end
     if self:is_opened() then
-      self:close()
+      local winid = self.winid[1]
+      local mode = self.modes:detect()
+      self:set_text(vim.api.nvim_win_get_buf(winid), mode)
+      pcall(vim.api.nvim_win_set_config, winid, self:win_pos_config(mode))
+      self:border_highlight(winid, mode)
+      self.opened_cursor = vim.api.nvim_win_get_cursor(0)
+      redraw_if_cmdline(winid)
+    else
+      self:open()
     end
-    self:open()
   end)
 end
 

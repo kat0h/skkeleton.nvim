@@ -230,6 +230,29 @@ T["hooks"]["入力が始まると閉じる"] = function()
   eq(#floats(), 0)
 end
 
+T["hooks"]["補完メニューが開いている間の文字入力でも閉じる"] = function()
+  setup({})
+  child.type_keys("i")
+  eq(#floats(), 1)
+  child.lua("vim.api.nvim_exec_autocmds('TextChangedP', {})")
+  eq(#floats(), 0)
+end
+
+T["hooks"]["スクロールやウィンドウの大きさが変わったら閉じる"] = function()
+  setup({})
+  child.type_keys("i")
+  eq(#floats(), 1)
+  child.lua("vim.api.nvim_exec_autocmds('WinScrolled', {})")
+  eq(#floats(), 0)
+
+  child.g["skkeleton#mode"] = "hira"
+  child.lua("_G.fire('skkeleton-mode-changed')")
+  wait(30)
+  eq(#floats(), 1)
+  child.lua("vim.api.nvim_exec_autocmds('WinResized', {})")
+  eq(#floats(), 0)
+end
+
 T["hooks"]["出したときのカーソル位置から動くと閉じる"] = function()
   setup({})
   child.api.nvim_buf_set_lines(0, 0, -1, false, { "ab" })
@@ -260,7 +283,7 @@ T["hooks"]["setup を何度呼んでも 1 つしか出ない。設定は最後�
   local f = floats()
   eq(#f, 1)
   eq(f[1].text, "Aa")
-  eq(#child.api.nvim_get_autocmds({ group = "skkeleton-indicator" }), 14)
+  eq(#child.api.nvim_get_autocmds({ group = "skkeleton-indicator" }), 17)
 end
 
 T["hooks"]["style = rounded / minimal / pill と winblend が反映される"] = function()

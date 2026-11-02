@@ -250,9 +250,10 @@ local function draw(text, chunks, annot)
 end
 
 -- いま出している pre-edit（注釈を含む）の文字列（カーソルがまだ指している行・列のときだけ。なければ ""）。
--- inline の virtual text は relative = "cursor" や screenpos() の位置に入らないので、インジケータが足す
+-- inline の virtual text は relative = "cursor" や screenpos() の位置に入らないので、
+-- 画面からはみ出すかを確かめるときに使う
 ---@return string
-function M.preedit_text()
+local function preedit_text()
   if not mark or current_text == "" or not vim.api.nvim_buf_is_valid(mark.buf) then
     return ""
   end
@@ -264,12 +265,6 @@ function M.preedit_text()
     return ""
   end
   return current_text .. (current_annot or "")
-end
-
--- 上の文字列の表示幅
----@return integer
-function M.preedit_width()
-  return vim.fn.strdisplaywidth(M.preedit_text())
 end
 
 -- pre-edit が残っているのにバッファや cmdline がそれと合わなくなっているか
@@ -368,7 +363,7 @@ local function adjust_scroll()
   if not vim.wo[win].wrap then
     return
   end
-  local preedit = M.preedit_text()
+  local preedit = preedit_text()
   if preedit == "" then
     return
   end
@@ -453,9 +448,10 @@ end
 -- ctx の今の状態を出す。prefix は先に流すキー
 ---@param ctx skkeleton.Context
 ---@param prefix? string
-function M.update(ctx, prefix)
+---@param pre? string ctx:to_string() の結果（呼び出し側で作ったもの）
+function M.update(ctx, prefix, pre)
   local vm = ctx.vim_mode
-  local pre = ctx:to_string()
+  pre = pre or ctx:to_string()
   local keys, esc
   if vm == "c" or vm == "t" then
     esc = pre == "\27"

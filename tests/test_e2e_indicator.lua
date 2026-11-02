@@ -77,6 +77,18 @@ T["closes when the preedit starts"] = function()
   eq(positions(), vim.NIL)
 end
 
+T["clears the preedit when leaving cmdline with <C-r>="] = function()
+  start()
+  type("<C-r>=")
+  eq(positions() ~= nil, true)
+
+  type("Kan")
+  eq(positions(), vim.NIL)
+
+  type("<Esc>")
+  eq(positions() ~= nil, true)
+end
+
 T["does not show on a mode change while the preedit remains"] = function()
   start()
   type("Kan")
