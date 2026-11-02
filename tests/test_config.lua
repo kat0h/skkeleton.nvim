@@ -30,7 +30,6 @@ T["defaults"] = function()
     setUndoPoint = true,
     setUndoPointOnPaste = true,
     showCandidatesCount = 4,
-    sources = { "skk_dictionary" },
     userDictionary = "~/.skkeleton",
   })
 end
@@ -90,6 +89,7 @@ T["set rejects illegal options"] = function()
     { [[{ kanaTable = "nothing" }]], "Illegal option detected: can't use undefined kanaTable: nothing" },
     { [[{ useSkkServer = true }]], "Illegal option detected: unknown option: useSkkServer" },
     { [[{ useGoogleJapaneseInput = true }]], "Illegal option detected: unknown option: useGoogleJapaneseInput" },
+    { [[{ sources = { "skk_dictionary" } }]], "Illegal option detected: unknown option: sources" },
     {
       [[{ globalDictionaries = { 1 } }]],
       "Illegal option detected: 'globalDictionaries' must be array of two string tuple",

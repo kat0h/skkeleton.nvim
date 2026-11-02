@@ -30,7 +30,6 @@ local function defaults()
     setUndoPoint = true,
     setUndoPointOnPaste = true,
     showCandidatesCount = 4,
-    sources = { "skk_dictionary" },
     userDictionary = "~/.skkeleton",
   }
 end
@@ -115,13 +114,6 @@ local validators = {
   setUndoPoint = of_type("boolean"),
   setUndoPointOnPaste = of_type("boolean"),
   showCandidatesCount = of_type("number"),
-  sources = function(x)
-    ensure_type(x, "table")
-    for _, v in ipairs(x) do
-      ensure_type(v, "string")
-    end
-    return x
-  end,
   userDictionary = of_type("string"),
 }
 

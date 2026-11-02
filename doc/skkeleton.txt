@@ -466,17 +466,6 @@ showCandidatesCount                     *skkeleton-config-showCandidatesCount*
 	変換候補をポップアップ一覧で表示するまでに、インラインで 1 つずつ表示
 	する候補数です。
 
-sources                                             *skkeleton-config-sources*
-	(既定値: { "skk_dictionary" })
-	変換候補の取得元のリストです。ユーザー辞書はこの設定にかかわらず常に使
-	用されます。
-
-	"skk_dictionary":
-		|skkeleton-config-globalDictionaries| に指定されたグローバル
-		辞書を検索します。辞書は DB 化して高速に検索されます。
-
-	それ以外の名前を指定しても、警告を表示して無視します。
-
 userDictionary                               *skkeleton-config-userDictionary*
 	(既定値: "~/.skkeleton")
 	ユーザー辞書のファイルパスです。文字コードは UTF-8 で保存されます。

@@ -256,7 +256,6 @@ T["load(cfg)"]["builds a Library from the config"] = function()
         userDictionary = TMP .. "/user",
         databasePath = TMP .. "/db",
         immediatelyDictionaryRW = false,
-        sources = { "skk_dictionary" },
       })
       lib:register_henkan_result("okurinasi", "てすと", "test")
       local files = {}
@@ -274,28 +273,6 @@ T["load(cfg)"]["builds a Library from the config"] = function()
       { "悪" },
       { "db", "db", "db" },
     }
-  )
-end
-
-T["load(cfg)"]["warns about unknown sources and skips them"] = function()
-  eq(
-    run([[
-      local msgs = {}
-      vim.notify = function(m) msgs[#msgs + 1] = m end
-      local lib = dictionary.load({
-        globalDictionaries = { { TD .. "/globalJisyo", "euc-jp" } },
-        userDictionary = TMP .. "/user",
-        databasePath = TMP .. "/db",
-        sources = { "deno_kv", "skk_server", "skk_dictionary" },
-      })
-      return {
-        #msgs,
-        msgs[1]:find("deno_kv", 1, true) ~= nil,
-        msgs[2]:find("skk_server", 1, true) ~= nil,
-        lib:get_henkan_result("okurinasi", "てすと"),
-      }
-    ]]),
-    { 2, true, true, { "テスト", "test" } }
   )
 end
 

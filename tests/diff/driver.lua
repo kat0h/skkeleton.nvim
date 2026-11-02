@@ -176,7 +176,6 @@ local function make_config(dict_text, extra)
   write_file(dir .. "/dict", dict_text)
   local config = vim.tbl_extend("force", {
     globalDictionaries = { { dir .. "/dict", "utf-8" } },
-    sources = { "skk_dictionary" },
     userDictionary = dir .. "/user",
     databasePath = dir .. "/db",
   }, extra or {})
