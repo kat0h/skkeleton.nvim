@@ -95,6 +95,34 @@ T["<Esc> after converting inserts the candidate"] = function()
   eq(child.fn.mode(), "n")
 end
 
+T["<C-c> in the middle of conversion leaves the same text as <Esc> (#70)"] = function()
+  for _, keys in ipairs({ "Kan", "Kan<Space>", "k" }) do
+    child.api.nvim_buf_set_lines(0, 0, -1, false, { "" })
+    child.api.nvim_win_set_cursor(0, { 1, 0 })
+    start()
+    type(keys)
+    type("<Esc>")
+    local esc_text = helpers.buffer(child)
+    local esc_cursor = helpers.cursor(child)
+    eq(#esc_text, 1)
+    eq(esc_text[1] ~= "", true)
+
+    child.api.nvim_buf_set_lines(0, 0, -1, false, { "" })
+    child.api.nvim_win_set_cursor(0, { 1, 0 })
+    start()
+    type(keys)
+    type("<C-c>")
+    eq(helpers.buffer(child), esc_text)
+    eq(helpers.cursor(child), esc_cursor)
+    eq(helpers.preedit(child), "")
+    eq(child.fn.mode(), "n")
+    eq(child.g["skkeleton#enabled"], false)
+    -- 確定した文字は u 1 回で戻せる
+    type("u")
+    eq(helpers.buffer(child), { "" })
+  end
+end
+
 T["the pre-edit follows the cursor in the middle of a line"] = function()
   child.api.nvim_buf_set_lines(0, 0, -1, false, { "abcdef" })
   child.api.nvim_win_set_cursor(0, { 1, 3 })

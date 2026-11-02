@@ -187,6 +187,18 @@ T["register"]["<C-g> cancels"] = function()
   eq(child.g["skkeleton#enabled"], true)
 end
 
+T["register"]["<C-c> cancels"] = function()
+  enable()
+  type("Yomi<Space>")
+  type("y")
+  child.type_keys("<C-c>")
+  helpers.settle(child)
+  eq(child.fn.mode(), "i")
+  eq(helpers.buffer(child), { "" })
+  eq(child.g["skkeleton#enabled"], true)
+  eq(user_dictionary():find("よみ", 1, true), nil)
+end
+
 T["register"]["an empty input cancels"] = function()
   enable()
   type("Yomi<Space><CR>")
