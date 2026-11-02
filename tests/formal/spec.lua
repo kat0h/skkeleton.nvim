@@ -1382,13 +1382,4 @@ function M.is_known(name, keys, msg)
   end
 end
 
--- terminal で ▽ の途中に <C-a> などを押すと、シェルのカーソルだけが動いて行が崩れる（#121）
-M.known[#M.known + 1] = {
-  property = "unmapped: 未マップの特殊キーのあと、pre-edit は元のままか、きれいにリセットされる",
-  match = function(keys)
-    return vim.tbl_contains(keys, "#term") and vim.tbl_contains(keys, "<C-S-a>")
-  end,
-  reason = "#121: terminal で ▽ の途中に <C-a> などを押すと、シェルのカーソルだけが動いて行が崩れる",
-}
-
 return M
