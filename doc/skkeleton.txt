@@ -466,14 +466,6 @@ showCandidatesCount                     *skkeleton-config-showCandidatesCount*
 	変換候補をポップアップ一覧で表示するまでに、インラインで 1 つずつ表示
 	する候補数です。
 
-skkServerHost                                 *skkeleton-config-skkServerHost*
-skkServerPort                                 *skkeleton-config-skkServerPort*
-skkServerReqEnc                             *skkeleton-config-skkServerReqEnc*
-skkServerResEnc                             *skkeleton-config-skkServerResEnc*
-	(既定値: "127.0.0.1"、1178、"euc-jp"、"euc-jp")
-	skkeleton との設定互換性のために用意されています。型の検証のみを行い、
-	実際の処理では使用しません。
-
 sources                                             *skkeleton-config-sources*
 	(既定値: { "skk_dictionary" })
 	変換候補の取得元のリストです。ユーザー辞書はこの設定にかかわらず常に使
@@ -482,11 +474,8 @@ sources                                             *skkeleton-config-sources*
 	"skk_dictionary":
 		|skkeleton-config-globalDictionaries| に指定されたグローバル
 		辞書を検索します。辞書は DB 化して高速に検索されます。
-	"deno_kv":
-		`"skk_dictionary"` と同じものとして扱われます。skkeleton の設
-		定をそのまま引き継げるように受け付けています。
-	"skk_server"、"google_japanese_input":
-		対応していません。指定された場合は警告を表示して無視します。
+
+	それ以外の名前を指定しても、警告を表示して無視します。
 
 userDictionary                               *skkeleton-config-userDictionary*
 	(既定値: "~/.skkeleton")
@@ -941,12 +930,9 @@ skkeleton からの移行                                     *skkeleton-migrati
 - |skkeleton-config-databasePath| にはファイルではなくディレクトリを指定しま
   す。skkeleton が生成した Deno KV の DB ファイルは使用せず、新しい形式で DB
   を作成します。
-- `sources` の `"deno_kv"` は `"skk_dictionary"` と同じものとして扱われます。
-- `skkServer*` は型の検証のみを行い、実際の処理では使用しません。
 
 非対応の機能~
-- skkserv および Google 日本語入力（`sources` の `"skk_server"`、
-  `"google_japanese_input"`）
+- skkserv および Google 日本語入力
 - ddc.vim の補完ソース（blink.cmp に対応しています）
 - YAML 形式・MessagePack 形式の辞書（JSON 形式の辞書には対応しています）
 - `skkeleton#handle()`、`skkeleton#dangerously_clear_buffer_local_mappings()`

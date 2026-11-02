@@ -30,10 +30,6 @@ T["defaults"] = function()
     setUndoPoint = true,
     setUndoPointOnPaste = true,
     showCandidatesCount = 4,
-    skkServerHost = "127.0.0.1",
-    skkServerPort = 1178,
-    skkServerReqEnc = "euc-jp",
-    skkServerResEnc = "euc-jp",
     sources = { "skk_dictionary" },
     userDictionary = "~/.skkeleton",
   })
@@ -92,7 +88,8 @@ T["set rejects illegal options"] = function()
     { [[{ showCandidatesCount = "4" }]], "Illegal option detected: expected number, got string" },
     { [[{ selectCandidateKeys = "abc" }]], "Illegal option detected: selectCandidateKeys.length !== 7" },
     { [[{ kanaTable = "nothing" }]], "Illegal option detected: can't use undefined kanaTable: nothing" },
-    { [[{ skkServerReqEnc = "latin" }]], "Illegal option detected: latin is invalid encoding" },
+    { [[{ useSkkServer = true }]], "Illegal option detected: unknown option: useSkkServer" },
+    { [[{ useGoogleJapaneseInput = true }]], "Illegal option detected: unknown option: useGoogleJapaneseInput" },
     {
       [[{ globalDictionaries = { 1 } }]],
       "Illegal option detected: 'globalDictionaries' must be array of two string tuple",
@@ -106,9 +103,6 @@ T["set rejects illegal options"] = function()
   for _, c in ipairs(cases) do
     eq(child.lua_get("err(" .. c[1] .. ")"), c[2])
   end
-  -- 削除済みのオプション
-  eq(child.lua_get([[err({ useSkkServer = true })]]):find("`useSkkServer` is removed", 1, true) ~= nil, true)
-  eq(child.lua_get([[err({ useGoogleJapaneseInput = true })]]):find("is removed", 1, true) ~= nil, true)
 end
 
 T["set changes nothing when an option is illegal"] = function()
@@ -117,22 +111,6 @@ T["set changes nothing when an option is illegal"] = function()
     pcall(config.set, { eggLikeNewline = true, debug = "x" })
   ]])
   eq(child.lua_get([[config.options.eggLikeNewline]]), false)
-end
-
-T["options not used in v1 are accepted"] = function()
-  child.lua([[
-    config = require("skkeleton.config")
-    config.set({
-      skkServerHost = "localhost",
-      skkServerPort = 1234,
-      skkServerReqEnc = "utf-8",
-      skkServerResEnc = "utf-8",
-      completionRankFile = "",
-      sources = { "skk_dictionary", "skk_server" },
-    })
-  ]])
-  eq(child.lua_get([[config.options.skkServerPort]]), 1234)
-  eq(child.lua_get([[config.options.sources]]), { "skk_dictionary", "skk_server" })
 end
 
 T["reset"] = function()
