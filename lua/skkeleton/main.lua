@@ -192,6 +192,8 @@ function M.init(force)
       end
       if action == "reset" then
         if not host.is_in_input() then
+          -- insert から置換・visual・select へ移るときも、捨てずに <Esc> と同じく確定する (#111)
+          commit_preedit()
           reset()
           host.disable()
         end

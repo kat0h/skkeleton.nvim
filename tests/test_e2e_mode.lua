@@ -334,6 +334,7 @@ T["transitioning directly to visual mode during pre-edit resets state"] = functi
   eq(child.fn.mode(), "v")
   eq(child.g["skkeleton#enabled"], false)
   eq(helpers.preedit(child), "")
+  eq(helpers.buffer(child)[1]:find("かんじ", 1, true) ~= nil, true)
   eq(child.g["skkeleton#state"].phase, "input")
 end
 
@@ -521,6 +522,7 @@ I["transitioning directly to visual mode during pre-edit resets state and closes
   eq(ichild.fn.mode(), "v")
   eq(ichild.g["skkeleton#enabled"], false)
   eq(helpers.preedit(ichild), "")
+  eq(helpers.buffer(ichild)[1]:find("かんじ", 1, true) ~= nil, true)
   eq(helpers.indicator(ichild), vim.NIL)
 end
 

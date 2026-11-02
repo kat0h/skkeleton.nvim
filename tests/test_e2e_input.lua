@@ -367,6 +367,36 @@ T["<Insert> で置換モードに移ると pre-edit を捨てて無効になる 
   eq(#marks, 0)
 end
 
+T["<Insert> during pre-edit keeps the reading as text (#111)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "" })
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.type_keys("i")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+  eq(helpers.preedit(child), "▽かn")
+  child.type_keys("<Insert>")
+  helpers.settle(child)
+  eq(child.fn.mode(), "R")
+  eq(child.g["skkeleton#enabled"], false)
+  eq(helpers.buffer(child), { "かん" })
+  eq(helpers.preedit(child), "")
+end
+
+T["<Insert> during henkan keeps the candidate as text (#111)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "" })
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.type_keys("i")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan<Space>")
+  eq(helpers.preedit(child), "▼缶")
+  child.type_keys("<Insert>")
+  helpers.settle(child)
+  eq(child.fn.mode(), "R")
+  eq(child.g["skkeleton#enabled"], false)
+  eq(helpers.buffer(child), { "缶" })
+  eq(helpers.preedit(child), "")
+end
+
 T["ウィンドウの最後の行の右端で入力したとき、折り返した pre-edit が収まるようにスクロールする (#34)"] = function()
   child.cmd("vsplit")
   local win = child.api.nvim_get_current_win()
