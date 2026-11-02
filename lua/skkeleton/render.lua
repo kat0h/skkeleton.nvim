@@ -1,10 +1,10 @@
 -- skkeleton.nvim: 表示。handle の結果を Neovim に出す。
 -- insert モード: pre-edit は inline の extmark で出し、確定した文字列は feedkeys で流す。
 -- cmdline と terminal: BS で消して書き直す文字列を feedkeys する。
-local candidate = require("skkeleton.candidate")
 local cmdline = require("skkeleton.render.cmdline")
 local options = require("skkeleton.config").options
 local popup = require("skkeleton.popup")
+local state = require("skkeleton.state")
 
 local M = {}
 
@@ -42,13 +42,19 @@ local function ensure_highlights()
   vim.api.nvim_set_hl(0, "SkkeletonAnnotation", { link = "Comment", default = true })
 end
 
----@param chunks string[][]
----@param part string
----@param hl string
-local function push_chunk(chunks, part, hl)
-  if part and part ~= "" then
-    chunks[#chunks + 1] = { part, hl }
+-- 断片の役割をハイライト名に引き当てる
+---@param role skkeleton.SegmentRole
+---@param kind "input"|"henkan"|"escape"
+---@return string
+local function role_highlight(role, kind)
+  if role == "marker" then
+    return kind == "henkan" and "SkkeletonMarkerSelect" or "SkkeletonMarkerHenkan"
+  elseif role == "romaji" then
+    return "SkkeletonRomaji"
+  elseif role == "okuri" then
+    return "SkkeletonOkuri"
   end
+  return "SkkeletonPreedit"
 end
 
 ---@param ctx skkeleton.Context
@@ -60,57 +66,18 @@ local function build_chunks(ctx, text)
   end
   local st = ctx.state
   local chunks = {}
+  for _, segment in ipairs(state.segments(st)) do
+    chunks[#chunks + 1] = { segment.text, role_highlight(segment.hl, st.type) }
+  end
   local annot = ""
-  if st.type == "input" then
-    if st.mode == "direct" then
-      push_chunk(chunks, st.feed, "SkkeletonRomaji")
-    elseif st.mode == "okurinasi" then
-      local marker = st.converter and st.converter(options.markerHenkan) or options.markerHenkan
-      local body = st.converter and st.converter(st.henkan_feed) or st.henkan_feed
-      push_chunk(chunks, marker, "SkkeletonMarkerHenkan")
-      push_chunk(chunks, body, "SkkeletonPreedit")
-      push_chunk(chunks, st.feed, "SkkeletonRomaji")
-    elseif st.mode == "okuriari" then
-      local marker = st.converter and st.converter(options.markerHenkan) or options.markerHenkan
-      local body = st.converter and st.converter(st.henkan_feed) or st.henkan_feed
-      push_chunk(chunks, marker, "SkkeletonMarkerHenkan")
-      push_chunk(chunks, body, "SkkeletonPreedit")
-      if st.previous_feed then
-        push_chunk(chunks, st.feed, "SkkeletonRomaji")
-        push_chunk(chunks, "*", "SkkeletonOkuri")
-      else
-        local okuri_part = "*" .. st.okuri_feed
-        if st.converter then
-          okuri_part = st.converter(okuri_part)
-        end
-        push_chunk(chunks, okuri_part, "SkkeletonOkuri")
-        push_chunk(chunks, st.feed, "SkkeletonRomaji")
-      end
-    end
-  elseif st.type == "henkan" then
+  if st.type == "henkan" then
     local raw_cand = st.candidates and st.candidates[st.candidate_index + 1] or nil
-    local cand = candidate.modify(raw_cand, st.affix) or "error"
-    local okuri = st.okuri_feed
-    if st.converter then
-      okuri = st.converter(okuri)
-    end
-    push_chunk(chunks, options.markerHenkanSelect, "SkkeletonMarkerSelect")
-    push_chunk(chunks, cand, "SkkeletonPreedit")
-    push_chunk(chunks, okuri, "SkkeletonOkuri")
     if raw_cand and st.candidate_index >= 0 and st.candidate_index < options.showCandidatesCount then
       local semi = raw_cand:find(";", 1, true)
       if semi and #raw_cand > semi then
         annot = " ;" .. raw_cand:sub(semi + 1)
       end
     end
-  end
-
-  local joined = ""
-  for _, c in ipairs(chunks) do
-    joined = joined .. c[1]
-  end
-  if joined ~= text then
-    chunks = { { text, "SkkeletonPreedit" } }
   end
   return chunks, annot
 end

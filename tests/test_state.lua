@@ -84,6 +84,48 @@ T["state.to_string"] = function()
   end
 end
 
+T["state.segments matches to_string and roles"] = function()
+  init()
+  child.lua([[
+    state = require("skkeleton.state")
+    seg = function(fields)
+      local st = state.initialize({})
+      for k, v in pairs(fields) do st[k] = v end
+      local joined, roles = "", {}
+      for _, segment in ipairs(state.segments(st)) do
+        joined = joined .. segment.text
+        roles[#roles + 1] = segment.hl
+      end
+      return { joined, roles, state.to_string(st) }
+    end
+  ]])
+  local cases = {
+    { [[{ feed = "k" }]], "k", { "romaji" } },
+    { [[{ mode = "okurinasi", henkan_feed = "かん", feed = "j" }]], "▽かんj", { "marker", "body", "romaji" } },
+    {
+      [[{ mode = "okuriari", henkan_feed = "か", okuri_feed = "ん", feed = "j" }]],
+      "▽か*んj",
+      { "marker", "body", "okuri", "romaji" },
+    },
+    {
+      [[{ mode = "okuriari", henkan_feed = "や", feed = "t", previous_feed = true }]],
+      "▽やt*",
+      { "marker", "body", "romaji", "okuri" },
+    },
+    {
+      [[{ type = "henkan", candidates = { "変換;注釈" }, candidate_index = 0, okuri_feed = "った", converter = function(x) return x .. "X" end }]],
+      "▼変換ったX",
+      { "marker", "body", "okuri" },
+    },
+  }
+  for _, c in ipairs(cases) do
+    local got = child.lua_get("seg(" .. c[1] .. ")")
+    eq(got[1], c[2])
+    eq(got[2], c[3])
+    eq(got[1], got[3])
+  end
+end
+
 T["state.to_string follows config markers"] = function()
   init()
   child.lua([[
