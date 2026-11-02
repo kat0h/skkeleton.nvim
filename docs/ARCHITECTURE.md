@@ -22,14 +22,15 @@ skkeleton.nvim のモジュールの構成と、モジュールのあいだの�
 | `lua/skkeleton/kana/{init,rom_hira,rom_zen,hira_kata,hira_hankata}.lua` | コア | かなテーブル（Trie）とかな変換 |
 | `lua/skkeleton/{state,context,candidate,okuri,preedit,store,host}.lua` | コア | 入力状態、Context、確定文字列のバッファ |
 | `lua/skkeleton/mode.lua` | コア | かなモード（hira / kata / hankata / abbrev）の切り替え |
-| `lua/skkeleton/paste.lua` | UI | `vim.paste` を包み、貼り付けの直前に undo を区切る |
+| `lua/skkeleton/paste.lua` | UI | `vim.paste` を包み、貼り付けの前に pre-edit を確定し、undo を区切る（#125） |
+| `lua/skkeleton/guard.lua` | コア | 未マップの物理の特殊キーで、pre-edit を確定してからキーを流す（#56、#121） |
 | `lua/skkeleton/marker.lua` | コア | 辞書登録の取り消しの印と設定したマーカーの判定、履歴の掃除 |
 | `lua/skkeleton/keymap.lua` | コア | 状態ごとのキーマップと `handle_key` |
 | `lua/skkeleton/function/{init,common,input,henkan,mode,disable,dictionary}.lua` | コア | upstream の `function/*.ts` に対応する各機能 |
 | `lua/skkeleton/dictionary/{init,skk,db,user,numeral}.lua` | 辞書 | 辞書管理（Library、SKK 辞書、DB キャッシュ、ユーザー辞書、数値変換） |
 | `lua/skkeleton/indicator/{init,indicator,config,modes,strings}.lua` | インジケータ | `skkeleton_indicator.nvim` の移植。本体の中を見ない（下の indicator） |
 | `lua/skkeleton/completion/{init,blink,sort}.lua` | 補完 | blink.cmp の source と、候補作り・判定・確定の共通の処理（`can_complete()`、`items()`、`confirm()`）。補完は blink.cmp だけ（#69） |
-| `lua/skkeleton/{init,main,cleanup,render,popup,map}.lua`、`plugin/skkeleton.lua`、`autoload/skkeleton.vim`、`host.lua` の UI 部分 | UI | Neovim との結合。`main.lua` が enable/disable/toggle/handle/complete、`cleanup.lua` が後片付けの autocmd と pre-edit のずれの検出、`render.lua` が描画、`popup.lua` が候補ポップアップ、`map.lua` がマッピングとオプションの退避・復元を担当 |
+| `lua/skkeleton/{init,main,cleanup,render,popup,map}.lua`、`lua/skkeleton/render/cmdline.lua`、`plugin/skkeleton.lua`、`autoload/skkeleton.vim`、`host.lua` の UI 部分 | UI | Neovim との結合。`main.lua` が enable/disable/toggle/handle/complete、`cleanup.lua` が後片付けの autocmd と pre-edit のずれの検出、`render.lua` が insert の描画、`render/cmdline.lua` が cmdline / terminal の pre-edit の記録と片付け、`popup.lua` が候補ポップアップ、`map.lua` がマッピングとオプションの退避・復元を担当 |
 | `tests/helpers.lua` のキー入力ドライバ、E2E テスト | UI | 結合テスト・E2E テスト基盤 |
 
 ほかの区分のモジュールを使うときは、以下のインターフェースだけを通す。単体テストでは、ほかの区分のモジュールをスタブに差し替える。
@@ -57,6 +58,7 @@ skkeleton.nvim のモジュールの構成と、モジュールのあいだの�
 -- { type = "escape" } もある
 state.initialize(st, ignore?)   -- upstream の initializeState
 state.to_string(st)
+state.segments(st)              -- pre-edit の { text, role } の列。文字列と色つきの断片を 1 か所で作る（#97）
 ```
 
 ### Context と store（コア）
@@ -120,20 +122,20 @@ DB の形式 v2（`lua/skkeleton/dictionary/db.lua`）:
 - `[0,128)` のヘッダは ASCII で `SKKDB <ver> <nari> <nnasi> <src_size> <src_mtime_sec> <src_mtime_nsec>\n` を空白で埋めたもの。ヘッダのサイズと mtime が元の辞書と合わなければ作り直す
 - `[128,…)` の索引: u32 LE の行頭オフセット。okuri-ari が nari 個＋終端、okuri-nasi が nnasi 個＋終端。行の長さはオフセットの差でわかる
 - データ部: UTF-8 の `読み 候補\n` を、種類ごとにバイト順（LuaJIT の文字列比較と同じ）でソートしたもの
-- 書き込みは `.tmp` に書いてから rename する。同じ読みが 2 回あれば先のものを使う（#48）
+- 書き込みは `.tmp` に書いてから rename する。同じ読みが 2 回以上あれば、あとのものを使う（#48）
 
 ### indicator（インジケータ）
 ```lua
 require("skkeleton.indicator").setup(opts)  -- opts は skkeleton_indicator と同じキー（camelCase）。false で無効化
 ```
 インジケータは本体から切り離す。本体が公開する状態（`g:skkeleton#mode`、`g:skkeleton#enabled`、`g:skkeleton#state`）と User イベント（`skkeleton-mode-changed`、`skkeleton-enable-post`、`skkeleton-disable-post`、`skkeleton-handled`）だけを読み、`skkeleton.render` などを `require` しない。本体からインジケータを呼ぶのは `init.lua` の `setup` だけにする。
-インジケータは、挿入モード・コマンドラインモードに入ったときと、skkeleton のモードが変わったときにカーソルの右下に出す。入力が始まったとき（`g:skkeleton#state.preedit` が空でない）、文字が入ったとき、カーソルが動いたとき、`fadeOutMs` がたったときに消す（#63）。挿入に入ってすぐ文字が入ったとき（`Afoo` のようなマッピング）は出さない。
+インジケータは、挿入モード・コマンドラインモードに入ったときと、skkeleton のモードが変わったときにカーソルの右下に出す。入力が始まったとき（`g:skkeleton#state.preedit` が空でない）、文字が入ったとき、カーソルが動いたとき、ウィンドウを移ったとき、`fadeOutMs` がたったときに消す（#63、#85、#86）。挿入に入ってすぐ文字が入ったとき（`Afoo` のようなマッピング）は出さない。
 
 ### 公開インターフェース（UI、upstream と互換）
 - 変数: `g:skkeleton#enabled`、`g:skkeleton#mode`
 - User イベント: `skkeleton-initialize-pre/post`、`skkeleton-enable-pre/post`、`skkeleton-disable-pre/post`、`skkeleton-mode-changed`、`skkeleton-handled`
 - `<Plug>(skkeleton-enable)`、`<Plug>(skkeleton-disable)`、`<Plug>(skkeleton-toggle)`（`i` / `c` / `t` モード）
-- Lua API: `require("skkeleton").setup(opts)`、`.enable()`、`.disable()`、`.toggle()`、`.mode()`、`.is_enabled()`、`.register_keymap(state, key, func)`、`.register_kanatable(name, tbl, create)`、`.register_kanatable_file(...)`、`.get_config()`、`.initialize()`、`.update_database(path, encoding, force)`
+- Lua API: `require("skkeleton").setup(opts)`、`.enable()`、`.disable()`、`.toggle()`、`.mode()`、`.is_enabled()`、`.register_keymap(state, key, func)`、`.register_kanatable(name, tbl, create)`、`.register_kanatable_file(...)`、`.get_config()`、`.initialize()`、`.update_database(path, encoding, force)`、`.get_prefix()`、`.get_preedit()`、`.get_completion_result()`、`.get_completion_ranks()`、`.complete(kana, word, kind?)`
 - pre-edit 用 extmark の namespace は `skkeleton-preedit`、ハイライトグループは `SkkeletonPreedit`（既定では属性未設定）
 - `g:skkeleton#state`（`{ phase, henkanFeed, preedit }`）はキー処理（handle）のたびに更新する
 - `autoload/skkeleton.vim` にはステータスライン連携用の `skkeleton#mode()` と `skkeleton#is_enabled()` のみを配置する
@@ -142,8 +144,10 @@ require("skkeleton.indicator").setup(opts)  -- opts は skkeleton_indicator と�
 - insert モード: 確定文字列がある場合は `nvim_feedkeys(…, "nit")` で送出し、続けて `<Cmd>lua require('skkeleton.render').finish()<CR>` を実行する。`finish()` 内で extmark の再配置、候補ポップアップの表示、`User skkeleton-handled` の発火を行う。確定文字列がない場合はその場で `finish()` を直接呼び出す。
 - 送出する文字列に含まれる `0x80`（「、」などの UTF-8 バイト列に含まれる）は `0x80 0xfe 'X'` にエスケープし、末尾の `<Cmd>...<CR>` のみを `nvim_replace_termcodes` で変換して結合する。
 - pre-edit とバッファのずれは、`cleanup.lua` の `reset_if_stale()` の 1 か所で見つけて片付ける（#61）。判定は `render.is_stale()`。pre-edit を出している間は `nvim_buf_attach` の `on_bytes` でバッファの書き換えを受け、ずれた合図にする（#66）。extmark は `right_gravity = false`。
-- Vim のモードが移ったときの片付けは、`cleanup.lua` の `ModeChanged` 1 か所で受け、`MODE_TRANSITIONS` の表で片付け方を決める（#62）。insert から normal へ移るときは、pre-edit を `<Esc>` と同じく確定してから片付ける（#70）。
-- cmdline モードと terminal モードでは `ctx.preedit:output(ctx:to_string())` を送出する。
+- Vim のモードが移ったときの片付けは、`cleanup.lua` の `ModeChanged` 1 か所で受け、`MODE_TRANSITIONS` の表で片付け方を決める（#62）。insert から normal へ移るときは pre-edit を `<Esc>` と同じく確定してから片付ける（#70）。置換モード・visual / select・`<C-o>` で一瞬 normal に移って戻るときも確定し、`<C-o>:` から cmdline に入って戻るときは残す（#111、#117、#86）。
+- `guard.lua` は `vim.on_key` で、skkeleton が奪っていない物理の特殊キー（insert / cmdline）と、terminal の Ctrl + 文字を見つけたら、`main.commit_preedit()` で確定してから元のキーを流す（#56、#121）。
+- cmdline モードと terminal モードでは `ctx.preedit:output(ctx:to_string())` を送出する。cmdline の pre-edit の記録と片付けは `render/cmdline.lua`（`remember()`、`is_stale()`、`clean()`、`has_stale()`、`reset()`）が持つ（#98）。
+- 貼り付け（`vim.paste`）では、pre-edit があれば最初のチャンクの前に確定してから undo を区切る（#125）。
 - モードのみが変化し出力文字列がない場合も `finish()` を呼ぶため、upstream の `" \x08"` に相当する再描画ハックは不要。
 - `virtualedit` は変更しない（pre-edit をバッファに書き込まないため）。`textwidth` のみ `0` に退避・設定する。
 
