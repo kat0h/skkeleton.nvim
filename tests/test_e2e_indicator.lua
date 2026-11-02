@@ -90,6 +90,19 @@ T["closes when the preedit starts"] = function()
   eq(positions(), vim.NIL)
 end
 
+T["keeps the insert preedit after <C-o>: <Esc> and does not show the indicator (#86)"] = function()
+  start()
+  type("K")
+  eq(helpers.preedit(child), "▽k")
+
+  -- <C-o> で cmdline に入って戻る。insert の pre-edit は残っている
+  type("<C-o>:<Esc>")
+  eq(child.fn.mode(), "i")
+  eq(helpers.preedit(child), "▽k")
+  eq(child.g["skkeleton#state"].preedit, "▽k")
+  eq(positions(), vim.NIL)
+end
+
 T["clears the preedit when leaving cmdline with <C-r>="] = function()
   start()
   type("<C-r>=")
