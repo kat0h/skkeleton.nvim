@@ -7,14 +7,10 @@ local T, child = helpers.child_set()
 
 local function init()
   child.lua([[
-    H = require("core_helpers")
-    lib = H.setup_library()
-    config = require("skkeleton.config")
-    Context = require("skkeleton.context")
+    require("core_helpers").init_core({ spy_host = true })
     common = require("skkeleton.function.common")
     disable = require("skkeleton.function.disable")
     dictionary = require("skkeleton.function.dictionary")
-    H.spy_host()
   ]])
 end
 

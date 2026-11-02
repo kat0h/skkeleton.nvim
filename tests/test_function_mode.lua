@@ -7,16 +7,12 @@ local T, child = helpers.child_set()
 
 local function init()
   child.lua([[
-    H = require("core_helpers")
-    lib = H.setup_library()
-    config = require("skkeleton.config")
-    Context = require("skkeleton.context")
+    require("core_helpers").init_core({ spy_host = true })
     common = require("skkeleton.function.common")
     input = require("skkeleton.function.input")
     mode = require("skkeleton.function.mode")
     kana = require("skkeleton.kana")
     store = require("skkeleton.store")
-    H.spy_host()
   ]])
 end
 

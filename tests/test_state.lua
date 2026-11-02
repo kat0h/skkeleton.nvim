@@ -4,10 +4,7 @@ local eq = MiniTest.expect.equality
 local T, child = helpers.child_set()
 
 local function init()
-  child.lua([[
-    H = require("core_helpers")
-    H.setup_library()
-  ]])
+  child.lua([[require("core_helpers").init_core()]])
 end
 
 T["state.initialize resets fields"] = function()

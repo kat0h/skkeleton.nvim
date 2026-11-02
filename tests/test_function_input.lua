@@ -7,35 +7,23 @@ local T, child = helpers.child_set()
 
 local function init()
   child.lua([[
-    H = require("core_helpers")
-    H.setup_library()
-    config = require("skkeleton.config")
-    Context = require("skkeleton.context")
+    require("core_helpers").init_core()
     input = require("skkeleton.function.input")
     mode = require("skkeleton.function.mode")
     common = require("skkeleton.function.common")
   ]])
 end
 
--- 新しい Context に keys を流して、確定した文字列を返す
-local function output(keys)
-  return child.lua_get("H.output(...)", { keys })
-end
-
-local function shown(keys)
-  return child.lua_get("H.shown(...)", { keys })
-end
-
 T["kana input"] = function()
   init()
-  eq(output("nihongoutteiki"), "にほんごうっていき")
+  eq(helpers.core_output(child, "nihongoutteiki"), "にほんごうっていき")
 end
 
 T["kana input with illegal key"] = function()
   init()
-  eq(output("n n n n "), "ん ん ん ん ")
-  eq(output("@a"), "@あ")
-  eq(output(" na"), " な")
+  eq(helpers.core_output(child, "n n n n "), "ん ん ん ん ")
+  eq(helpers.core_output(child, "@a"), "@あ")
+  eq(helpers.core_output(child, " na"), " な")
 end
 
 T["kana input: table of romaji"] = function()
@@ -57,7 +45,7 @@ T["kana input: table of romaji"] = function()
     { "[]", "「」" },
   }
   for _, c in ipairs(cases) do
-    eq({ c[1], output(c[1]) }, c)
+    eq({ c[1], helpers.core_output(child, c[1]) }, c)
   end
 end
 
@@ -82,14 +70,14 @@ end
 
 T["upper case input"] = function()
   init()
-  eq(shown("HogeP"), "▽ほげ*p")
-  eq(shown("sAsS"), "▽さっ*s")
+  eq(helpers.core_output(child, "HogeP", { shown = true }), "▽ほげ*p")
+  eq(helpers.core_output(child, "sAsS", { shown = true }), "▽さっ*s")
 end
 
 T["upper case input with lowercaseMap"] = function()
   init()
   child.lua([[config.set({ lowercaseMap = { ["+"] = "a" } })]])
-  eq(shown("+"), "▽あ")
+  eq(helpers.core_output(child, "+", { shown = true }), "▽あ")
 end
 
 T["delete char"] = function()

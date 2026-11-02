@@ -7,27 +7,15 @@ local T, child = helpers.child_set()
 
 local function init()
   child.lua([[
-    H = require("core_helpers")
-    lib = H.setup_library()
+    require("core_helpers").init_core({ spy_host = true })
     lib:register_henkan_result("okurinasi", "あ", "い")
     lib:register_henkan_result("okurinasi", "ちゅうしゃく", "注釈;これは注釈です")
     lib:register_henkan_result("okurinasi", "あ", "あ")
     lib:register_henkan_result("okuriari", "あt", "会")
     lib:register_henkan_result("okuriari", "すp", "酸")
-    config = require("skkeleton.config")
-    Context = require("skkeleton.context")
     common = require("skkeleton.function.common")
     mode = require("skkeleton.function.mode")
-    H.spy_host()
   ]])
-end
-
-local function output(keys)
-  return child.lua_get("H.output(...)", { keys })
-end
-
-local function shown(keys)
-  return child.lua_get("H.shown(...)", { keys })
 end
 
 T["input cancel"] = function()
@@ -102,35 +90,35 @@ end
 
 T["kakutei of input state outputs the pre-edit string"] = function()
   init()
-  eq(output(";kan\n"), "かん\n")
-  eq(output("ab\n"), "あb\n")
+  eq(helpers.core_output(child, ";kan\n"), "かん\n")
+  eq(helpers.core_output(child, "ab\n"), "あb\n")
 end
 
 T["egg like newline"] = function()
   init()
   -- normal
-  eq(output("A \nA\n"), "あ\nあ\n")
+  eq(helpers.core_output(child, "A \nA\n"), "あ\nあ\n")
   -- egg like
   child.lua([[config.set({ eggLikeNewline = true })]])
-  eq(output("A \nA\n"), "ああ")
+  eq(helpers.core_output(child, "A \nA\n"), "ああ")
   -- 直接入力中の改行は egg like でも出る
-  eq(output("a\n"), "あ\n")
+  eq(helpers.core_output(child, "a\n"), "あ\n")
 end
 
 T["acceptIllegalResult"] = function()
   init()
-  eq(output("ksa"), "さ")
+  eq(helpers.core_output(child, "ksa"), "さ")
   child.lua([[config.set({ acceptIllegalResult = true })]])
-  eq(output("ksa"), "kさ")
+  eq(helpers.core_output(child, "ksa"), "kさ")
 end
 
 T["immediatelyOkuriConvert"] = function()
   init()
   -- true
-  eq(shown(";a;xtu"), "▼会っ")
+  eq(helpers.core_output(child, ";a;xtu", { shown = true }), "▼会っ")
   -- false
   child.lua([[config.set({ immediatelyOkuriConvert = false })]])
-  eq(shown(";su;xtupa"), "▼酸っぱ")
+  eq(helpers.core_output(child, ";su;xtupa", { shown = true }), "▼酸っぱ")
 end
 
 T["purge_candidate asks host.confirm"] = function()

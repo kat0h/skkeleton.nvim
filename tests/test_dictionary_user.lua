@@ -2,25 +2,9 @@ local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 local T, child = helpers.child_set()
 
-local PRE = [[
+local PRE = helpers.dict_pre([[
 local User = require("skkeleton.dictionary.user")
-_G.TMP = _G.TMP or vim.fn.tempname()
-vim.fn.mkdir(_G.TMP, "p")
-local TMP = _G.TMP
-local function write(name, s)
-  local path = TMP .. "/" .. name
-  local f = assert(io.open(path, "wb"))
-  f:write(s)
-  f:close()
-  return path
-end
-local function read(path)
-  local f = assert(io.open(path, "rb"))
-  local s = f:read("*a")
-  f:close()
-  return s
-end
-]]
+]])
 
 local function run(code, ...)
   return child.lua(PRE .. code, { ... })
