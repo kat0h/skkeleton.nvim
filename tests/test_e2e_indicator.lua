@@ -118,7 +118,7 @@ local function hides_cursor(r)
 end
 
 -- #16: 枠つき（row の既定が 0）で右端のとき、押し戻されてカーソルを隠さない
-local R, rchild = helpers.e2e_set({ config = { indicator = { style = "rounded" } } })
+local R, rchild = helpers.e2e_set({ config = { indicator = { border = "rounded" } } })
 T["rounded"] = R
 R["does not cover the cursor at the right edge"] = function()
   rchild.o.columns = 80

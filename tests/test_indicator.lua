@@ -240,8 +240,8 @@ T["hooks"]["setup を何度呼んでも 1 つしか出ない。設定は最後�
   eq(#child.api.nvim_get_autocmds({ group = "skkeleton-indicator" }), 15)
 end
 
-T["hooks"]["style = rounded / minimal / pill と winblend が反映される"] = function()
-  setup({ style = "rounded", winblend = 15 })
+T["hooks"]["style = minimal / pill と border = rounded、winblend が反映される"] = function()
+  setup({ border = "rounded", winblend = 15 })
   child.type_keys("i")
   local f1 = floats()[1]
   eq(f1.border[1], "╭")
@@ -315,6 +315,7 @@ end
 T["hooks"]["知らないオプションはエラー"] = function()
   eq(child.lua_get("(pcall(require('skkeleton.indicator').setup, { fooBar = 1 }))"), false)
   eq(child.lua_get("(pcall(require('skkeleton.indicator').setup, { fadeOutMs = 'x' }))"), false)
+  eq(child.lua_get("(pcall(require('skkeleton.indicator').setup, { style = 'rounded' }))"), false)
 end
 
 T["hooks"]["background が変わると色を作り直す"] = function()
