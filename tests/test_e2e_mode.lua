@@ -358,7 +358,7 @@ T["the state is exposed in g:skkeleton#state"] = function()
 end
 
 T["register_kanatable adds a table"] = function()
-  child.lua([[require("skkeleton").register_kanatable("rom", { ["!"] = { "！", "" }, jj = "disable" })]])
+  child.lua([[require("skkeleton").register_kanatable("rom", { ["!"] = { "！", "" } })]])
   enable()
   type("!")
   eq(helpers.buffer(child), { "！" })

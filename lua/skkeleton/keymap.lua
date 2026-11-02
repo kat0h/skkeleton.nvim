@@ -19,6 +19,7 @@ local keymaps ---@type table<string, skkeleton.KeyMap>?
 local function get_keymaps()
   if not keymaps then
     local f = functions.functions
+    local kf = require("skkeleton.function.input").kana_function
     keymaps = {
       input = {
         default = require("skkeleton.function.input").kana_input,
@@ -32,6 +33,12 @@ local function get_keymaps()
           ["<c-q>"] = f.hankatakana,
           [">"] = f.prefix,
           ["<space>"] = f.henkanFirst,
+          -- 以前は既定のかなテーブルにあったもの (#67)
+          ["l"] = kf(f.disable),
+          ["q"] = kf(f.katakana),
+          [";"] = kf(f.henkanPoint),
+          ["/"] = kf(f.abbrev),
+          ["L"] = kf(f.zenkaku),
         },
       },
       henkan = {
@@ -64,10 +71,15 @@ function M.handle_key(ctx, key)
   end
   local char = notation.to_key(key)
   local func = keymap.map[key]
-  -- 今の打ちかけとそのキーをつないだものがかなテーブルにあれば、キーマップより先にかなテーブルを使う (#42)
-  if func and ctx.state.type == "input" and ctx.state.feed ~= "" then
+  -- 1 打ごとの順番: 打ちかけ＋キーがかなテーブルにあればかなテーブル、なければキーマップの関数、
+  -- それもなければ default (kana_input) (#42 #67)。
+  -- ただし feed が空で、そのキーだけで完結する単独のエントリは、キーマップを優先する。
+  -- 使う人がテーブルで <Space> を全角スペースにしても、<Space> の変換が消えない (#43) という今の動きに合わせるため。
+  -- そのキーで始まるより長いエントリがあるとき（z<Space> など）は、feed が空でもテーブルを先に使う
+  if func and ctx.state.type == "input" then
     local state = ctx.state ---@type skkeleton.InputState
-    if state.table and state.table:node(state.feed .. char) then
+    local node = state.table and state.table:node(state.feed .. char)
+    if node and (state.feed ~= "" or node.result == nil or node.count > 1) then
       func = nil
     end
   end

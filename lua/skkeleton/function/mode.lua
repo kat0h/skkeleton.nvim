@@ -11,7 +11,6 @@ local store = require("skkeleton.store")
 local util = require("skkeleton.util")
 
 local common = util.lazy("skkeleton.function.common")
-local henkan = util.lazy("skkeleton.function.henkan")
 local input = util.lazy("skkeleton.function.input")
 
 local M = {}
@@ -23,10 +22,7 @@ function M.abbrev(ctx)
   end
   input.henkan_point(ctx)
   local s = ctx.state
-  local henkan_first = henkan.henkan_first
-  s.table = s.table:filter(function(_, func)
-    return func == henkan_first
-  end)
+  s.table = kana.KanaTable.new({})
   s.direct_input = true
   mode.mode_change(ctx, "abbrev")
 end

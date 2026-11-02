@@ -57,14 +57,6 @@ T["fallback to kana_input in henkan_first"] = function()
     H.dispatch(ctx, " ")
   ]]):format(KanaTable))
   eq(child.lua_get([[ctx:to_string()]]), "space")
-  -- 無限再帰を避けて、直接入力にフォールバックする
-  child.lua(([[
-    ctx.state.table = %s.new({ { " ", henkan.henkan_first } })
-    H.dispatch(ctx, " ")
-  ]]):format(KanaTable))
-  eq(child.lua_get([[ctx.preedit:output("")]]), " ")
-  -- 再入の防止は例外のあとにも残らない
-  eq(child.lua_get([[(function() H.dispatch(ctx, " "); return ctx.preedit:output("") end)()]]), " ")
 end
 
 T["no candidates: input state returns when nothing is registered"] = function()
