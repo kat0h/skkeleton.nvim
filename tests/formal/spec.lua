@@ -1371,13 +1371,4 @@ function M.is_known(name, keys, msg)
   end
 end
 
--- ▽ の途中の <C-o>l で、pre-edit が残る（#117）
-M.known[#M.known + 1] = {
-  property = "frame: skkeleton の外でバッファやカーソルが動いたら pre-edit を捨てる",
-  match = function(keys)
-    return vim.tbl_contains(keys, "<C-o>l")
-  end,
-  reason = "#117: insert で ▽ の途中に <C-o>l でカーソルを動かすと、pre-edit が残る",
-}
-
 return M
