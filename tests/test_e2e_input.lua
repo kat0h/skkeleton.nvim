@@ -431,4 +431,37 @@ T["折り返してスクロールした後に pre-edit をキャンセルして�
   eq(cur_winline >= 1 and cur_winline <= 5, true)
 end
 
+T["kanatable with space mapped to fullwidth space still allows conversion (#43)"] = function()
+  child.lua([[
+    require("skkeleton").register_kanatable("rom", { [" "] = { "　", "" } })
+  ]])
+  start()
+  type("a<Space>")
+  eq(helpers.buffer(child), { "あ　" })
+  type("Kan<Space><C-j>")
+  eq(helpers.buffer(child), { "あ　缶" })
+end
+
+T["longer kanatable entry takes precedence over keymap function (#42)"] = function()
+  child.lua([[
+    require("skkeleton").register_kanatable("rom", {
+      z = { "ab", "" },
+      ["z "] = { "　", "" },
+    })
+    require("skkeleton").register_keymap("input", "<Space>", "henkanFirst")
+  ]])
+  start()
+  type("z<Space>")
+  eq(helpers.buffer(child), { "　" })
+end
+
+T["symbol after henkanFirst in kanatable is not duplicated (#41)"] = function()
+  child.lua([[
+    require("skkeleton").register_kanatable("rom", { z = "henkanFirst" })
+  ]])
+  start()
+  type("z&")
+  eq(helpers.buffer(child), { "z&" })
+end
+
 return T

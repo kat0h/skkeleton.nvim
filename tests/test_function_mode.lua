@@ -206,4 +206,17 @@ T["katakana and hankatakana do nothing in abbrev mode"] = function()
   eq(child.lua_get([[ctx.mode]]), "abbrev")
 end
 
+T["katakana in hankata mode confirms as hiragana (#51)"] = function()
+  init()
+  child.lua([[
+    ctx = Context.new()
+    mode.hankatakana(ctx)
+    H.dispatch(ctx, "Te")
+  ]])
+  eq(child.lua_get([[ctx:to_string()]]), "▽ﾃ")
+  child.lua([[mode.katakana(ctx)]])
+  -- denops 版と同様、st.converter が入っている状態（半角カタカナ）での q (katakana) はひらがなで確定する
+  eq(child.lua_get([[ctx.preedit:output("")]]), "て")
+end
+
 return T

@@ -390,4 +390,29 @@ T["escapes candidates with slashes using (concat ...) on save and restores them 
   )
 end
 
+T["escapes candidates starting with (concat ...) on save and restores them on load (#53)"] = function()
+  eq(
+    run([[
+      local path = TMP .. "/user_concat_start"
+      local u = User.new()
+      u:load({ path = path })
+      u:register_henkan_result("okurinasi", "かんじ", '(concat "a")')
+      u:register_henkan_result("okurinasi", "てすと", '(concat "b");(concat "c")')
+      u:save()
+
+      local v = User.new()
+      v:load({ path = path })
+
+      return {
+        v:get_henkan_result("okurinasi", "かんじ"),
+        v:get_henkan_result("okurinasi", "てすと"),
+      }
+    ]]),
+    {
+      { '(concat "a")' },
+      { '(concat "b");(concat "c")' },
+    }
+  )
+end
+
 return T

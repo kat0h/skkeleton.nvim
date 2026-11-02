@@ -357,7 +357,9 @@ end
 
 -- <C-c> で insert を抜けたときなど InsertLeave が来ない場合も閉じる。
 -- また、<Insert> で置換モードを経由して insert に戻ったときなど InsertEnter が
--- 来ない場合にも開き直す (#38)
+-- 来ない場合にも開き直す (#38)。
+-- マウス操作で visual から insert に戻ったときは、ModeChanged のあとにカーソルが
+-- 移動するため、開き直したあとに vim.schedule で move() を呼んでカーソル位置に追従させる (#47)。
 function Indicator:on_mode_changed()
   if not Modes.is_active() then
     if self:is_opened() then
@@ -366,6 +368,11 @@ function Indicator:on_mode_changed()
   else
     if not self:is_opened() and not self:is_disabled() then
       self:open()
+      vim.schedule(function()
+        if Modes.is_active() and not self:is_disabled() and self:is_opened() then
+          self:move()
+        end
+      end)
     end
   end
 end

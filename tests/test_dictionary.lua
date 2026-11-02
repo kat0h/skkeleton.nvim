@@ -629,6 +629,7 @@ T["skk.split_candidates"]["decodes concat expressions with octal and character e
         skk.split_candidates([[/(concat "foo" "bar")/]]),
         skk.split_candidates([[/(concat "a\"b\\c")/]]),
         skk.split_candidates([[/(concat "semi\073colon")/]]),
+        skk.split_candidates([[/(concat "a\073b");annotation/]]),
         skk.split_candidates([[/ao/(concat "and\057or")/]]),
         skk.split_candidates([[/GNU General Public License;(concat "http:\057\057www.gnu.org\057licenses\057gpl.ja.html")/]]),
       }
@@ -640,7 +641,8 @@ T["skk.split_candidates"]["decodes concat expressions with octal and character e
       { "a/b;c/d" },
       { "foobar" },
       { 'a"b\\c' },
-      { "semi;colon" },
+      { "semi\\073colon" },
+      { "a\\073b;annotation" },
       { "ao", "and/or" },
       { "GNU General Public License;http://www.gnu.org/licenses/gpl.ja.html" },
     }

@@ -267,7 +267,47 @@ function Wrapper:get_henkan_result(kind, word)
 end
 
 function Wrapper:get_prefix(kind, prefix, limit)
-  return self.inner:get_prefix(kind, prefix, limit)
+  local real_prefix = prefix:gsub("[0-9]+", "#")
+  local entries = self.inner:get_prefix(kind, prefix, limit)
+  if prefix == real_prefix then
+    return entries
+  end
+  local hash_entries = self.inner:get_prefix(kind, real_prefix, limit)
+  if #hash_entries == 0 then
+    return entries
+  end
+
+  local merged = vim.deepcopy(entries)
+  for _, e in ipairs(hash_entries) do
+    local hash_kana = e[1]
+    local converted_kana = M.convert_number(hash_kana, prefix)
+    local converted_cands = {}
+    for _, c in ipairs(e[2]) do
+      converted_cands[#converted_cands + 1] = M.convert_number(c, converted_kana)
+    end
+    local existing
+    for _, item in ipairs(merged) do
+      if item[1] == converted_kana then
+        existing = item
+        break
+      end
+    end
+    if existing then
+      local cand_seen = {}
+      for _, c in ipairs(existing[2]) do
+        cand_seen[c] = true
+      end
+      for _, c in ipairs(converted_cands) do
+        if not cand_seen[c] then
+          cand_seen[c] = true
+          table.insert(existing[2], c)
+        end
+      end
+    else
+      merged[#merged + 1] = { converted_kana, converted_cands }
+    end
+  end
+  return merged
 end
 
 function Wrapper:close()

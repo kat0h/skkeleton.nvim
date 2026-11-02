@@ -217,6 +217,9 @@ function M.init(force)
       if host.is_in_input() then
         return
       end
+      if vim.fn.mode():sub(1, 1) == "c" then
+        render.clean_stale_cmdline()
+      end
       reset()
       host.disable()
     end,

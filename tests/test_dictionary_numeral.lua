@@ -178,4 +178,11 @@ T["wrap"]["does not change the inner dictionary"] = function()
   eq(inner.maps.okurinasi["#ばん"], { "#0番" })
 end
 
+T["wrap"]["get_prefix converts numbers for completion (#50)"] = function()
+  local u = require("skkeleton.dictionary.user").new()
+  u.maps.okurinasi["#ばい"] = { "#1倍" }
+  local l = require("skkeleton.dictionary").Library.new({}, u)
+  eq(l:get_completion_result("1ば", ""), { { "1ばい", { "１倍" } } })
+end
+
 return T

@@ -110,7 +110,7 @@ function M.kana_input(ctx, char)
     -- feed を確定し、もう一度 kana_input に通す
     local current = state.table:find(state.feed)
     if current then
-      M.accept_result(ctx, current, nxt)
+      M.accept_result(ctx, current, state.feed)
     elseif options.acceptIllegalResult then
       M.kakutei_kana(state, ctx.preedit, state.feed, "")
     else

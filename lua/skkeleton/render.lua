@@ -263,15 +263,18 @@ function M.clean_stale_cmdline()
   local before = cm.line:sub(1, cm.start_pos - 1)
   local after = cm.line:sub(cm.end_pos)
   local new_line, new_pos
-  if line == cm.line then
-    new_line = before .. after
-    if pos <= cm.start_pos then
-      new_pos = pos
-    elseif pos >= cm.end_pos then
-      new_pos = pos - #cm.text
-    else
-      new_pos = cm.start_pos
-    end
+
+  local s, e
+  if #cm.text > 0 and line:sub(cm.start_pos, cm.start_pos + #cm.text - 1) == cm.text then
+    s = cm.start_pos
+    e = cm.start_pos + #cm.text - 1
+  elseif #cm.text > 0 then
+    s, e = line:find(cm.text, 1, true)
+  end
+
+  if s then
+    new_line = line:sub(1, s - 1) .. line:sub(e + 1)
+    new_pos = pos > s and math.max(s, pos - #cm.text) or pos
   elseif
     line:sub(1, #before) == before
     and (#after == 0 or line:sub(-#after) == after)

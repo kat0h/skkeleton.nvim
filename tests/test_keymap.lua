@@ -126,4 +126,39 @@ T["handle_key rejects illegal state"] = function()
   eq(child.lua_get([[select(2, pcall(keymap.handle_key, ctx, "a"))]]), "Illegal State: escape")
 end
 
+T["longer kanatable entry takes precedence over keymap function (#42)"] = function()
+  init()
+  child.lua([[
+    local kana = require("skkeleton.kana")
+    kana.register("rom", {
+      z = { "ab", "" },
+      ["z "] = { "　", "" },
+      [" "] = { " ", "" },
+    })
+    keymap.register("input", "<space>", "henkanFirst")
+    out = function(keys)
+      local c = Context.new()
+      press(c, keys)
+      return c.preedit:output("")
+    end
+  ]])
+  eq(child.lua_get([[out({ "z", "<Space>" })]]), "　")
+end
+
+T["kanatable space override allows conversion via keymap (#43)"] = function()
+  init()
+  child.lua([[
+    local kana = require("skkeleton.kana")
+    kana.register("rom", { [" "] = { "　", "" } })
+    ctx = Context.new()
+    press(ctx, { "a", "<Space>" })
+  ]])
+  eq(child.lua_get([[ctx.preedit:output("")]]), "あ　")
+  child.lua([[
+    ctx = Context.new()
+    press(ctx, { "A", "<Space>" })
+  ]])
+  eq(child.lua_get([[ctx:to_string()]]), "▼亜")
+end
+
 return T

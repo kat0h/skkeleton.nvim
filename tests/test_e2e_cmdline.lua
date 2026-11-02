@@ -99,6 +99,25 @@ T["the pre-edit is dropped when the command line is edited behind skkeleton"] = 
   eq(child.fn.getcmdline(), "か")
 end
 
+T["the pre-edit is dropped when <C-y> is typed behind skkeleton (#12)"] = function()
+  enable_in_cmdline()
+  type("Kan")
+  eq(child.fn.getcmdline(), "▽かn")
+  child.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-y>", true, true, true), "nt", false)
+  helpers.settle(child)
+  local line = child.fn.getcmdline()
+  eq(line:find("▽", 1, true), nil)
+end
+
+T["the pre-edit is dropped when digraph <C-k>a: is typed behind skkeleton (#12)"] = function()
+  enable_in_cmdline()
+  type("Kan")
+  eq(child.fn.getcmdline(), "▽かn")
+  child.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-k>a:", true, true, true), "nt", false)
+  helpers.settle(child)
+  eq(child.fn.getcmdline(), "ä")
+end
+
 T["terminal"] = function()
   child.cmd("terminal cat")
   child.type_keys("i")
@@ -137,6 +156,18 @@ T["<C-c> does not leave markers in command line history (#44)"] = function()
   local hist = child.fn.histget("cmd", -1)
   eq(hist:find("▽", 1, true), nil)
   eq(hist:find("▼", 1, true), nil)
+end
+
+T["switching window during cmdline removes pre-edit from cmdline (#46)"] = function()
+  child.cmd("botright new")
+  child.cmd("wincmd p")
+  enable_in_cmdline()
+  type("K")
+  eq(child.fn.getcmdline(), "▽k")
+  child.type_keys("<Cmd>wincmd w<CR>")
+  helpers.settle(child)
+  eq(child.fn.getcmdline(), "")
+  eq(child.g["skkeleton#enabled"], false)
 end
 
 return T

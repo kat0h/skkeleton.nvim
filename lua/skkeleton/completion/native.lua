@@ -17,11 +17,11 @@ function M.completefunc(findstart, base)
   local sort = require("skkeleton.completion.sort")
   local completions = skkeleton.get_completions()
   local sorted = sort.sort_completions(completions, skkeleton.get_completion_ranks())
+  local candidate_mod = require("skkeleton.candidate")
   local items = {}
   for _, item in ipairs(sorted) do
     local cand = item.word
-    local word, annotation = cand:match("^([^;]*);(.*)$")
-    word = word or cand
+    local word, annotation = candidate_mod.pair(cand)
     items[#items + 1] = {
       word = word,
       abbr = word,

@@ -181,7 +181,7 @@ T["katakana input"] = function()
       return out
     end)()
   ]])
-  eq(r, { "ア", "あ", "▽n", "ン", "ホゲ", "ホゲ", "ほげ" })
+  eq(r, { "ア", "あ", "▽n", "ン", "ホゲ", "ほげ", "ほげ" })
 end
 
 T["hankatakana input"] = function()

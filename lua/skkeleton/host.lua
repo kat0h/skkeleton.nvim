@@ -81,9 +81,18 @@ function M.input(prompt)
   vim.api.nvim_create_autocmd("WinEnter", {
     group = input_group,
     callback = function()
-      if vim.api.nvim_win_is_valid(win) and vim.api.nvim_get_current_win() ~= win then
-        pcall(vim.api.nvim_set_current_win, win)
-      end
+      vim.schedule(function()
+        if in_input_depth <= 0 then
+          return
+        end
+        if vim.fn.getcmdwintype() ~= "" then
+          return
+        end
+        local cur = vim.api.nvim_get_current_win()
+        if vim.api.nvim_win_is_valid(win) and cur ~= win then
+          pcall(vim.api.nvim_set_current_win, win)
+        end
+      end)
     end,
   })
 
@@ -136,6 +145,20 @@ function M.input(prompt)
 
   if not ok then
     error(res, 0)
+  end
+  if type(res) == "string" then
+    local options = require("skkeleton.config").options
+    local mh = options.markerHenkan
+    local ms = options.markerHenkanSelect
+    if
+      res:find("▽", 1, true)
+      or res:find("▼", 1, true)
+      or (mh and mh ~= "" and res:find(mh, 1, true))
+      or (ms and ms ~= "" and res:find(ms, 1, true))
+      or res:find("__skkeleton_return__", 1, true)
+    then
+      return ""
+    end
   end
   return res
 end

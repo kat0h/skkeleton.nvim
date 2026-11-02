@@ -196,4 +196,16 @@ T["load_file supports 3 columns and comma key"] = function()
   eq(child.lua_get([[H.output("bba")]]), "っば")
 end
 
+T["function entry in kanatable does not duplicate following characters (#41)"] = function()
+  init()
+  child.lua([[
+    kana.register("rom", { z = "henkanFirst" })
+    ctx = require("skkeleton.context").new()
+    local input = require("skkeleton.function.input")
+    input.kana_input(ctx, "z")
+    input.kana_input(ctx, "&")
+  ]])
+  eq(child.lua_get([[ctx.preedit:output("")]]), "z&")
+end
+
 return T

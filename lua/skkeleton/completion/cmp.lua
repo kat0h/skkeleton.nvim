@@ -42,12 +42,12 @@ function source:complete(params, callback)
   local skkeleton = require("skkeleton")
   local sort = require("skkeleton.completion.sort")
   local sorted = sort.sort_completions(result, skkeleton.get_completion_ranks())
+  local candidate_mod = require("skkeleton.candidate")
   local items = {}
   for idx, entry in ipairs(sorted) do
     local kana = entry.kana
     local cand = entry.word
-    local word, annotation = cand:match("^([^;]*);(.*)$")
-    word = word or cand
+    local word, annotation = candidate_mod.pair(cand)
     local item = {
       label = word,
       detail = kana,

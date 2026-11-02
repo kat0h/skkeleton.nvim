@@ -475,4 +475,15 @@ I["transitioning directly to visual mode during pre-edit resets state and closes
   eq(helpers.indicator(ichild), vim.NIL)
 end
 
+T["q in hankata pre-edit confirms as hiragana (#51)"] = function()
+  enable()
+  type("<C-q>")
+  eq(helpers.mode(child), "hankata")
+  type("Te")
+  eq(helpers.preedit(child), "▽ﾃ")
+  type("q")
+  eq(helpers.buffer(child), { "て" })
+  eq(helpers.preedit(child), "")
+end
+
 return T
