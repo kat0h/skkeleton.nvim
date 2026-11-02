@@ -42,6 +42,17 @@ return {
   { issue = 86, profile = "misc", keys = { "<C-j>", "K", "<C-o>:<Esc>" } },
   { issue = 87, profile = "default", keys = { "<C-j>", "q", "<C-g>", "A", "q" } },
   { issue = 111, profile = "steal", keys = { "#eol", "<C-j>", "Kan", "<Insert>", "a", "<Space>", "k" } },
+  {
+    issue = 115,
+    profile = "cmdline",
+    keys = { "#cmd-on", "Kan", "<Space><Space><Space><Space>", "<Space>", "<Right>" },
+  },
+  { issue = 116, profile = "blink", keys = { "<C-j>", "Kan", "Kanji", "n", "<C-w>", "<C-g>" } },
+  {
+    issue = 117,
+    profile = "misc",
+    keys = { "<Esc>", "O", "<Esc>", "<C-n>", "<C-v>", "<C-g>", "<C-p>", "<C-j>", "a", "Kan", "<C-o>l" },
+  },
   -- 半角カタカナモードの ▽ で q: denops 版はひらがなで確定する（性質では見つからず、upstream.lua で見比べる）
   { issue = 51, keys = { "<C-j>", "<C-q>", "Te", "q" } },
   -- 辞書登録の欄の <C-f>（register プロファイル）

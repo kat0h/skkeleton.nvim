@@ -1117,7 +1117,12 @@ M.action["register: 閉じたあとのモードと状態が登録の前と同じ
     end
     return
   end
-  if s.enabled ~= b.enabled or s.skk_mode ~= b.skk_mode then
+  -- abbrev から始めた登録は、確定するとひらがなに戻る（abbrev の確定と同じ。upstream も同じ）
+  local want_mode = b.skk_mode
+  if b.skk_mode == "abbrev" and word then
+    want_mode = "hira"
+  end
+  if s.enabled ~= b.enabled or s.skk_mode ~= want_mode then
     return ("閉じたあと enabled=%s mode=%s（登録の前は %s / %s）"):format(
       tostring(s.enabled),
       s.skk_mode,
@@ -1365,5 +1370,37 @@ function M.is_known(name, keys, msg)
     end
   end
 end
+
+-- cmdline の ▼ で候補の一覧が出ているときの未マップの特殊キーで、確定したあとも一覧が残る（#115）
+M.known[#M.known + 1] = {
+  property = "unmapped: 未マップの特殊キーのあと、pre-edit は元のままか、きれいにリセットされる",
+  match = function(_, msg)
+    return msg ~= nil and msg:find("popup が残っている", 1, true) ~= nil
+  end,
+  reason = "#115: cmdline の ▼ で一覧が出ているときに <Right> などを押すと、確定したあとも一覧が残る",
+}
+
+-- 辞書登録の欄で <C-w> のあと <C-g> で取り消すと、取り消しの印が崩れて語として登録される（#116）
+for _, name in ipairs({
+  "register: ユーザー辞書は空でない確定のときだけ増える",
+  "register: 取り消すと登録の前に戻る",
+}) do
+  M.known[#M.known + 1] = {
+    property = name,
+    match = function(keys)
+      return vim.tbl_contains(keys, "<C-w>") and vim.tbl_contains(keys, "<C-g>")
+    end,
+    reason = "#116: 辞書登録の欄で <C-w> のあと <C-g> で取り消すと、取り消しの印が崩れて語として登録される",
+  }
+end
+
+-- ▽ の途中の <C-o>l で、pre-edit が残る（#117）
+M.known[#M.known + 1] = {
+  property = "frame: skkeleton の外でバッファやカーソルが動いたら pre-edit を捨てる",
+  match = function(keys)
+    return vim.tbl_contains(keys, "<C-o>l")
+  end,
+  reason = "#117: insert で ▽ の途中に <C-o>l でカーソルを動かすと、pre-edit が残る",
+}
 
 return M
