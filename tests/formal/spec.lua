@@ -1217,7 +1217,8 @@ local function is_unmapped(key)
       unmapped_set[k] = true
     end
   end
-  return unmapped_set[key] == true
+  -- 端末からの貼り付け（vim.paste）も、skkeleton を通らずに文字が入るので同じ決まりで見る（#56 の「打った読みは消さない」）
+  return unmapped_set[key] == true or key == "<Paste>" or key == "<PasteLines>"
 end
 
 local function count_plain(text, sub)
@@ -1380,6 +1381,20 @@ function M.is_known(name, keys, msg)
       return k
     end
   end
+end
+
+-- ▽ や ▼ の途中で貼り付けると、打った読みが確定されずに消える（#125）
+for _, name in ipairs({
+  "unmapped: 未マップの特殊キーのあと、打った読みが黙って消えない",
+  "unmapped: 未マップの特殊キーのあと、pre-edit は元のままか、きれいにリセットされる",
+}) do
+  M.known[#M.known + 1] = {
+    property = name,
+    match = function(keys)
+      return vim.tbl_contains(keys, "<Paste>") or vim.tbl_contains(keys, "<PasteLines>")
+    end,
+    reason = "#125: ▽ や ▼ の途中で貼り付けると、打った読みが確定されずに消える",
+  }
 end
 
 return M

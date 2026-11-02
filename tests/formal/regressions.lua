@@ -54,6 +54,7 @@ return {
     keys = { "<Esc>", "O", "<Esc>", "<C-n>", "<C-v>", "<C-g>", "<C-p>", "<C-j>", "a", "Kan", "<C-o>l" },
   },
   { issue = 121, profile = "unmapped", keys = { "#term", "Kan", "<C-S-a>" } },
+  { issue = 125, profile = "paste", keys = { "#mid", "<C-j>", "Kan", "<Paste>" } },
   -- 半角カタカナモードの ▽ で q: denops 版はひらがなで確定する（性質では見つからず、upstream.lua で見比べる）
   { issue = 51, keys = { "<C-j>", "<C-q>", "Te", "q" } },
   -- 辞書登録の欄の <C-f>（register プロファイル）

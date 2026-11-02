@@ -463,6 +463,9 @@ M.aliases["<DragRight>"] = mouse(
 M.aliases["<ClickPopup>"] = mouse(on_float("true", click("p[1]", "p[2]")))
 M.aliases["<ClickIndicator>"] = mouse(on_float("false", click("p[1]", "p[2]")))
 M.aliases["<WheelPopup>"] = mouse(on_float("true", "m('wheel', 'down', '', p[1], p[2])"))
+-- 端末からの貼り付け（vim.paste を通る。bracketed paste と同じ道）。1 行と 2 行
+M.aliases["<Paste>"] = "<Cmd>lua vim.api.nvim_paste('貼り', false, -1)<CR>"
+M.aliases["<PasteLines>"] = "<Cmd>lua vim.api.nvim_paste('一\\n二', false, -1)<CR>"
 M.aliases["<WheelUp>"] = "<Cmd>lua vim.api.nvim_input_mouse('wheel', 'up', '', 0, 1, 1)<CR>"
 M.aliases["<WheelDownMid>"] = "<Cmd>lua vim.api.nvim_input_mouse('wheel', 'down', '', 0, 1, 1)<CR>"
 M.aliases["<RightClickMid>"] = mouse(
@@ -700,6 +703,29 @@ M.block = {
 -- 空のプロンプトの <BS>、<C-r> でのレジスタの貼り付け、cmdline window（<C-f>）、遅れて来る :stopinsert や
 -- ウィンドウの移動を流す
 M.aliases["<StopinsertLater>"] = later_stop
+-- 貼り付け（vim.paste）。▽・▼ の途中や、確定の直後に貼り、undo する（#57 の setUndoPointOnPaste）
+M.paste = {
+  doc = "端末からの貼り付け（vim.paste）を ▽・▼ の途中や確定の直後に行い、u で戻す",
+  config = {},
+  alphabet = {
+    "<C-j>",
+    "Kan",
+    "a",
+    "<Space>",
+    "<CR>",
+    "<C-g>",
+    "<BS>",
+    "<Esc>",
+    "i",
+    "u",
+    "<Paste>",
+    "<PasteLines>",
+    ":",
+  },
+  inits = line_inits,
+  dict = dict,
+}
+
 M.register = {
   doc = "辞書登録のプロンプト: かな入力・入れ子の変換と登録・確定と取り消し・<C-r>・<C-f>・:stopinsert やウィンドウの移動",
   config = {},
@@ -910,6 +936,7 @@ M.names = {
   "register",
   "regcmd",
   "unmapped",
+  "paste",
 }
 
 return M
