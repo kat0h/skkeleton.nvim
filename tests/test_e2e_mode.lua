@@ -327,6 +327,8 @@ T["transitioning directly to visual mode during pre-edit resets state"] = functi
 
   child.api.nvim_input_mouse("left", "press", "", 0, 0, 2)
   child.api.nvim_input_mouse("left", "release", "", 0, 0, 2)
+  -- 2 回目のクリックをダブルクリックとして扱わせる
+  vim.uv.sleep(30)
   child.api.nvim_input_mouse("left", "press", "", 0, 0, 2)
   child.api.nvim_input_mouse("left", "release", "", 0, 0, 2)
   helpers.settle(child)
@@ -515,6 +517,8 @@ I["transitioning directly to visual mode during pre-edit resets state and closes
   -- ダブルクリックで単語選択し、insert から visual に直接遷移する
   ichild.api.nvim_input_mouse("left", "press", "", 0, 0, 2)
   ichild.api.nvim_input_mouse("left", "release", "", 0, 0, 2)
+  -- 2 回目のクリックをダブルクリックとして扱わせる
+  vim.uv.sleep(30)
   ichild.api.nvim_input_mouse("left", "press", "", 0, 0, 2)
   ichild.api.nvim_input_mouse("left", "release", "", 0, 0, 2)
   helpers.settle(ichild)

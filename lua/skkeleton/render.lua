@@ -257,6 +257,34 @@ function M.is_stale(ctx, vim_mode)
   return cur_line ~= mark.line
 end
 
+-- pre-edit は出たままだが、カーソルだけが動いているか（insert）。
+-- このときは捨てたあとに visual / 置換へ移るなら確定できるよう、呼び出し側で控える (#111)。
+---@param ctx skkeleton.Context
+---@param vim_mode string
+---@return boolean
+function M.is_cursor_only_stale(ctx, vim_mode)
+  if vim_mode ~= "i" or mark_bytes_changed or ctx.vim_mode ~= vim_mode then
+    return false
+  end
+  if ctx:to_string() == "" or not mark then
+    return false
+  end
+  local buf = vim.api.nvim_get_current_buf()
+  if mark.buf ~= buf then
+    return false
+  end
+  local pos = vim.api.nvim_win_get_cursor(0)
+  if pos[1] - 1 == mark.row and pos[2] == mark.col then
+    return false
+  end
+  local em = vim.api.nvim_buf_get_extmark_by_id(buf, ns, mark.id, {})
+  if #em == 0 or em[1] ~= mark.row or em[2] ~= mark.col then
+    return false
+  end
+  local cur_line = vim.api.nvim_buf_get_lines(buf, mark.row, mark.row + 1, false)[1] or ""
+  return cur_line == mark.line
+end
+
 -- pre-edit の末尾がウィンドウ下端からはみ出している場合、収まるようにスクロールする (#34)
 local function adjust_scroll()
   local win = vim.api.nvim_get_current_win()

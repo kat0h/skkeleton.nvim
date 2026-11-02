@@ -67,6 +67,7 @@ end
 
 -- Context を作り直す（使い終わった state の片付け）
 local function reset()
+  pending_commit = nil
   store.init_context()
   update_state_variable()
 end
@@ -100,6 +101,8 @@ end
 
 -- handle の実行中か（辞書登録の input() などで誤って初期化しない）
 local handling_depth = 0
+-- カーソルが動いて pre-edit を捨てたあと、visual / 置換へ移るときに確定するための控え (#111)
+local pending_commit
 
 -- pre-edit が出ているのにバッファやカーソルがずれたら、状態を初期化して表示を片付ける。
 -- 戻り値: ずれていてリセットしたかどうか
@@ -111,6 +114,16 @@ local function reset_if_stale(vm)
   local ctx = store.context()
   if not render.is_stale(ctx, vm) then
     return false
+  end
+  -- カーソルだけが動いて pre-edit を捨てるときは、あとで visual / 置換へ移るなら
+  -- 確定できるように文字と位置を控えておく (#111)
+  if render.is_cursor_only_stale(ctx, vm) then
+    local buf, row, col = render.preedit_position()
+    common_func.kakutei(ctx)
+    local text = ctx.preedit:take_kakutei()
+    if buf and text ~= "" then
+      pending_commit = { buf = buf, row = row, col = col, text = text }
+    end
   end
   render.clear()
   if vm == "c" then
@@ -190,10 +203,21 @@ function M.init(force)
           break
         end
       end
+      if action ~= "reset" then
+        pending_commit = nil
+      end
       if action == "reset" then
         if not host.is_in_input() then
           -- insert から置換・visual・select へ移るときも、捨てずに <Esc> と同じく確定する (#111)
-          commit_preedit()
+          if pending_commit then
+            local p = pending_commit
+            pending_commit = nil
+            if vim.api.nvim_buf_is_valid(p.buf) then
+              pcall(vim.api.nvim_buf_set_text, p.buf, p.row, p.col, p.row, p.col, { p.text })
+            end
+          else
+            commit_preedit()
+          end
           reset()
           host.disable()
         end
@@ -381,6 +405,8 @@ function handle_inner(func, opts)
 
   -- 補完の後など pre-edit とバッファが合わなくなったときはリセットする
   reset_if_stale(short)
+  -- キー入力から来た経路では、控えた確定は使わない（ModeChanged のときだけ使う）
+  pending_commit = nil
 
   if func == "handleKey" then
     handle_keys(opts, vim_mode)
