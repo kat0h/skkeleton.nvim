@@ -1337,15 +1337,6 @@ end
 -- 当てはまる違反は「既知」として出し、失敗にしない
 M.known = {}
 
--- 未マップの特殊キー（<C-.>・<S-CR>・<Left>・<F5> など）を ▽/▼ の途中で押すと、打った読みが黙って消える（#56）
-M.known[#M.known + 1] = {
-  property = "unmapped: 未マップの特殊キーのあと、打った読みが黙って消えない",
-  match = function()
-    return true
-  end,
-  reason = "#56: ▽/▼ の途中で未マップの特殊キーを押すと、打った読みが黙って消える",
-}
-
 -- #56 の別の現れ方。キーが先に通るので、pre-edit が残ったまま cmdline や terminal の文字がずれる、
 -- pre-edit が消えても cmdline にマーカーと読みが文字で残る
 local function has_unmapped(keys)
@@ -1355,17 +1346,6 @@ local function has_unmapped(keys)
     end
   end
   return false
-end
-for _, name in ipairs({
-  "unmapped: 未マップの特殊キーのあと、pre-edit は元のままか、きれいにリセットされる",
-  "cmdline: pre-edit が無ければマーカーを残さない",
-  "buffer: マーカーがバッファに漏れない",
-}) do
-  M.known[#M.known + 1] = {
-    property = name,
-    match = has_unmapped,
-    reason = "#56: ▽/▼ の途中で未マップの特殊キーを押すと、pre-edit と実際の文字がずれる",
-  }
 end
 
 if not CHECK_INDICATOR then
