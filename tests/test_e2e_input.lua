@@ -135,7 +135,7 @@ T["the pre-edit follows the cursor in the middle of a line"] = function()
   eq(helpers.cursor(child), { 1, 6 })
 end
 
-T["moving the cursor drops the pre-edit"] = function()
+T["moving the cursor commits the pre-edit at its position"] = function()
   child.api.nvim_buf_set_lines(0, 0, -1, false, { "abcdef" })
   child.api.nvim_win_set_cursor(0, { 1, 3 })
   start()
@@ -143,7 +143,8 @@ T["moving the cursor drops the pre-edit"] = function()
   child.api.nvim_win_set_cursor(0, { 1, 1 })
   type("ka")
   eq(helpers.preedit(child), "")
-  eq(helpers.buffer(child), { "aかbcdef" })
+  -- pre-edit の「か」は元の位置（3 文字目）に確定し、そのあと打った「か」はカーソル（1 文字目）に入る
+  eq(helpers.buffer(child), { "aかbcかdef" })
 end
 
 T["text inserted by completion drops the pre-edit"] = function()
