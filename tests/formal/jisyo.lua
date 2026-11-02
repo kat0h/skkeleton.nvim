@@ -16,8 +16,7 @@
 --   - 空の候補（`//`）と、候補の無い行（`見出し /`、`見出し //`、`見出し `）は候補にならない。upstream は空文字の候補を返すが、
 --     変換で選ぶ意味が無いので、ここは skkeleton.nvim の仕様とする
 --   - 1 行の中で同じ候補が重ねて出ても、Library を通すと最初の 1 つだけになる
---   - 同じ見出しが 2 行あるとき: 望ましいのは全部の行の候補をつなげること（#48 は未決の「質問」）。今は先の行だけが
---     使われるので、先の行だけと一致する場合は「△ 既知 #48」とする。それ以外の食い違いは本物の失敗
+--   - 同じ見出しが 2 行あるとき: あとの行を使う（upstream と同じ。#48 で決めた）
 --   - 前方一致（get_prefix）と補完（Library:get_completion_result）は、候補のある見出しをバイト順に返す。補完は
 --     1 文字なら完全一致だけ、2 文字以上は前方一致
 --   - 文字コード: encoding の指定があればそれ、無ければ先頭のコメントの `coding:`、それも無ければ UTF-8 と
@@ -438,15 +437,15 @@ local function has_dup(m)
   end
 end
 
--- 見出しの候補（重複なし）。policy "merge" は全部の行、"first" は先の行だけ
+-- 見出しの候補（重複なし）。policy "last" はあとの行だけ（#48）、"merge" は全部の行
 local function expected(lines, policy, variant)
   local out, seen = {}, {}
   if not lines then
     return out
   end
   for li, toks in ipairs(lines) do
-    if policy == "first" and li > 1 then
-      break
+    if policy == "last" and li < #lines then
+      goto continue
     end
     for _, t in ipairs(toks) do
       for _, s in ipairs(tok_strings(t, variant)) do
@@ -456,6 +455,7 @@ local function expected(lines, policy, variant)
         end
       end
     end
+    ::continue::
   end
   return out
 end
@@ -541,18 +541,11 @@ local KNOWN = {}
 local function judge(d, model, ex)
   local first_msg
   for _, variant in ipairs({ "A", "B" }) do
-    local msg = battery(d, model, variant, "merge", ex)
+    local msg = battery(d, model, variant, "last", ex)
     if not msg then
       return nil
     end
     first_msg = first_msg or msg
-  end
-  if has_dup(model) then
-    for _, variant in ipairs({ "A", "B" }) do
-      if not battery(d, model, variant, "first", ex) then
-        return KNOWN
-      end
-    end
   end
   return first_msg
 end
