@@ -171,6 +171,8 @@ local function cache_write(name, data)
   vim.fn.writefile({ vim.json.encode(data) }, CACHE .. "/" .. name)
 end
 local ALPHABET = profile.alphabet
+-- 幅優先は、種類ごとの代表だけに絞った集合があればそれを使う（ファジングと --random は全部）
+local BFS_ALPHABET = profile.bfs_alphabet or ALPHABET
 local INITS = profile.inits
 local INIT_NAMES = vim.tbl_keys(INITS)
 table.sort(INIT_NAMES)
@@ -763,7 +765,7 @@ elseif opts.fuzz then
     for _ = 1, opts.seed_depth do
       local items = {}
       for _, path in ipairs(frontier) do
-        for _, key in ipairs(ALPHABET) do
+        for _, key in ipairs(BFS_ALPHABET) do
           items[#items + 1] =
             { keys = vim.list_extend(vim.list_slice(path), { key }), mutation = opts.mutate, every = false }
         end
@@ -953,7 +955,7 @@ else
   for depth = 1, opts.depth do
     local items = {}
     for _, path in ipairs(frontier) do
-      for _, key in ipairs(ALPHABET) do
+      for _, key in ipairs(BFS_ALPHABET) do
         local ks = vim.list_extend(vim.list_slice(path), { key })
         items[#items + 1] = { keys = ks, mutation = opts.mutate, every = false }
       end

@@ -839,6 +839,82 @@ M.regcmd = {
   }, "\n"),
 }
 
+-- skkeleton が奪わない特殊キー（#56）。奪うのは英数字と記号、<BS>・<C-h>・<CR>・<Space>・<C-q>・<C-j>・<C-g>・<Esc> だけ（map.lua の default_keys）。
+-- ▽/▼ の途中でこれらを押すと Neovim の標準の動きが先に走る。spec.lua の「unmapped:」の性質がこの一覧を使う。
+-- tmux から送れるもの（tui.lua の TMUX_KEYS）と、headless の nvim_input でだけ送れるもの（修飾キーの組み合わせ）がある
+M.unmapped_keys = {
+  -- 修飾キーの組み合わせ
+  "<C-.>",
+  "<C-,>",
+  "<S-CR>",
+  "<C-S-a>",
+  "<M-a>",
+  -- カーソル移動
+  "<Left>",
+  "<Right>",
+  "<Home>",
+  "<End>",
+  "<S-Left>",
+  "<C-Left>",
+  -- 機能キーなど
+  "<F5>",
+  "<Insert>",
+  "<PageUp>",
+  "<Del>",
+  "<S-Tab>",
+}
+
+-- 未マップの特殊キーを ▽/▼ の途中で押す（insert、cmdline、terminal、辞書登録のプロンプト、候補一覧）。
+-- 幅優先は 1 種類ごとの代表だけ（bfs_alphabet）、ファジングと --random は一覧の全部を流す
+M.unmapped = {
+  doc = "未マップの特殊キー（<C-.>・<S-CR>・<Left>・<F5> など）を ▽/▼・候補一覧・辞書登録の途中で押す（#56）",
+  config = {},
+  setup = [[
+    vim.keymap.set("t", "<C-j>", "<Plug>(skkeleton-toggle)")
+  ]],
+  alphabet = vim.list_extend({
+    "<C-j>",
+    "Kan",
+    "Ka",
+    "ka",
+    "a",
+    "<Space>",
+    "<Space><Space><Space><Space>",
+    "<CR>",
+    "<BS>",
+    "<Esc>",
+    "<C-g>",
+    "<C-c>",
+  }, M.unmapped_keys),
+  bfs_alphabet = {
+    "<C-j>",
+    "Kan",
+    "Ka",
+    "ka",
+    "<Space>",
+    "<Space><Space><Space><Space>",
+    "<CR>",
+    "<Esc>",
+    "<C-g>",
+    "<C-c>",
+    "<C-.>",
+    "<Left>",
+    "<F5>",
+    "<S-Tab>",
+  },
+  inits = {
+    ["#mid"] = { lines = { "ab cd" }, cursor = { 1, 2 }, keys = "i" },
+    ["#cmd-on"] = { lines = { "ab cd" }, cursor = { 1, 2 }, keys = ":<C-j>" },
+    ["#term"] = {
+      lines = { "ab cd" },
+      cursor = { 1, 2 },
+      cmd = "terminal env PS1='$ ' HISTFILE=/dev/null bash --norc --noprofile",
+      keys = "i<C-j>",
+    },
+  },
+  dict = dict,
+}
+
 -- インジケータを切ったもの（ちらつきなどの原因がインジケータかを切り分けるため）
 M.noindicator = {
   doc = "インジケータを切った既定の設定（原因の切り分け用）",
@@ -864,6 +940,7 @@ M.names = {
   "okuri",
   "register",
   "regcmd",
+  "unmapped",
 }
 
 return M

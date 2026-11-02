@@ -75,6 +75,14 @@ local TMUX_KEYS = {
   ["<Up>"] = "Up",
   ["<Down>"] = "Down",
   ["<S-Left>"] = "S-Left",
+  -- 未マップの特殊キー（profiles.unmapped_keys）のうち、tmux から送れるもの。<C-.>・<C-,>・<S-CR>・<C-S-a> は
+  -- 端末の通常のキー入力では区別できないので、headless（check.lua）だけで流す
+  ["<M-a>"] = "M-a",
+  ["<C-Left>"] = "C-Left",
+  ["<F5>"] = "F5",
+  ["<PageUp>"] = "PPage",
+  ["<Del>"] = "DC",
+  ["<S-Tab>"] = "BTab",
   ["<C-[>"] = "C-[",
 }
 

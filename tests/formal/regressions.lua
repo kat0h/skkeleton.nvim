@@ -48,6 +48,13 @@ return {
     config = { markerHenkan = "" },
     keys = { "#mid", "<C-j>", "Ka", "<Space>", "ka", "<CR>" },
   },
+  -- 未マップの特殊キー（unmapped プロファイル）。▽ の途中で押すと、insert は打った読みが消え、cmdline は ▽ と読みが文字で残り、
+  -- terminal は job に渡ったキーで pre-edit の位置がずれる。直ったら 3 つとも「△ 既知」が出なくなる
+  { issue = 56, profile = "unmapped", keys = { "#mid", "<C-j>", "Kan", "<C-.>" } },
+  { issue = 56, profile = "unmapped", keys = { "#cmd-on", "Kan", "<C-.>" } },
+  { issue = 56, profile = "unmapped", keys = { "#term", "Kan", "<F5>" } },
+  -- <M-a>（<Esc> と a が続いた入力）で insert に戻ると escape の状態が残る。#32 の残り
+  { issue = 32, profile = "unmapped", keys = { "#mid", "<C-j>", "Kan", "<M-a>" } },
   -- core.lua・dict.lua の検査で見つかったもの。checker にスクリプトの名前、args に引数（シード固定）を書く。
   -- 開いている issue は「△ 既知 #N」が出れば未修正、閉じたあとにまた出たら失敗になる
   { issue = 49, checker = "core", args = { "--metamorphic", "300", "--seed", "1" } },

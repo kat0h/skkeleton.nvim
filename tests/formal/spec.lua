@@ -1135,6 +1135,146 @@ M.action["frame: 確定はカーソル位置に入り、前後の文字を変え
   end
 end
 
+-- 未マップの特殊キー（profiles.unmapped_keys。<C-.>・<S-CR>・<Left>・<F5> など。#56）。
+-- skkeleton は英数字と記号、<BS>・<CR>・<Space>・<Esc> などしか奪わないので、これらは ▽/▼ の途中で Neovim の標準の動きが先に走る
+-- （文字が入る、カーソルが動く、端末なら job にエスケープシーケンスが渡る）。
+-- upstream（denops 版）は pre-edit が本物のバッファの文字なので、キーはそのまま通り、打った読みは文字として残る。
+-- こちらは pre-edit が extmark（insert）か、書いて BS で消し直す文字（cmdline と terminal）なので、打った読みが消えやすい。
+-- 守ること: キーのあと、(a) キーが捨てられて pre-edit がそのまま残る（読みが消えない）か、
+--           (b) 打った読みがバッファ（cmdline、terminal の行）に文字として残る（確定、または upstream のようにそのまま残る）。
+--           読みが黙って消えるのは違反（#56。M.known で既知にしている）。
+local unmapped_set
+local function is_unmapped(key)
+  if not unmapped_set then
+    unmapped_set = {}
+    for _, k in ipairs(require("formal.profiles").unmapped_keys) do
+      unmapped_set[k] = true
+    end
+  end
+  return unmapped_set[key] == true
+end
+
+local function count_plain(text, sub)
+  local n, init = 0, 1
+  while true do
+    local a, b = text:find(sub, init, true)
+    if not a then
+      return n
+    end
+    n = n + 1
+    init = b + 1
+  end
+end
+
+-- 画面に出ているバッファや cmdline の文字
+local function body(s)
+  if s.cmdline then
+    return s.cmdline
+  end
+  return (table.concat(s.lines, "\n"):gsub("\n+$", ""))
+end
+
+-- ▽/▼ の途中にあった読み。マーカーと送り仮名の印（*）と、まだかなになっていないローマ字を除く。▼ なら候補も返す
+local function typed_reading(p)
+  local text = p.ctx_text
+  for _, m in ipairs(markers(p)) do
+    text = text:gsub(vim.pesc(m), "")
+  end
+  local cand = p.state.type == "henkan" and text or ""
+  local reading = text:gsub("%*", ""):gsub("[%a%d%p]+$", "")
+  if p.state.type == "henkan" and (p.state.henkan_feed or "") ~= "" then
+    reading = p.state.henkan_feed
+  end
+  return reading, cand
+end
+
+local function at_preedit(p, key)
+  return is_unmapped(key) and p.enabled and p.ctx_text ~= "" and p.vim_mode:sub(1, 1):match("[icte]") ~= nil
+end
+
+M.action["unmapped: 未マップの特殊キーのあと、打った読みが黙って消えない"] = function(
+  p,
+  key,
+  s
+)
+  if not at_preedit(p, key) or s.ctx_text == p.ctx_text then
+    return
+  end
+  local reading, cand = typed_reading(p)
+  if reading == "" then
+    return
+  end
+  -- insert の pre-edit は extmark でバッファに無い。cmdline と terminal は文字として書いてあるので、前と同じ数だけ残っていればよい
+  local real = p.cmdline ~= nil or p.vim_mode:sub(1, 1) == "t"
+  local need = count_plain(body(p), reading) + (real and 0 or 1)
+  local need_cand = cand ~= "" and (count_plain(body(p), cand) + (real and 0 or 1)) or math.huge
+  if count_plain(body(s), reading) < need and count_plain(body(s), cand ~= "" and cand or reading) < need_cand then
+    return ("%s のあと、打った読み %q（pre-edit %q）が消えた（行 %q）"):format(
+      key,
+      reading,
+      p.ctx_text,
+      body(s)
+    )
+  end
+end
+
+-- 捨てたなら pre-edit が元のまま（バッファとカーソルも動かない）、リセットしたなら跡が残らない。
+-- 途中までの状態（読みの一部だけ消費した、マーカーや extmark や popup だけ残る、state だけ残る）は違反
+M.action["unmapped: 未マップの特殊キーのあと、pre-edit は元のままか、きれいにリセットされる"] = function(
+  p,
+  key,
+  s
+)
+  if not at_preedit(p, key) then
+    return
+  end
+  if s.ctx_text ~= "" then
+    if s.ctx_text ~= p.ctx_text then
+      return ("%s のあと pre-edit が %q から %q に変わった"):format(key, p.ctx_text, s.ctx_text)
+    end
+    -- 捨てたなら、バッファ（cmdline、terminal の行）もカーソルも動かない。キーが通って文字が入る・カーソルが動くと、
+    -- pre-edit の位置が実際の文字とずれる（cmdline と terminal は pre-edit を文字で書いて BS で消し直すので、ずれた分が残る）
+    if s.cmdline ~= nil and p.cmdline ~= nil and (s.cmdline ~= p.cmdline or s.cmdpos ~= p.cmdpos) then
+      return ("%s のあと pre-edit %q は残っているが、cmdline が %q（位置 %d）から %q（位置 %d）に動いた"):format(
+        key,
+        p.ctx_text,
+        p.cmdline,
+        p.cmdpos,
+        s.cmdline,
+        s.cmdpos
+      )
+    end
+    if
+      s.vim_mode:sub(1, 1) == "t"
+      and p.buf == s.buf
+      and (body(s) ~= body(p) or p.cursor[1] ~= s.cursor[1] or p.cursor[2] ~= s.cursor[2])
+    then
+      return ("%s のあと pre-edit %q は残っているが、terminal の行が %q から %q に動いた（カーソル %s -> %s）"):format(
+        key,
+        p.ctx_text,
+        body(p),
+        body(s),
+        short(p.cursor),
+        short(s.cursor)
+      )
+    end
+    return
+  end
+  if #s.preedit_marks > 0 then
+    return ("%s のあと ctx は空なのに extmark %q が残っている"):format(key, mark_text(s))
+  end
+  if s.state.feed ~= "" or s.state.henkan_feed ~= "" then
+    return ("%s のあと ctx は空なのに state に読み（feed=%q、henkan_feed=%q）が残っている"):format(
+      key,
+      s.state.feed,
+      s.state.henkan_feed
+    )
+  end
+  if #s.popup > 0 then
+    return ("%s のあと pre-edit が無いのに popup が残っている"):format(key)
+  end
+end
+
 -- 見つかったが、今は直さないもの。反例の性質の名前と、キー列で見分ける。
 -- 当てはまる違反は「既知」として出し、失敗にしない
 M.known = {}
@@ -1170,6 +1310,54 @@ for _, name in ipairs({
       return msg ~= nil and msg:find("[空のマーカー]", 1, true) ~= nil
     end,
     reason = "#55: マーカーが空の設定だと、辞書登録の確定が取り消し扱いになる",
+  }
+end
+
+-- 未マップの特殊キー（<C-.>・<S-CR>・<Left>・<F5> など）を ▽/▼ の途中で押すと、打った読みが黙って消える（#56）
+M.known[#M.known + 1] = {
+  property = "unmapped: 未マップの特殊キーのあと、打った読みが黙って消えない",
+  match = function()
+    return true
+  end,
+  reason = "#56: ▽/▼ の途中で未マップの特殊キーを押すと、打った読みが黙って消える",
+}
+
+-- <M-a> は端末では <Esc> と a の続けて押したもの。<Esc> の片付けが SafeState まで遅れるので、すぐ次の a で insert に戻ると
+-- escape の状態が残る（#32 と同じ原因。`<Esc>a` と 1 つのキーで流しても起きる。upstream でも同じ）
+for _, name in ipairs({
+  "preedit: 表示は状態の文字列と一致する",
+  "frame: skkeleton の外でバッファやカーソルが動いたら pre-edit を捨てる",
+  "unmapped: 未マップの特殊キーのあと、pre-edit は元のままか、きれいにリセットされる",
+  "unmapped: 未マップの特殊キーのあと、打った読みが黙って消えない",
+}) do
+  M.known[#M.known + 1] = {
+    property = name,
+    match = function(keys)
+      return vim.tbl_contains(keys, "<M-a>")
+    end,
+    reason = "#32: <Esc> のすぐあとに insert へ戻るキー（<M-a> や <Esc>a）を押すと、状態が escape のまま残る",
+  }
+end
+
+-- #56 の別の現れ方。キーが先に通るので、pre-edit が残ったまま cmdline や terminal の文字がずれる、
+-- pre-edit が消えても cmdline にマーカーと読みが文字で残る
+local function has_unmapped(keys)
+  for _, k in ipairs(keys) do
+    if is_unmapped(k) then
+      return true
+    end
+  end
+  return false
+end
+for _, name in ipairs({
+  "unmapped: 未マップの特殊キーのあと、pre-edit は元のままか、きれいにリセットされる",
+  "cmdline: pre-edit が無ければマーカーを残さない",
+  "buffer: マーカーがバッファに漏れない",
+}) do
+  M.known[#M.known + 1] = {
+    property = name,
+    match = has_unmapped,
+    reason = "#56: ▽/▼ の途中で未マップの特殊キーを押すと、pre-edit と実際の文字がずれる",
   }
 end
 
