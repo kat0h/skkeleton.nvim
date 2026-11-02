@@ -130,52 +130,56 @@ function M.init(force)
   doautocmd("skkeleton-initialize-pre")
 
   local group = vim.api.nvim_create_augroup("skkeleton-internal", { clear = true })
-  -- 使い終わった state を片付ける。CmdlineEnter にすると辞書登録の呼び出しで壊れる。
-  -- 挿入モードの <C-o>（niI）などで解除されないよう ModeChanged の :n にする。
-  -- SafeState を挟むのは、プラグインによる ModeChanged の呼び出しで解除されるのを防ぐため。
-  -- このイベントは利用者の操作を受け付けるときに呼ばれるので、insert / cmdline / terminal でなければ片付ける
+  -- モード遷移に伴う後片付けの遷移表 (#62)
+  -- 移る前と後のモードに応じて、片付け方（"reset"、"safe_reset"、"none"）を引く
+  local MODE_TRANSITIONS = {
+    -- 1. insert / completion 中から visual / select モードへの直接遷移（マウス選択など）
+    { from = "^i", to = "^[vV\022sS\019]", action = "reset" },
+    -- 2. insert 中から <Insert> キーで置換モードへの遷移
+    { from = "^i", to = "^R", action = "reset" },
+    -- 3. normal モードへの遷移（プラグイン等による一瞬の遷移を SafeState で待つ）
+    { from = ".*", to = "^n", action = "safe_reset" },
+    -- 4. cmdline から visual / select / operator-pending などへ戻ったとき
+    { from = "^c", to = "^[^ictn]", action = "safe_reset" },
+  }
+
   vim.api.nvim_create_autocmd("ModeChanged", {
     group = group,
-    pattern = "*:n",
     callback = function()
-      vim.api.nvim_create_autocmd("SafeState", {
-        group = group,
-        once = true,
-        callback = function()
-          local m = vim.fn.mode()
-          local s = m:sub(1, 1)
-          if s ~= "i" and s ~= "c" and s ~= "t" and not vim.startswith(m, "ni") and not host.is_in_input() then
-            reset()
-            host.disable()
-          end
-        end,
-      })
-    end,
-  })
-  -- visual・select・operator-pending から入った cmdline を抜けて戻ったときも片付ける。
-  -- insert・cmdline・terminal に移るときは使い続けるので触らない（insert の <C-o> は niI のまま）
-  vim.api.nvim_create_autocmd("ModeChanged", {
-    group = group,
-    pattern = "c:*",
-    callback = function()
-      clean_history()
-      local new_mode = vim.v.event.new_mode:sub(1, 1)
-      if new_mode == "i" or new_mode == "c" or new_mode == "t" or new_mode == "n" then
-        return
+      local old_mode = vim.v.event.old_mode
+      local new_mode = vim.v.event.new_mode
+      if old_mode:sub(1, 1) == "c" then
+        clean_history()
       end
-      vim.api.nvim_create_autocmd("SafeState", {
-        group = group,
-        once = true,
-        callback = function()
-          local m = vim.fn.mode():sub(1, 1)
-          if m ~= "i" and m ~= "c" and m ~= "t" and not host.is_in_input() then
-            reset()
-            host.disable()
-          end
-        end,
-      })
+      local action = "none"
+      for _, rule in ipairs(MODE_TRANSITIONS) do
+        if old_mode:find(rule.from) and new_mode:find(rule.to) then
+          action = rule.action
+          break
+        end
+      end
+      if action == "reset" then
+        if not host.is_in_input() then
+          reset()
+          host.disable()
+        end
+      elseif action == "safe_reset" then
+        vim.api.nvim_create_autocmd("SafeState", {
+          group = group,
+          once = true,
+          callback = function()
+            local m = vim.fn.mode()
+            local s = m:sub(1, 1)
+            if s ~= "i" and s ~= "c" and s ~= "t" and not vim.startswith(m, "ni") and not host.is_in_input() then
+              reset()
+              host.disable()
+            end
+          end,
+        })
+      end
     end,
   })
+
   -- cmdline を抜ける際（取り消しも含めて）に pre-edit を取り除き、履歴にマーカーを残さない
   vim.api.nvim_create_autocmd("CmdlineLeave", {
     group = group,
@@ -186,35 +190,6 @@ function M.init(force)
       vim.schedule(function()
         clean_history(cmdtype)
       end)
-    end,
-  })
-  -- insert から直接 visual・select モードへ遷移したとき（マウス選択など）も片付ける。
-  -- 挿入モードの <C-o>（niI）は insert のままなので除外する
-  vim.api.nvim_create_autocmd("ModeChanged", {
-    group = group,
-    pattern = { "i:*", "ic:*", "ix:*" },
-    callback = function()
-      local m = vim.v.event.new_mode:sub(1, 1)
-      if m == "v" or m == "V" or m == "\22" or m == "s" or m == "S" or m == "\19" then
-        if host.is_in_input() then
-          return
-        end
-        reset()
-        host.disable()
-      end
-    end,
-  })
-  -- 置換モードでは有効にできない（enable で断る）ので、insert で有効にしたまま <Insert> で
-  -- 置換モードに移ったときも、pre-edit を捨てて無効にする（InsertLeave も InsertEnter も来ない）
-  vim.api.nvim_create_autocmd("ModeChanged", {
-    group = group,
-    pattern = "i:R*",
-    callback = function()
-      if host.is_in_input() then
-        return
-      end
-      reset()
-      host.disable()
     end,
   })
   -- insert のままウィンドウやバッファを切り替えても残らないようにする
