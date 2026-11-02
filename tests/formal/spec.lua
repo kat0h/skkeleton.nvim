@@ -1383,18 +1383,4 @@ function M.is_known(name, keys, msg)
   end
 end
 
--- ▽ や ▼ の途中で貼り付けると、打った読みが確定されずに消える（#125）
-for _, name in ipairs({
-  "unmapped: 未マップの特殊キーのあと、打った読みが黙って消えない",
-  "unmapped: 未マップの特殊キーのあと、pre-edit は元のままか、きれいにリセットされる",
-}) do
-  M.known[#M.known + 1] = {
-    property = name,
-    match = function(keys)
-      return vim.tbl_contains(keys, "<Paste>") or vim.tbl_contains(keys, "<PasteLines>")
-    end,
-    reason = "#125: ▽ や ▼ の途中で貼り付けると、打った読みが確定されずに消える",
-  }
-end
-
 return M
