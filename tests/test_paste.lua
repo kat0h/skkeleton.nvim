@@ -100,7 +100,7 @@ T["calls original vim.paste and preserves result and multi-line behavior"] = fun
   eq(helpers.buffer(child), { "" })
 end
 
-T["splits undo during pre-edit without changing existing behavior"] = function()
+T["commits the pre-edit before pasting (#125)"] = function()
   child.type_keys("i")
   helpers.type(child, "<Plug>(skkeleton-enable)")
   helpers.type(child, "a") -- "あ" を入力
@@ -111,17 +111,58 @@ T["splits undo during pre-edit without changing existing behavior"] = function()
 
   child.lua([[vim.paste({ "abc" }, -1)]])
   helpers.settle(child)
-  -- 貼り付けた文字列がバッファに入る
-  eq(helpers.buffer(child), { "あabc" })
+  -- 読みが確定してから、貼り付けた文字列が入る
+  eq(helpers.buffer(child), { "あかabc" })
+  eq(helpers.preedit(child), "")
 
-  -- u で貼った分 "abc" が消え、前に打った "あ" は残る
+  -- u で貼った分 "abc" が消え、確定した "か" は残る
   child.type_keys("<Esc>", "u")
   helpers.settle(child)
-  eq(helpers.buffer(child), { "あ" })
+  eq(helpers.buffer(child), { "あか" })
+end
 
-  child.type_keys("u")
+T["commits the candidate before pasting (#125)"] = function()
+  child.type_keys("i")
+  helpers.type(child, "<Plug>(skkeleton-enable)")
+  helpers.type(child, "Kan<Space>")
+  eq(helpers.preedit(child), "▼缶")
+
+  child.lua([[vim.paste({ "abc" }, -1)]])
   helpers.settle(child)
-  eq(helpers.buffer(child), { "" })
+  eq(helpers.buffer(child), { "缶abc" })
+  eq(helpers.preedit(child), "")
+
+  child.type_keys("<Esc>", "u")
+  helpers.settle(child)
+  eq(helpers.buffer(child), { "缶" })
+end
+
+T["commits the pre-edit before a multi-line paste (#125)"] = function()
+  child.type_keys("i")
+  helpers.type(child, "<Plug>(skkeleton-enable)")
+  helpers.type(child, "Kan")
+  eq(helpers.preedit(child), "▽かn")
+
+  child.lua([[vim.paste({ "一", "二" }, -1)]])
+  helpers.settle(child)
+  eq(helpers.buffer(child), { "かん一", "二" })
+  eq(helpers.preedit(child), "")
+
+  child.type_keys("<Esc>", "u")
+  helpers.settle(child)
+  eq(helpers.buffer(child), { "かん" })
+end
+
+T["commits the cmdline pre-edit before pasting (#125)"] = function()
+  child.type_keys(":")
+  helpers.type(child, "<Plug>(skkeleton-enable)")
+  helpers.type(child, "Kan")
+  eq(child.fn.getcmdline(), "▽かn")
+
+  child.lua([[vim.paste({ "abc" }, -1)]])
+  helpers.settle(child)
+  eq(child.fn.getcmdline(), "かんabc")
+  eq(child.g["skkeleton#state"].preedit, "")
 end
 
 T["splits undo before first chunk only in streaming paste (phase 1, 2, 3)"] = function()
