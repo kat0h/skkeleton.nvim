@@ -181,6 +181,10 @@ function M.init(force)
           reset()
           host.disable()
         end
+      elseif action == "safe_reset" and store.context().state.type == "escape" and not host.is_in_input() then
+        -- skkeleton の <Esc> はもう確定して無効にしてある。SafeState を待つと、すぐ次の a などで
+        -- insert に戻ったときに escape の状態が残るので、ここで片付ける (#32)
+        reset()
       elseif action == "safe_reset" then
         -- insert から normal へ抜けたときは、捨てずに <Esc> と同じく確定する
         local commit = old_mode:sub(1, 1) == "i"

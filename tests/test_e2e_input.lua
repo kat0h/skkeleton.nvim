@@ -503,4 +503,15 @@ T["stale preedit: on_bytes detects line modification during pre-edit (#66)"] = f
   eq(helpers.preedit(child), "")
 end
 
+T["<Esc> のすぐあとに insert へ戻っても escape の状態が残らない (#32)"] = function()
+  child.type_keys("i")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+  -- <Esc> と a を 1 度に送ると、a は SafeState より先に処理される（端末の <M-a> と同じ）
+  child.api.nvim_input("<Esc>a")
+  helpers.settle(child)
+  eq(child.fn.mode(), "i")
+  eq(child.lua_get([[require("skkeleton.store").context().state.type]]), "input")
+end
+
 return T
