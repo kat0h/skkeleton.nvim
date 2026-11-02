@@ -154,7 +154,16 @@ W["follows the preedit wrapped onto the next screen line"] = function()
   wchild.type_keys("A")
   helpers.type(wchild, "<Plug>(skkeleton-enable)")
   helpers.type(wchild, "Kan")
+  helpers.settle(wchild)
   local r = rect(wchild)
+  local debug_info = wchild.lua_get([[(function()
+    local win = vim.api.nvim_get_current_win()
+    local cur = vim.api.nvim_win_get_cursor(win)
+    local line = vim.api.nvim_buf_get_lines(0, cur[1] - 1, cur[1], false)[1] or ""
+    local sp = vim.fn.screenpos(win, cur[1], math.min(cur[2], #line) + 1)
+    return { cur = cur, sp = sp, screencol = vim.fn.screencol(), screenrow = vim.fn.screenrow(), pre = require("skkeleton.render").preedit_text() }
+  end)()]])
+  print("DEBUG nightly wrap info: " .. vim.inspect(debug_info) .. " r=" .. vim.inspect(r))
   -- pre-edit ▽かn（6 桁）は 37 桁目から折り返して 2 行目に入る
   eq(r.cursor[1], 1)
   eq(r.float, { 2, r.cursor[2] + 1, 1, r.float[4] })

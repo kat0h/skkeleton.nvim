@@ -391,6 +391,7 @@ end
 T["C-f in dictionary input opens cmdline window without cancelling (#54)"] = function()
   enable()
   type("A<Space>")
+  eq(child.fn.mode(), "c")
   child.type_keys("<C-f>")
   helpers.settle(child)
   eq(child.fn.getcmdwintype(), "@")
