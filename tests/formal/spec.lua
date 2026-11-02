@@ -1397,7 +1397,7 @@ M.known[#M.known + 1] = {
     end
     return false
   end,
-  reason = "インジケータ: insert の中でウィンドウを移っても閉じず、新しいウィンドウのカーソルの右下に動く",
+  reason = "#85: insert の中でウィンドウを移っても閉じず、新しいウィンドウのカーソルの右下に動く",
 }
 
 -- <C-o>: で cmdline に入って戻ると、CmdlineLeave が g:skkeleton#state.preedit を空にするが、insert の pre-edit は残っている。
@@ -1415,7 +1415,7 @@ M.known[#M.known + 1] = {
     end
     return false
   end,
-  reason = "インジケータ: <C-o>: などで cmdline に入って戻ると、残っている pre-edit に重ねて出る（state.preedit が空になる）",
+  reason = "#86: <C-o>: などで cmdline に入って戻ると、残っている pre-edit に重ねて出る（state.preedit が空になる）",
 }
 
 if not CHECK_INDICATOR then
@@ -1435,5 +1435,14 @@ function M.is_known(name, keys, msg)
     end
   end
 end
+
+-- カタカナ系のモードで <C-g> を押すと converter が落ち、▽ がひらがなで出て q でカタカナに確定する（#87。upstream も同じ）
+M.known[#M.known + 1] = {
+  property = "mode: カタカナ系のモードの ▽ で q を押すと、ひらがなの読みで確定する",
+  match = function(keys)
+    return vim.tbl_contains(keys, "<C-g>")
+  end,
+  reason = "#87: カタカナ系のモードで <C-g> のあと、▽ がひらがなで出て q でカタカナに確定する",
+}
 
 return M
