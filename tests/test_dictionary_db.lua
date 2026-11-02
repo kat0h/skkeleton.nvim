@@ -45,13 +45,13 @@ T["skk.parse"]["handles CRLF"] = function()
   )
 end
 
-T["skk.parse"]["uses the first one for the same reading"] = function()
+T["skk.parse"]["uses the last one for the same reading (#48)"] = function()
   eq(
     run([[
       local m = skk.parse(";; okuri-nasi entries.\nあ /先/\nあ /後/\n")
       return m.okurinasi["あ"]
     ]]),
-    "/先/"
+    "/後/"
   )
 end
 
@@ -269,7 +269,7 @@ T["db"]["writes the header and a sorted index"] = function()
         dst:match("/(%x+)%.db$"):len(),
       }
     ]]),
-    { "SKKDB 1 ", 128, 1, 2, true, 16 }
+    { "SKKDB 2 ", 128, 1, 2, true, 16 }
   )
 end
 
@@ -432,6 +432,20 @@ T["db"]["falls back to the memory dictionary when the DB cannot be written"] = f
       return lib:get_henkan_result("okurinasi", "あ")
     ]]),
     { "亜" }
+  )
+end
+
+T["db"]["uses the later line for duplicate headwords (#48)"] = function()
+  eq(
+    run([[
+      local src = write("dup", ";; coding: utf-8\n;; okuri-nasi entries.\nがいひ /該非/\nがいひ /外皮/外被/\n")
+      local mem = skk.load_memory(src)
+      local d = db.open_dictionary(src, { dir = TMP .. "/db" })
+      local res = d:get_henkan_result("okurinasi", "がいひ")
+      d:close()
+      return { mem:get_henkan_result("okurinasi", "がいひ"), res }
+    ]]),
+    { { "外皮", "外被" }, { "外皮", "外被" } }
   )
 end
 

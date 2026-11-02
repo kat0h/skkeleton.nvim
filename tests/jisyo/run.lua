@@ -192,12 +192,15 @@ local function load_entries(path)
           local id = "n:" .. yomi
           if expr then
             skipped.expr = skipped.expr + 1
-          elseif index[id] then
-            skipped.dup = skipped.dup + 1
           elseif #cands > 0 then
-            entries[#entries + 1] = special
-            index[id] = #entries
-            skipped.special[special.kind] = (skipped.special[special.kind] or 0) + 1
+            if index[id] then
+              entries[index[id]] = special
+              skipped.dup = skipped.dup + 1
+            else
+              entries[#entries + 1] = special
+              index[id] = #entries
+              skipped.special[special.kind] = (skipped.special[special.kind] or 0) + 1
+            end
           end
         elseif okuri_ari and not okuri then
           -- 送りあり側にあるのに末尾が子音でない見出し（辞書の誤り）。入力のしようがない
@@ -214,12 +217,14 @@ local function load_entries(path)
         elseif expr then
           skipped.expr = skipped.expr + 1
         elseif #cands > 0 then
-          -- 同じ見出しが 2 行ある辞書では、先の行だけが使われる（あとの行の候補は出ない。skk.el と同じ）
+          -- 同じ見出しが 2 行以上ある辞書では、あとの行を使う (#48)
           local id = (okuri_ari and "a:" or "n:") .. yomi
+          local entry = { yomi = yomi, keys = keys, okuri = okuri, cands = cands }
           if index[id] then
+            entries[index[id]] = entry
             skipped.dup = skipped.dup + 1
           else
-            entries[#entries + 1] = { yomi = yomi, keys = keys, okuri = okuri, cands = cands }
+            entries[#entries + 1] = entry
             index[id] = #entries
           end
         end
@@ -386,7 +391,7 @@ print(
   )
 )
 print("特別な見出し: " .. vim.inspect(skipped.special):gsub("%s+", " "))
-print(string.format("同じ見出しが複数行ある: %d 件（先の行だけを期待値にした）", skipped.dup))
+print(string.format("同じ見出しが複数行ある: %d 件（あとの行を期待値にした）", skipped.dup))
 if nokey > 0 then
   local parts = {}
   for c, n in pairs(skipped.nokey) do
