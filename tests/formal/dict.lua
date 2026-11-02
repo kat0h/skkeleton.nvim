@@ -58,7 +58,8 @@ local function model_register(m, kind, word, cand)
   m[kind][word] = list
 end
 
--- 補完のランクの正解: 登録した候補ほど後ろ（新しい）。登録し直すと最新になり、削除すると消える
+-- 補完のランクの正解: 登録した候補ほど後ろ（新しい）。登録し直すと最新になる。
+-- 候補を削除してもランクは消えない（upstream と同じ。#129）
 local function rank_bump(m, cand)
   if cand == "" then
     return
@@ -69,10 +70,8 @@ local function rank_bump(m, cand)
   m.ranks[#m.ranks + 1] = cand
 end
 
-local function rank_drop(m, cand)
-  m.ranks = vim.tbl_filter(function(c)
-    return c ~= cand
-  end, m.ranks)
+local function rank_drop(_, _)
+  -- 削除してもランクは残る（#129）
 end
 
 local function model_purge(m, kind, word, cand)
