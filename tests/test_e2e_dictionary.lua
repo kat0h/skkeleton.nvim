@@ -199,6 +199,40 @@ T["register"]["<C-c> cancels"] = function()
   eq(user_dictionary():find("よみ", 1, true), nil)
 end
 
+T["register"]["<C-g> after <C-w> cancels and keeps the outer reading (#116)"] = function()
+  enable()
+  -- 送り仮名の変換で候補が無いときの登録になる。欄で打った「んじ」と打ちかけの n が残る
+  type("KanKanjin")
+  eq(child.fn.mode(), "c")
+  eq(child.fn.getcmdline(), "んじn")
+  child.type_keys("<C-w>")
+  helpers.settle(child)
+  eq(child.fn.getcmdline(), "んじ")
+  -- 取り消しの印をかな入力に通すと、n が食われて印が崩れ、語として登録される
+  type("<C-g>")
+  eq(child.fn.mode(), "i")
+  eq(helpers.buffer(child), { "" })
+  eq(helpers.preedit(child), "▽かん*か")
+  eq(child.g["skkeleton#enabled"], true)
+  eq(user_dictionary(), "")
+end
+
+T["register"]["<Esc> after <C-w> cancels and keeps the outer reading (#116)"] = function()
+  enable()
+  type("KanKanjin")
+  eq(child.fn.mode(), "c")
+  eq(child.fn.getcmdline(), "んじn")
+  child.type_keys("<C-w>")
+  helpers.settle(child)
+  eq(child.fn.getcmdline(), "んじ")
+  type("<Esc>")
+  eq(child.fn.mode(), "i")
+  eq(helpers.buffer(child), { "" })
+  eq(helpers.preedit(child), "▽かん*か")
+  eq(child.g["skkeleton#enabled"], true)
+  eq(user_dictionary(), "")
+end
+
 T["register"]["an empty input cancels"] = function()
   enable()
   type("Yomi<Space><CR>")

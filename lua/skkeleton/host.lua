@@ -160,6 +160,13 @@ local function pop_input_frame(frame)
   doautocmd("skkeleton-enable-post")
 end
 
+-- 辞書登録の欄の取り消し。<Cmd> から呼び、取り消しの印を書いて <CR> で抜ける。
+-- 印を文字として打ち込むと、かな入力が一部を食って崩れる (#116)
+function M.cancel_input()
+  require("skkeleton.render.cmdline").reset()
+  vim.fn.setcmdline(marker.CANCEL)
+end
+
 -- 辞書登録の入力。取り消しなら nil か ""
 -- 入力中は新しい Context で skkeleton を有効にし、終わったら元の Context とモードに戻す
 ---@param prompt string
@@ -186,8 +193,10 @@ function M.input(prompt)
       once = true,
       callback = function()
         map.map()
+        -- 印をかな入力に通さず、<Cmd> から書いて <CR> で抜ける (#116)
+        local cancel = "<Cmd>lua require('skkeleton.host').cancel_input()<CR><CR>"
         for _, k in ipairs({ "<Esc>", "<C-g>" }) do
-          vim.api.nvim_buf_set_keymap(frame.buf, "c", k, marker.CANCEL .. "<CR>", { noremap = true, silent = true })
+          vim.api.nvim_buf_set_keymap(frame.buf, "c", k, cancel, { noremap = true, silent = true })
         end
       end,
     })
