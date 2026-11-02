@@ -15,9 +15,9 @@ TLA+ の TLC のようなモデル検査を、仕様のモデルではなく実�
   | `default` | 既定の設定で、入力・変換・編集キー・モードとウィンドウの行き来 |
   | `modes` | 入力モードの切り替え（`q`、`<C-q>`、`L`、`l`、`/`）と送り仮名・数値変換 |
   | `config` | eggLikeNewline・keepState・keepMode・別のマーカー・`showCandidatesCount = 1` |
-  | `edge` | 画面の右端と下端で、popup とインジケータが画面に収まり、カーソルを隠さない |
+  | `edge` | 画面の右端と下端で、popup とインジケータが画面に収まり、popup がカーソルを隠さない |
   | `cmdline` | コマンドライン（`:`）の中での入力・変換・取り消し |
-  | `styles`、`rounded`、`minimal` | インジケータの style（#9）と popup の枠（#10） |
+  | `styles`、`rounded`、`minimal` | インジケータの style（#9）、`border`、popup の枠（#10） |
   | `misc` | `<C-o>`・`<C-r>=`・`<C-v>`・`<C-n>` の補完・`o`/`O`・`R`（置換）・`X`（候補の削除） |
   | `register` | 辞書登録のプロンプト（`host.input`）。かな入力・入れ子の変換と登録・`<CR>`／空の `<CR>`／`<Esc>`／`<C-c>`／`<C-g>`・`<C-r>`・`<C-f>`（cmdline window）・遅れて来る `:stopinsert` とウィンドウの移動 |
   | `regcmd` | cmdline（`:` と `/`）と terminal の中から始める辞書登録。▽ の読みが外れて `<Space>` で開くプロンプトの中で、かな入力・`<CR>`／空の `<CR>`／`<Esc>`／`<C-c>`／`<C-g>`・入れ子の登録・`<C-r>`・`<C-f>` |
@@ -39,7 +39,8 @@ TLA+ の TLC のようなモデル検査を、仕様のモデルではなく実�
   どのプロファイルのキーの集合にも `<C-c>` が入っています。`,` を含む操作には、`<ClickL2>`・`<StealCursor>`・`<WheelDown>` などの別名（`profiles.lua` の `M.aliases`）を付けて、`--keys` に書けるようにしています。
 
 - **性質**（`spec.lua`）
-  - 不変条件: 1 つの観測で成り立つべきことです。「pre-edit の extmark は全バッファで高々 1 つで、カーソル位置にある」「画面の行は、バッファのカーソルの位置に pre-edit を差し込んだものと一致する」「インジケータは pre-edit の直後にあり、今のモードの文字列を出す」「popup の中身は今のページの候補」「float は画面に収まり、カーソルを隠さない」「cmdline のカーソルの前は pre-edit で終わり、マーカーを残さない」「normal に戻ったら状態・`'textwidth'`・マッピングが元に戻っている」「ウィンドウとバッファが漏れない」など。
+  - 不変条件: 1 つの観測で成り立つべきことです。「pre-edit の extmark は全バッファで高々 1 つで、カーソル位置にある」「画面の行は、バッファのカーソルの位置に pre-edit を差し込んだものと一致する」「インジケータは出ていれば 1 つで、insert・cmdline で pre-edit が無いときだけ、今のモードの文字列を出す」「popup の中身は今のページの候補」「float は画面に収まり、popup はカーソルを隠さない」「cmdline のカーソルの前は pre-edit で終わり、マーカーを残さない」「normal に戻ったら状態・`'textwidth'`・マッピングが元に戻っている」「ウィンドウとバッファが漏れない」など。
+  - インジケータの性質（#76 の決まりに合わせてあります）: 出すのは insert・cmdline に入ったときと skkeleton のモードが変わったときで、出したあとは動かさず、pre-edit が出たら出しません。確かめるのは次の 4 つです。(a) 出ているのは insert・cmdline で pre-edit が無いときだけで、1 つ、中身は今のモードの文字列。(b) 出ているあいだ同じ窓が動かず、文字が入る・カーソルが動く・スクロールやウィンドウの大きさが変わる・cmdline が変わるのどれかのあとには残らない。(c) モードの切り替え（`q`・`l`・`L`・`/`・`<C-j>` など）のあと、pre-edit・文字・カーソルの変化が無ければ出ている。(d) float は画面に収まる（画面の端でインジケータがカーソルに重なるのは許す）。`fadeOutMs`（既定 3000ms）は、1 キーの検査が数十 ms で終わるので、たたないものとして扱います。`FORMAL_INDICATOR=0` でこの性質を切れます。insert の中でウィンドウを移ると、出ているインジケータが新しいウィンドウのカーソルの右下へ動く件は、既知（`M.known`）にしてあります。
   - 遷移の性質（TLA+ の action）: 1 キーの前後の組で成り立つべきことです。「skkeleton が処理しないキーでバッファやカーソルが動いたら、pre-edit を捨てる」（#8 の型）、「確定した文字はカーソルの位置に入り、前後の文字を変えない」など。
   - 2 手以上をまたぐ性質: 履歴を持って確かめます。「辞書登録を取り消すと、登録に入る前の行・カーソル・pre-edit に戻る」（d5fc182 の型）、「keepState なら、skkeleton の `<Esc>` で抜けたあと同じバッファで insert に戻ると有効になる」。
   - upstream の issue から作った性質: `g:skkeleton#mode` は内部のモードと同じ（upstream #69）、disable-post は無効になったときだけ（#130）、モードが変わったら mode-changed が来る（#43）、`<C-j>` で有効・無効が切り替わる（#4・#45）。
@@ -112,11 +113,10 @@ nvim --headless -u NONE -i NONE -l tests/formal/coverage.lua all [--json] [--top
 
 ## 確かめたこと
 
-直したバグを子の nvim の中に戻す変異（`--mutate`）を 7 種類作り、どれも深さ 5 までの探索で、3〜6 キーの反例として見つかりました。
+直したバグを子の nvim の中に戻す変異（`--mutate`）を 6 種類作り、どれも深さ 5 までの探索で、3〜6 キーの反例として見つかりました。
 
 | 変異 | 戻したバグ | 反例 |
 | --- | --- | --- |
-| `indicator-ignores-preedit` | #6 インジケータが pre-edit に置いていかれる | `#eol <C-j> K` |
 | `no-stale-check` | #8 変換中の `<C-u>` などで pre-edit が残る | `#mid <C-j> A <C-w>` |
 | `no-winleave-reset` | ウィンドウを移ると状態が残る | `#eol <C-j> <Cmd>wincmd w<CR>` |
 | `no-normal-reset` | normal に戻っても無効にならない | `#bol <C-j> <Esc>` |

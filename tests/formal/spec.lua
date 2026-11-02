@@ -4,9 +4,9 @@
 -- どちらも違反なら説明の文字列を、成り立てば nil を返す
 local M = {}
 
--- インジケータの不具合は追わない（利用者の判断）。FORMAL_INDICATOR=1 のときだけ、
--- 「indicator:」の性質と「float:」のインジケータの部分を確かめる
-local CHECK_INDICATOR = os.getenv("FORMAL_INDICATOR") == "1"
+-- インジケータの不具合は追わない（利用者の判断）が、性質は既定で入れてある。
+-- FORMAL_INDICATOR=0 で「indicator:」の性質と「float:」のインジケータの部分を切る
+local CHECK_INDICATOR = os.getenv("FORMAL_INDICATOR") ~= "0"
 
 -- 空のマーカー（upstream #103）は探せないので除く
 local function markers(s)
@@ -231,40 +231,33 @@ M.state["mapping: 有効なら今のバッファにマッピングがある"] = 
   end
 end
 
--- alwaysShown（既定 true）なら、無効でも insert モードでは出る。normal では出ない
-M.state["indicator: insert では pre-edit の直後に 1 つ、normal では出ない"] = function(s)
-  if s.vim_mode == "n" then
-    if #s.indicator > 0 then
-      return "normal なのにインジケータが出ている"
-    end
+-- インジケータの決まり（#76）:
+-- 出すのは insert・cmdline に入ったときと skkeleton のモードが変わったとき。出す場所はそのときのカーソルの右下で、
+-- 出したあとは動かさない。pre-edit が出ているあいだは出さない。画面の端ではカーソルに重なってもよい。
+-- fadeOutMs（既定 3000ms）は、1 キーの検査が数十 ms で終わる前提でたたないものとして扱う
+
+-- alwaysShown（既定 true）なら、無効でも insert では出る。出ていれば 1 つで、中身は今のモードの文字列
+M.state["indicator: 出ているのは insert・cmdline で pre-edit が無いときだけ、1 つで今のモードの文字列"] = function(
+  s
+)
+  if #s.indicator == 0 then
     return
   end
-  if not insert_mode(s) then
-    return
+  if #s.indicator > 1 then
+    return ("インジケータが %d 個"):format(#s.indicator)
   end
-  local want = (s.enabled or s.ind_cfg.always_shown) and 1 or 0
-  if #s.indicator ~= want then
-    return ("インジケータが %d 個（%d のはず）"):format(#s.indicator, want)
+  if not insert_mode(s) and not s.cmdline then
+    return ("mode %s でインジケータが出ている"):format(s.vim_mode)
   end
-  if want == 0 then
-    return
+  local pre = s.g_state and s.g_state.preedit or ""
+  if pre ~= "" or s.ctx_text ~= "" then
+    return ("pre-edit（g:skkeleton#state.preedit=%q、状態 %q）があるのにインジケータが出ている"):format(
+      pre,
+      s.ctx_text
+    )
   end
-  -- 画面のカーソル（pre-edit の直後）から row 行下、col 桁右。枠があれば枠の分だけ中身がずれる。
-  -- 画面の端で押し戻されるときは、位置は確かめない（「float: 画面に収まる」で確かめる）
-  local ind = s.indicator[1]
-  -- 位置は枠を含めた左上
-  local b = ind.border and 1 or 0
-  -- 注釈（#11）が出ているときは、注釈に重ならないよう、その後ろに置く（render.preedit_width が注釈の幅も足す）
-  local expect = { s.screen.row - 1 + s.ind_cfg.row, s.screen.col - 1 + s.ind_cfg.col + width(annot_text(s)) }
-  -- float の中では headless の screenrow()/screencol() が正しい値を返さないので、位置は確かめない
-  if s.win_float then
-    return
-  end
-  local fits = expect[2] + ind.width + 2 * b <= s.columns
-    and expect[1] + ind.height + 2 * b <= s.editor_lines - s.cmdheight
-  local got = ind.pos
-  if fits and (got[1] ~= expect[1] or got[2] ~= expect[2]) then
-    return ("インジケータ %s、期待 %s"):format(short(got), short(expect))
+  if not (s.enabled or s.ind_cfg.always_shown) then
+    return "無効で alwaysShown = false なのにインジケータが出ている"
   end
 end
 
@@ -340,8 +333,8 @@ M.state["popup: 中身は今のページの候補"] = function(s)
   end
 end
 
--- float（popup とインジケータ）は画面の中に収まり、カーソルのセルを隠さない
-M.state["float: 画面に収まり、カーソルを隠さない"] = function(s)
+-- float（popup とインジケータ）は画面の中に収まる。popup はカーソルのセルを隠さない（インジケータは画面の端で重なってよい）
+M.state["float: 画面に収まり、popup はカーソルを隠さない"] = function(s)
   local bottom = s.editor_lines - s.cmdheight
   local all = {}
   for _, f in ipairs(s.popup) do
@@ -359,7 +352,14 @@ M.state["float: 画面に収まり、カーソルを隠さない"] = function(s)
       return ("%s (%d,%d) %dx%d が画面 %dx%d からはみ出す"):format(e.kind, top, left, h, w, bottom, s.columns)
     end
     local crow, ccol = s.screen.row - 1, s.screen.col - 1
-    if s.vim_mode:sub(1, 1) == "i" and crow >= top and crow < top + h and ccol >= left and ccol < left + w then
+    if
+      e.kind == "popup"
+      and s.vim_mode:sub(1, 1) == "i"
+      and crow >= top
+      and crow < top + h
+      and ccol >= left
+      and ccol < left + w
+    then
       return ("%s%s (%d,%d) %dx%d がカーソル (%d,%d) を隠す"):format(
         e.kind,
         f.border and "（枠つき）" or "",
@@ -561,6 +561,83 @@ M.action["cmdline: pre-edit が無ければマーカーを残さない"] = funct
         return ("pre-edit が無いのに cmdline %q に %s が残っている"):format(s.cmdline, m)
       end
     end
+  end
+end
+
+-- インジケータは、出したあとに動かさず、文字が入る・カーソルが動く・スクロールする・cmdline が変わるのどれかで閉じる
+M.action["indicator: 出ているあいだ動かず、文字・カーソル・スクロールの変化で閉じる"] = function(
+  p,
+  key,
+  s
+)
+  if not CHECK_INDICATOR or s.cmdwin ~= "" or registering(s) or registering(p) then
+    return
+  end
+  for _, a in ipairs(p.indicator) do
+    for _, b in ipairs(s.indicator) do
+      if a.win == b.win then
+        if a.pos[1] ~= b.pos[1] or a.pos[2] ~= b.pos[2] then
+          return ("インジケータが %s から %s に動いた"):format(short(a.pos), short(b.pos))
+        end
+        if s.buf == p.buf and not s.win_float then
+          if s.win == p.win and insert_mode(s) and not vim.deep_equal(p.lines, s.lines) then
+            return "文字が入ったのにインジケータが残っている"
+          end
+          if insert_mode(s) and not vim.deep_equal(p.cursor, s.cursor) then
+            return ("カーソルが %s から %s に動いたのにインジケータが残っている"):format(
+              short(p.cursor),
+              short(s.cursor)
+            )
+          end
+          -- cmdline の最中は WinScrolled・WinResized が来ない（画面の大きさを変えても、cmdline を抜けるまで届かない）ので確かめない
+          if
+            insert_mode(s) and (p.topline ~= s.topline or p.win_height ~= s.win_height or p.win_width ~= s.win_width)
+          then
+            return "スクロールかウィンドウの大きさが変わったのにインジケータが残っている"
+          end
+          if p.cmdline ~= s.cmdline then
+            return "cmdline が変わったのにインジケータが残っている"
+          end
+        end
+      end
+    end
+  end
+end
+
+-- モードの切り替え（q、l、L、/、<C-j> など）のあと、pre-edit が無く、文字もカーソルも動いていなければ、インジケータが出ている
+M.action["indicator: モードが変わったあと pre-edit が無ければ出ている"] = function(p, key, s)
+  if not CHECK_INDICATOR or s.cmdwin ~= "" or registering(s) or s.pending or s.win_float then
+    return
+  end
+  if not (insert_mode(s) or s.cmdline) or p.vim_mode ~= s.vim_mode then
+    return
+  end
+  if p.skk_mode == s.skk_mode and p.enabled == s.enabled then
+    return
+  end
+  if not (s.enabled or s.ind_cfg.always_shown) then
+    return
+  end
+  local pre = s.g_state and s.g_state.preedit or ""
+  if pre ~= "" or s.ctx_text ~= "" then
+    return
+  end
+  if
+    p.buf ~= s.buf
+    or p.win ~= s.win
+    or not vim.deep_equal(p.lines, s.lines)
+    or not vim.deep_equal(p.cursor, s.cursor)
+  then
+    return
+  end
+  if #s.indicator ~= 1 then
+    return ("モードが %s/%s から %s/%s に変わったのにインジケータが %d 個"):format(
+      p.skk_mode,
+      tostring(p.enabled),
+      s.skk_mode,
+      tostring(s.enabled),
+      #s.indicator
+    )
   end
 end
 
@@ -1300,10 +1377,53 @@ for _, name in ipairs({
   }
 end
 
+-- insert の中でウィンドウを移ると、出ているインジケータ（relative = "cursor"）が新しいウィンドウのカーソルの右下に動く。
+-- インジケータの不具合は追わない方針なので既知にしてある（本物の挙動の差。窓を移ったときに閉じていない）
+M.known[#M.known + 1] = {
+  property = "indicator: 出ているあいだ動かず、文字・カーソル・スクロールの変化で閉じる",
+  match = function(keys, msg)
+    if not (msg or ""):find("動いた", 1, true) then
+      return false
+    end
+    for _, k in ipairs(keys) do
+      if
+        k:find("wincmd", 1, true)
+        or k:find("Steal", 1, true)
+        or k:find("Click", 1, true)
+        or k:find("<C-w>", 1, true)
+      then
+        return true
+      end
+    end
+    return false
+  end,
+  reason = "インジケータ: insert の中でウィンドウを移っても閉じず、新しいウィンドウのカーソルの右下に動く",
+}
+
+-- <C-o>: で cmdline に入って戻ると、CmdlineLeave が g:skkeleton#state.preedit を空にするが、insert の pre-edit は残っている。
+-- インジケータは state.preedit だけを見るので、残った pre-edit に重ねて出る（lua/skkeleton/main.lua の clear_preedit_state）
+M.known[#M.known + 1] = {
+  property = "indicator: 出ているのは insert・cmdline で pre-edit が無いときだけ、1 つで今のモードの文字列",
+  match = function(keys, msg)
+    if not (msg or ""):find("あるのに", 1, true) then
+      return false
+    end
+    for _, k in ipairs(keys) do
+      if k:find("<C-o>", 1, true) or k:find("<C-r>=", 1, true) then
+        return true
+      end
+    end
+    return false
+  end,
+  reason = "インジケータ: <C-o>: などで cmdline に入って戻ると、残っている pre-edit に重ねて出る（state.preedit が空になる）",
+}
+
 if not CHECK_INDICATOR then
-  for name in pairs(M.state) do
-    if name:find("^indicator:") then
-      M.state[name] = function() end
+  for _, kind in ipairs({ M.state, M.action }) do
+    for name in pairs(kind) do
+      if name:find("^indicator:") then
+        kind[name] = function() end
+      end
     end
   end
 end

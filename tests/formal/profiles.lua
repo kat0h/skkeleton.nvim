@@ -134,7 +134,7 @@ M.config = {
 -- 画面の端。右端（長い行の行末）と、ウィンドウの最後の行で、popup とインジケータを出す
 M.edge = {
   doc = "画面の右端と下端で、popup とインジケータが画面に収まり、カーソルを隠さない",
-  config = { indicator = { style = "rounded" }, popupBorder = "single", showCandidatesCount = 1 },
+  config = { indicator = { border = "rounded" }, popupBorder = "single", showCandidatesCount = 1 },
   alphabet = {
     "<C-j>",
     "Kan",
@@ -217,8 +217,8 @@ M.styles = {
 }
 
 M.rounded = {
-  doc = "インジケータの style = rounded（枠つき）",
-  config = { indicator = { style = "rounded" } },
+  doc = "インジケータの border = rounded（枠つき）",
+  config = { indicator = { border = "rounded" } },
   alphabet = with(base, { "q", "l" }),
   inits = line_inits,
   dict = dict,

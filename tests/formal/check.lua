@@ -31,10 +31,6 @@ local MUTATIONS = {
     code = [[require("skkeleton.main").init()
       vim.api.nvim_clear_autocmds({ group = "skkeleton-internal", event = { "TextChangedI", "TextChangedP", "CursorMovedI" } })]],
   },
-  ["indicator-ignores-preedit"] = {
-    issue = "#6 インジケータが pre-edit に置いていかれる",
-    code = [[require("skkeleton.render").preedit_width = function() return 0 end]],
-  },
   ["no-winleave-reset"] = {
     issue = "ウィンドウを移ると pre-edit と状態が前のウィンドウに残る",
     code = [[require("skkeleton.main").init()

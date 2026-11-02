@@ -157,6 +157,8 @@ function M.snapshot()
     win_pos = wpos,
     textoff = textoff,
     win_width = vim.api.nvim_win_get_width(win),
+    win_height = vim.api.nvim_win_get_height(win),
+    topline = vim.fn.getwininfo(win)[1].topline,
     screen = { row = vim.fn.screenrow(), col = vim.fn.screencol() },
     screen_row = vim.fn.screenpos(win, cur[1], 1).row,
     preedit_marks = marks(render.ns),
