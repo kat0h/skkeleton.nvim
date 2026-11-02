@@ -4,7 +4,7 @@ p = sys.argv[1]; fixed = {"#" + n for n in sys.argv[2:]}
 lines = open(p, encoding="utf-8").read().split("\n"); out, i = [], 0
 while i < len(lines):
     L = lines[i]
-    if L.startswith("M.known[#M.known + 1] = {") or L.startswith("for _, property in ipairs({"):
+    if L.startswith("M.known[#M.known + 1] = {") or (L.startswith("for _, ") and L.endswith(" in ipairs({")):
         endtok = "}" if L.startswith("M.known") else "end"; j = i
         while lines[j] != endtok: j += 1
         m = re.search(r'reason = "(#\d+):', "\n".join(lines[i:j + 1]))

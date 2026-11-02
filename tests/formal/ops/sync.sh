@@ -24,13 +24,15 @@ for i in $(grep -o 'reason = "#[0-9]*' tests/formal/spec.lua | grep -o '[0-9]*' 
 done
 if [ -n "$closed" ]; then
   python3 "$O/drop-known.py" tests/formal/spec.lua $closed
-  git add tests/formal/spec.lua
-  git commit -qm "$(msg "test(formal): drop known entries for closed issues:$closed")"
-  git push -q origin poc/formal-ui; echo "dropped known:$closed"; n=1
+  if ! git diff --quiet tests/formal/spec.lua; then
+    git add tests/formal/spec.lua
+    git commit -qm "$(msg "test(formal): drop known entries for closed issues:$closed")"
+    git push -q origin poc/formal-ui; echo "dropped known:$closed"; n=1
+  fi
 fi
 # core.lua・dict.lua の既知の絞り込みは形がまちまちなので自動では外さず、閉じたものを知らせる
 for f in tests/formal/core.lua tests/formal/dict.lua; do
-  for i in $(grep -oE '(#|issue = )[0-9]{2,}' "$f" | grep -oE '[0-9]+' | sort -u); do
+  for i in $(grep -v -E '^\s*--' "$f" | grep -oE '(issue = |reason = "#|"#)[0-9]{2,}' | grep -oE '[0-9]+' | sort -u); do
     [ "$(gh api "repos/kat0h/skkeleton.nvim/issues/$i" -q .state 2>/dev/null)" = closed ] && echo "closed but still known in $f: #$i（手で外す）"
   done
 done

@@ -1260,20 +1260,14 @@ end
 -- 当てはまる違反は「既知」として出し、失敗にしない
 M.known = {}
 
--- markerHenkan か markerHenkanSelect が "" だと、辞書登録の入力が全部取り消し扱いになる（#55。upstream は登録できる）
-for _, name in ipairs({
-  "register: 閉じたあとのバッファは登録した語か元の ▽ の読み",
-  "register: ユーザー辞書は空でない確定のときだけ増える",
-  "register: 閉じたあとのモードと状態が登録の前と同じ",
-}) do
-  M.known[#M.known + 1] = {
-    property = name,
-    match = function(_, msg)
-      return msg ~= nil and msg:find("[空のマーカー]", 1, true) ~= nil
-    end,
-    reason = "#55: マーカーが空の設定だと、辞書登録の確定が取り消し扱いになる",
-  }
-end
+-- cmdline の ▽ の途中で中クリックで貼ると、pre-edit を片付けても ▽ と読みが cmdline に残る（#12 の残り）
+M.known[#M.known + 1] = {
+  property = "cmdline: pre-edit が無ければマーカーを残さない",
+  match = function(keys)
+    return vim.tbl_contains(keys, "<RightClickMid>")
+  end,
+  reason = "#12: cmdline の ▽ の途中で中クリックで貼ると、▽ と読みが cmdline に残る",
+}
 
 -- 未マップの特殊キー（<C-.>・<S-CR>・<Left>・<F5> など）を ▽/▼ の途中で押すと、打った読みが黙って消える（#56）
 M.known[#M.known + 1] = {
@@ -1283,23 +1277,6 @@ M.known[#M.known + 1] = {
   end,
   reason = "#56: ▽/▼ の途中で未マップの特殊キーを押すと、打った読みが黙って消える",
 }
-
--- <M-a> は端末では <Esc> と a の続けて押したもの。<Esc> の片付けが SafeState まで遅れるので、すぐ次の a で insert に戻ると
--- escape の状態が残る（#32 と同じ原因。`<Esc>a` と 1 つのキーで流しても起きる。upstream でも同じ）
-for _, name in ipairs({
-  "preedit: 表示は状態の文字列と一致する",
-  "frame: skkeleton の外でバッファやカーソルが動いたら pre-edit を捨てる",
-  "unmapped: 未マップの特殊キーのあと、pre-edit は元のままか、きれいにリセットされる",
-  "unmapped: 未マップの特殊キーのあと、打った読みが黙って消えない",
-}) do
-  M.known[#M.known + 1] = {
-    property = name,
-    match = function(keys)
-      return vim.tbl_contains(keys, "<M-a>")
-    end,
-    reason = "#32: <Esc> のすぐあとに insert へ戻るキー（<M-a> や <Esc>a）を押すと、状態が escape のまま残る",
-  }
-end
 
 -- #56 の別の現れ方。キーが先に通るので、pre-edit が残ったまま cmdline や terminal の文字がずれる、
 -- pre-edit が消えても cmdline にマーカーと読みが文字で残る

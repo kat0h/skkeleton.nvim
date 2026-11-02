@@ -37,6 +37,7 @@ return {
   { issue = 46, keys = { "#mid", "<Esc>", ":", "<C-j>", "K", "<Cmd>wincmd w<CR>", "<C-j>" } },
   { issue = 47, profile = "mouse", keys = { "#eol", "<ClickOtherWin>", "<DragRight>", "<ClickLine3>" } },
   { issue = 12, profile = "mouse", keys = { "#mid", "<Esc>", ":", "<C-j>", "Kan", "<RightClickMid>" } },
+  { issue = 74, profile = "terminal", keys = { "#term", "<Plug>(skkeleton-toggle)", "K", "<C-\\><C-n>" } },
   -- 半角カタカナモードの ▽ で q: denops 版はひらがなで確定する（性質では見つからず、upstream.lua で見比べる）
   { issue = 51, keys = { "<C-j>", "<C-q>", "Te", "q" } },
   -- 辞書登録の欄の <C-f>（register プロファイル）
