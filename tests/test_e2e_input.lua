@@ -135,7 +135,7 @@ T["the pre-edit follows the cursor in the middle of a line"] = function()
   eq(helpers.cursor(child), { 1, 6 })
 end
 
-T["moving the cursor drops the pre-edit"] = function()
+T["moving the cursor commits the pre-edit at its position"] = function()
   child.api.nvim_buf_set_lines(0, 0, -1, false, { "abcdef" })
   child.api.nvim_win_set_cursor(0, { 1, 3 })
   start()
@@ -143,7 +143,8 @@ T["moving the cursor drops the pre-edit"] = function()
   child.api.nvim_win_set_cursor(0, { 1, 1 })
   type("ka")
   eq(helpers.preedit(child), "")
-  eq(helpers.buffer(child), { "aかbcdef" })
+  -- pre-edit の「か」は元の位置（3 文字目）に確定し、そのあと打った「か」はカーソル（1 文字目）に入る
+  eq(helpers.buffer(child), { "aかbcかdef" })
 end
 
 T["text inserted by completion drops the pre-edit"] = function()
@@ -365,6 +366,36 @@ T["<Insert> で置換モードに移ると pre-edit を捨てて無効になる 
   local marks =
     child.lua_get([[vim.api.nvim_buf_get_extmarks(0, vim.api.nvim_get_namespaces()["skkeleton-preedit"], 0, -1, {})]])
   eq(#marks, 0)
+end
+
+T["<Insert> during pre-edit keeps the reading as text (#111)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "" })
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.type_keys("i")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+  eq(helpers.preedit(child), "▽かn")
+  child.type_keys("<Insert>")
+  helpers.settle(child)
+  eq(child.fn.mode(), "R")
+  eq(child.g["skkeleton#enabled"], false)
+  eq(helpers.buffer(child), { "かん" })
+  eq(helpers.preedit(child), "")
+end
+
+T["<Insert> during henkan keeps the candidate as text (#111)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "" })
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.type_keys("i")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan<Space>")
+  eq(helpers.preedit(child), "▼缶")
+  child.type_keys("<Insert>")
+  helpers.settle(child)
+  eq(child.fn.mode(), "R")
+  eq(child.g["skkeleton#enabled"], false)
+  eq(helpers.buffer(child), { "缶" })
+  eq(helpers.preedit(child), "")
 end
 
 T["ウィンドウの最後の行の右端で入力したとき、折り返した pre-edit が収まるようにスクロールする (#34)"] = function()

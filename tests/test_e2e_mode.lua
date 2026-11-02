@@ -327,6 +327,8 @@ T["transitioning directly to visual mode during pre-edit resets state"] = functi
 
   child.api.nvim_input_mouse("left", "press", "", 0, 0, 2)
   child.api.nvim_input_mouse("left", "release", "", 0, 0, 2)
+  -- 2 回目のクリックをダブルクリックとして扱わせる
+  vim.uv.sleep(30)
   child.api.nvim_input_mouse("left", "press", "", 0, 0, 2)
   child.api.nvim_input_mouse("left", "release", "", 0, 0, 2)
   helpers.settle(child)
@@ -334,6 +336,7 @@ T["transitioning directly to visual mode during pre-edit resets state"] = functi
   eq(child.fn.mode(), "v")
   eq(child.g["skkeleton#enabled"], false)
   eq(helpers.preedit(child), "")
+  eq(helpers.buffer(child)[1]:find("かんじ", 1, true) ~= nil, true)
   eq(child.g["skkeleton#state"].phase, "input")
 end
 
@@ -514,6 +517,8 @@ I["transitioning directly to visual mode during pre-edit resets state and closes
   -- ダブルクリックで単語選択し、insert から visual に直接遷移する
   ichild.api.nvim_input_mouse("left", "press", "", 0, 0, 2)
   ichild.api.nvim_input_mouse("left", "release", "", 0, 0, 2)
+  -- 2 回目のクリックをダブルクリックとして扱わせる
+  vim.uv.sleep(30)
   ichild.api.nvim_input_mouse("left", "press", "", 0, 0, 2)
   ichild.api.nvim_input_mouse("left", "release", "", 0, 0, 2)
   helpers.settle(ichild)
@@ -521,6 +526,7 @@ I["transitioning directly to visual mode during pre-edit resets state and closes
   eq(ichild.fn.mode(), "v")
   eq(ichild.g["skkeleton#enabled"], false)
   eq(helpers.preedit(ichild), "")
+  eq(helpers.buffer(ichild)[1]:find("かんじ", 1, true) ~= nil, true)
   eq(helpers.indicator(ichild), vim.NIL)
 end
 
