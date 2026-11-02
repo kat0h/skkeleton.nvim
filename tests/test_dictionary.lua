@@ -277,21 +277,6 @@ T["load(cfg)"]["builds a Library from the config"] = function()
   )
 end
 
-T["load(cfg)"]["accepts deno_kv for compatibility and does not load twice"] = function()
-  eq(
-    run([[
-      local lib = dictionary.load({
-        globalDictionaries = { { TD .. "/globalJisyo", "euc-jp" } },
-        userDictionary = TMP .. "/user",
-        databasePath = TMP .. "/db",
-        sources = { "deno_kv", "skk_dictionary" },
-      })
-      return { #lib.dicts, lib:get_henkan_result("okurinasi", "てすと") }
-    ]]),
-    { 2, { "テスト", "test" } }
-  )
-end
-
 T["load(cfg)"]["warns about unknown sources and skips them"] = function()
   eq(
     run([[
@@ -301,11 +286,16 @@ T["load(cfg)"]["warns about unknown sources and skips them"] = function()
         globalDictionaries = { { TD .. "/globalJisyo", "euc-jp" } },
         userDictionary = TMP .. "/user",
         databasePath = TMP .. "/db",
-        sources = { "skk_server", "skk_dictionary" },
+        sources = { "deno_kv", "skk_server", "skk_dictionary" },
       })
-      return { #msgs, msgs[1]:find("skk_server", 1, true) ~= nil, lib:get_henkan_result("okurinasi", "てすと") }
+      return {
+        #msgs,
+        msgs[1]:find("deno_kv", 1, true) ~= nil,
+        msgs[2]:find("skk_server", 1, true) ~= nil,
+        lib:get_henkan_result("okurinasi", "てすと"),
+      }
     ]]),
-    { 1, true, { "テスト", "test" } }
+    { 2, true, true, { "テスト", "test" } }
   )
 end
 

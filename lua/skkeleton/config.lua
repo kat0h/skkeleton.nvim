@@ -30,10 +30,6 @@ local function defaults()
     setUndoPoint = true,
     setUndoPointOnPaste = true,
     showCandidatesCount = 4,
-    skkServerHost = "127.0.0.1",
-    skkServerPort = 1178,
-    skkServerReqEnc = "euc-jp",
-    skkServerResEnc = "euc-jp",
     sources = { "skk_dictionary" },
     userDictionary = "~/.skkeleton",
   }
@@ -42,33 +38,11 @@ end
 -- 他のモジュールが参照を持ち続けられるように、options は同じ表を書き換えて使う
 M.options = defaults()
 
-local encodings = {
-  ["utf-32"] = true,
-  ["utf-16"] = true,
-  ["utf-16be"] = true,
-  ["utf-16le"] = true,
-  binary = true,
-  ascii = true,
-  jis = true,
-  ["utf-8"] = true,
-  ["euc-jp"] = true,
-  sjis = true,
-  unicode = true,
-  auto = true,
-}
-
 local function ensure_type(x, t)
   if type(x) ~= t then
     error(("expected %s, got %s"):format(t, type(x)), 0)
   end
   return x
-end
-
-local function ensure_encoding(x)
-  if type(x) == "string" and encodings[x] then
-    return x
-  end
-  error(tostring(x) .. " is invalid encoding", 0)
 end
 
 local function of_type(t)
@@ -141,23 +115,12 @@ local validators = {
   setUndoPoint = of_type("boolean"),
   setUndoPointOnPaste = of_type("boolean"),
   showCandidatesCount = of_type("number"),
-  -- skkServer* と completionRankFile は v1 では使わない。upstream の設定を流用できるように受け付けるだけ
-  skkServerHost = of_type("string"),
-  skkServerPort = of_type("number"),
-  skkServerReqEnc = ensure_encoding,
-  skkServerResEnc = ensure_encoding,
   sources = function(x)
     ensure_type(x, "table")
     for _, v in ipairs(x) do
       ensure_type(v, "string")
     end
     return x
-  end,
-  useGoogleJapaneseInput = function()
-    error('`useGoogleJapaneseInput` is removed. Please use `sources` with "google_japanese_input"', 0)
-  end,
-  useSkkServer = function()
-    error('`useSkkServer` is removed. Please use `sources` with "skk_server"', 0)
   end,
   userDictionary = of_type("string"),
 }
