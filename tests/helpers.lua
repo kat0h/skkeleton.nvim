@@ -42,6 +42,42 @@ M.dict_text = table.concat({
   "abc /ＡＢＣ/",
 }, "\n") .. "\n"
 
+-- 辞書のテストで子に渡す前置き。一時ディレクトリと write/read を用意し、extra に各テスト固有の require を続ける
+---@param extra? string
+---@return string
+function M.dict_pre(extra)
+  return (
+    [[
+_G.TMP = _G.TMP or vim.fn.tempname()
+vim.fn.mkdir(_G.TMP, "p")
+local TMP = _G.TMP
+local function write(name, s)
+  local path = TMP .. "/" .. name
+  local f = assert(io.open(path, "wb"))
+  f:write(s)
+  f:close()
+  return path
+end
+local function read(path)
+  local f = assert(io.open(path, "rb"))
+  local s = f:read("*a")
+  f:close()
+  return s
+end
+]] .. (extra or "")
+  )
+end
+
+-- core_helpers の output / shown を子で呼ぶ。opts.shown なら表示（to_string）を返す
+---@param child table
+---@param keys string
+---@param opts? { shown?: boolean }
+---@return string
+function M.core_output(child, keys, opts)
+  local fn = opts and opts.shown and "shown" or "output"
+  return child.lua_get("H." .. fn .. "(...)", { keys })
+end
+
 -- E2E の子を作る。ケースごとに作り直し、skkeleton を setup する。
 -- 辞書とユーザー辞書とデータベースは一時ディレクトリに置く（手元の ~/.skkeleton には触らない）
 ---@param opts? { config?: table, dict?: string, init?: string }

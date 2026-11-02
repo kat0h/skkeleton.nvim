@@ -169,7 +169,7 @@ function M.suffix(ctx)
 
   common.kakutei(ctx)
   input.henkan_point(ctx)
-  input.accept_result(ctx, { ">", "" }, "")
+  input.accept_result(ctx, { ">", "" })
   ctx.state.affix = "suffix"
 end
 

@@ -348,6 +348,27 @@ T["register"]["cancelling input does not leave markers in input history (#44)"] 
   eq(hist_cg:find("__skkeleton_return__", 1, true), nil)
 end
 
+T["register"]["changing markers keeps them out of cmdline and input history (#94)"] = function()
+  child.lua([[require("skkeleton.config").set({ markerHenkan = "▲", markerHenkanSelect = "△" })]])
+  -- cmdline の履歴の掃除も、固定の ▽ ▼ ではなく設定したマーカーを見る
+  child.type_keys(":")
+  type("<Plug>(skkeleton-enable)")
+  child.lua([[vim.fn.histadd("cmd", "▲かn")]])
+  child.type_keys("<C-c>")
+  helpers.settle(child)
+  eq(child.fn.histget("cmd", -1):find("▲", 1, true), nil)
+
+  -- 辞書登録の欄で、マーカーの付いた行を受け取っても履歴に残さない
+  enable()
+  type("Yomi<Space>")
+  eq(child.fn.mode(), "c")
+  type("Kan")
+  eq(child.fn.getcmdline(), "▲かn")
+  child.type_keys("<CR>")
+  helpers.settle(child)
+  eq(child.fn.histget("@", -1):find("▲", 1, true), nil)
+end
+
 T["purge"] = MiniTest.new_set()
 
 T["purge"]["X removes the candidate after confirming"] = function()
@@ -444,7 +465,10 @@ T["dictionary input clears the state variable and the outer pre-edit (#54)"] = f
   -- 登録の Context は新しく作られるので、参照用の変数もその状態に合わせる
   eq(child.g["skkeleton#state"].henkanFeed, "")
   -- 外側の pre-edit の extmark は残らない
-  eq(child.lua_get([[#vim.api.nvim_buf_get_extmarks(0, require("skkeleton.render").ns, 0, -1, {})]]), 0)
+  eq(
+    child.lua_get([[#vim.api.nvim_buf_get_extmarks(0, vim.api.nvim_get_namespaces()["skkeleton-preedit"], 0, -1, {})]]),
+    0
+  )
   child.type_keys("<Esc>")
   helpers.settle(child)
 end

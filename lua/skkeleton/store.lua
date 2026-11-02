@@ -4,7 +4,7 @@
 local M = {}
 
 local current_context ---@type skkeleton.Context?
-local current_library ---@type table?
+local current_library ---@type skkeleton.Library?
 
 M.variables = {
   last_mode = "hira",
@@ -32,6 +32,7 @@ function M.set_context(ctx)
 end
 
 -- 今の Library。未設定なら config から作る
+---@return skkeleton.Library
 function M.library()
   if not current_library then
     current_library = require("skkeleton.dictionary").load(require("skkeleton.config").options)

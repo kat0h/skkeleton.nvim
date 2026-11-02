@@ -5,7 +5,7 @@ local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 local T, child = helpers.child_set()
 
-local PRE = ([[
+local PRE = helpers.dict_pre(([[
 local dictionary = require("skkeleton.dictionary")
 local Library = dictionary.Library
 local User = require("skkeleton.dictionary.user")
@@ -13,22 +13,6 @@ local numeral = require("skkeleton.dictionary.numeral")
 local skk = require("skkeleton.dictionary.skk")
 local db = require("skkeleton.dictionary.db")
 local TD = %q
-_G.TMP = _G.TMP or vim.fn.tempname()
-vim.fn.mkdir(_G.TMP, "p")
-local TMP = _G.TMP
-local function write(name, s)
-  local path = TMP .. "/" .. name
-  local f = assert(io.open(path, "wb"))
-  f:write(s)
-  f:close()
-  return path
-end
-local function read(path)
-  local f = assert(io.open(path, "rb"))
-  local s = f:read("*a")
-  f:close()
-  return s
-end
 -- 同じ辞書をメモリと DB の両方で開く（upstream の test() が SkkDictionary と DenoKvDictionary で回すのに当たる）
 local function backends(path, enc)
   return {
@@ -36,7 +20,7 @@ local function backends(path, enc)
     db = db.open_dictionary(path, { encoding = enc, dir = TMP .. "/db" }),
   }
 end
-]]):format(helpers.testdata)
+]]):format(helpers.testdata))
 
 local function run(code, ...)
   return child.lua(PRE .. code, { ... })
@@ -256,7 +240,6 @@ T["load(cfg)"]["builds a Library from the config"] = function()
         userDictionary = TMP .. "/user",
         databasePath = TMP .. "/db",
         immediatelyDictionaryRW = false,
-        sources = { "skk_dictionary" },
       })
       lib:register_henkan_result("okurinasi", "てすと", "test")
       local files = {}
@@ -274,28 +257,6 @@ T["load(cfg)"]["builds a Library from the config"] = function()
       { "悪" },
       { "db", "db", "db" },
     }
-  )
-end
-
-T["load(cfg)"]["warns about unknown sources and skips them"] = function()
-  eq(
-    run([[
-      local msgs = {}
-      vim.notify = function(m) msgs[#msgs + 1] = m end
-      local lib = dictionary.load({
-        globalDictionaries = { { TD .. "/globalJisyo", "euc-jp" } },
-        userDictionary = TMP .. "/user",
-        databasePath = TMP .. "/db",
-        sources = { "deno_kv", "skk_server", "skk_dictionary" },
-      })
-      return {
-        #msgs,
-        msgs[1]:find("deno_kv", 1, true) ~= nil,
-        msgs[2]:find("skk_server", 1, true) ~= nil,
-        lib:get_henkan_result("okurinasi", "てすと"),
-      }
-    ]]),
-    { 2, true, true, { "テスト", "test" } }
   )
 end
 

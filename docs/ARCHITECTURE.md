@@ -21,6 +21,9 @@ skkeleton.nvim のモジュールの構成と、モジュールのあいだの�
 | `lua/skkeleton/notation.lua` | コア | キー表記の正規化（`<C-j>` → `<nl>` など） |
 | `lua/skkeleton/kana/{init,rom_hira,rom_zen,hira_kata,hira_hankata}.lua` | コア | かなテーブル（Trie）とかな変換 |
 | `lua/skkeleton/{state,context,candidate,okuri,preedit,store,host}.lua` | コア | 入力状態、Context、確定文字列のバッファ |
+| `lua/skkeleton/mode.lua` | コア | かなモード（hira / kata / hankata / abbrev）の切り替え |
+| `lua/skkeleton/paste.lua` | UI | `vim.paste` を包み、貼り付けの直前に undo を区切る |
+| `lua/skkeleton/marker.lua` | コア | 辞書登録の取り消しの印と設定したマーカーの判定、履歴の掃除 |
 | `lua/skkeleton/keymap.lua` | コア | 状態ごとのキーマップと `handle_key` |
 | `lua/skkeleton/function/{init,common,input,henkan,mode,disable,dictionary}.lua` | コア | upstream の `function/*.ts` に対応する各機能 |
 | `lua/skkeleton/dictionary/{init,skk,db,user,numeral}.lua` | 辞書 | 辞書管理（Library、SKK 辞書、DB キャッシュ、ユーザー辞書、数値変換） |
@@ -65,7 +68,7 @@ ctx:kakutei(str); ctx:kakutei_with_undo_point(str); ctx:to_string()
 local store = require("skkeleton.store")
 store.context()        -- 現在の Context（未作成なら生成）
 store.init_context()   -- 新規に生成して返す
-store.library()        -- 現在の Library。未設定なら require("skkeleton.dictionary").load() で生成
+store.library()        -- 現在の Library。未設定なら require("skkeleton.dictionary").load(require("skkeleton.config").options) で生成
 store.set_library(lib) -- テスト用の差し替え
 store.variables.last_mode
 ```
@@ -104,7 +107,7 @@ tbl:node(prefix) -> { count = 前方一致する件数, result = 完全一致の
 ### Library（辞書）
 ```lua
 local dictionary = require("skkeleton.dictionary")
-dictionary.load() -> Library      -- config（globalDictionaries、userDictionary、databasePath など）から生成
+dictionary.load(cfg) -> Library    -- cfg（globalDictionaries、userDictionary、databasePath など）から生成
 dictionary.Library.new(dicts, user_dict)
 lib:get_henkan_result(type, word) -> string[]   -- 変換候補（ユーザー辞書優先、重複排除、数値変換を含む）
 lib:register_henkan_result(type, word, candidate)
