@@ -35,7 +35,7 @@ end
 ---@return skkeleton.Library
 function M.library()
   if not current_library then
-    current_library = require("skkeleton.dictionary").load(require("skkeleton.config").options)
+    current_library = require("skkeleton.dictionary").load()
   end
   return current_library
 end

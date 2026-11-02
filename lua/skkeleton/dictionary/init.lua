@@ -3,6 +3,7 @@
 -- Modified for skkeleton.nvim: rewritten in Lua. Global dictionaries are read through a persistent DB cache.
 --
 -- 辞書の入り口。Library がユーザー辞書とグローバル辞書をまとめ、候補を重複なしで返す。
+local config = require("skkeleton.config")
 local db = require("skkeleton.dictionary.db")
 local numeral = require("skkeleton.dictionary.numeral")
 local skk = require("skkeleton.dictionary.skk")
@@ -21,18 +22,18 @@ Library.__index = Library
 ---@field immediately_rw boolean
 
 -- dicts: get_henkan_result(kind, word) を持つ辞書の配列。user_dict は先に引き、数値変換をつける。
--- cfg.immediatelyDictionaryRW が真なら、検索の前にユーザー辞書を読み、登録と削除のあとに書く
+-- immediately_rw が真なら、検索の前にユーザー辞書を読み、登録と削除のあとに書く
 ---@param dicts? table[]
 ---@param user_dict? skkeleton.UserDictionary
----@param cfg? { immediatelyDictionaryRW?: boolean }
+---@param immediately_rw? boolean
 ---@return skkeleton.Library
-function Library.new(dicts, user_dict, cfg)
+function Library.new(dicts, user_dict, immediately_rw)
   local self = setmetatable({ user_dict = user_dict, dicts = {}, immediately_rw = false }, Library)
   if user_dict then
     self.dicts[1] = numeral.wrap(user_dict)
   end
   vim.list_extend(self.dicts, dicts or {})
-  self.immediately_rw = cfg ~= nil and cfg.immediatelyDictionaryRW == true
+  self.immediately_rw = immediately_rw == true
   return self
 end
 
@@ -163,12 +164,7 @@ function Library:register_henkan_result(kind, word, candidate)
   end
   self.user_dict:register_henkan_result(kind, word, candidate)
   if self.immediately_rw then
-    self.user_dict:save()
-    local config = require("skkeleton.config")
-    local rank_file = config.options and config.options.completionRankFile
-    if rank_file and rank_file ~= "" then
-      self.user_dict:save_ranks(rank_file)
-    end
+    self:save()
   end
 end
 
@@ -181,12 +177,7 @@ function Library:purge_candidate(kind, word, candidate)
   end
   self.user_dict:purge_candidate(kind, word, candidate)
   if self.immediately_rw then
-    self.user_dict:save()
-    local config = require("skkeleton.config")
-    local rank_file = config.options and config.options.completionRankFile
-    if rank_file and rank_file ~= "" then
-      self.user_dict:save_ranks(rank_file)
-    end
+    self:save()
   end
 end
 
@@ -196,14 +187,18 @@ function Library:load()
   end
 end
 
+-- 補完のランクを completionRankFile に書く。保存先が空なら何もしない
+function Library:save_ranks()
+  local rank_file = config.options.completionRankFile
+  if self.user_dict and rank_file ~= "" then
+    self.user_dict:save_ranks(rank_file)
+  end
+end
+
 function Library:save()
   if self.user_dict then
     self.user_dict:save()
-    local config = require("skkeleton.config")
-    local rank_file = config.options and config.options.completionRankFile
-    if rank_file and rank_file ~= "" then
-      self.user_dict:save_ranks(rank_file)
-    end
+    self:save_ranks()
   end
 end
 
@@ -216,26 +211,6 @@ function Library:close()
   end
 end
 
-local DEFAULT_USER_DICTIONARY = "~/.skkeleton"
-
--- globalDictionaries の 1 要素（文字列、{path, encoding}、{path, encoding} の並び）を { path, encoding } にそろえる
----@return { path: string, encoding?: string }[]
-local function global_dictionaries(cfg)
-  local out = {}
-  for _, d in ipairs(cfg.globalDictionaries or {}) do
-    local path, encoding
-    if type(d) == "string" then
-      path = d
-    elseif type(d) == "table" then
-      path, encoding = d.path or d[1], d.encoding or d[2]
-    end
-    if type(path) == "string" and path ~= "" then
-      out[#out + 1] = { path = util.expand_home(path), encoding = encoding }
-    end
-  end
-  return out
-end
-
 local function warn(msg)
   vim.notify("skkeleton: " .. msg, vim.log.levels.WARN)
 end
@@ -244,77 +219,69 @@ local function is_json(path)
   return path:lower():match("%.json$") ~= nil
 end
 
--- グローバル辞書を 1 つ開く。JSON はメモリに読み、SKK 形式は DB を（必要なら作って）開く。
--- DB を作れない（書き込めないなど）ときはメモリに読む
-local function open_global(entry, cfg)
+-- グローバル辞書を 1 つ開く。entry は config がそろえた { path, encoding }。
+-- JSON はメモリに読み、SKK 形式は DB を（必要なら作って）開く。DB を作れない（書き込めないなど）ときはメモリに読む
+local function open_global(entry)
+  local path, encoding = entry[1], entry[2]
   local ok, dict = pcall(function()
-    if is_json(entry.path) then
-      return skk.load_json(entry.path)
+    if is_json(path) then
+      return skk.load_json(path)
     end
-    skk.check_supported(entry.path)
-    local dir = db.cache_dir(cfg.databasePath)
-    local opened, res = pcall(db.open_dictionary, entry.path, { encoding = entry.encoding, dir = dir })
+    skk.check_supported(path)
+    local dir = db.cache_dir(config.options.databasePath)
+    local opened, res = pcall(db.open_dictionary, path, { encoding = encoding, dir = dir })
     if opened then
       return res
     end
-    return skk.load_memory(entry.path, entry.encoding)
+    return skk.load_memory(path, encoding)
   end)
   if not ok then
-    warn(("globalDictionary loading failed\nat %s\n%s"):format(entry.path, dict))
+    warn(("globalDictionary loading failed\nat %s\n%s"):format(path, dict))
     return nil
   end
   return numeral.wrap(dict)
 end
 
--- config（camelCase の表）から Library を作る。キャッシュが古ければその場で作る
----@param cfg? table
+-- config から Library を作る。キャッシュが古ければその場で作る
 ---@return skkeleton.Library
-function M.load(cfg)
-  cfg = cfg or {}
+function M.load()
+  local opts = config.options
   local user = User.new()
-  local user_path = cfg.userDictionary
-  if user_path == nil then
-    user_path = DEFAULT_USER_DICTIONARY
-  end
-  user:load({ path = user_path })
-  local config = require("skkeleton.config")
-  local rank_file = cfg.completionRankFile or config.options.completionRankFile
-  if rank_file and rank_file ~= "" then
-    user:load_ranks(rank_file)
+  user:load({ path = opts.userDictionary })
+  if opts.completionRankFile ~= "" then
+    user:load_ranks(opts.completionRankFile)
   end
 
   local dicts = {}
-  for _, entry in ipairs(global_dictionaries(cfg)) do
-    local dict = open_global(entry, cfg)
+  for _, entry in ipairs(opts.globalDictionaries) do
+    local dict = open_global(entry)
     if dict then
       dicts[#dicts + 1] = dict
     end
   end
-  return Library.new(dicts, user, cfg)
+  return Library.new(dicts, user, opts.immediatelyDictionaryRW)
 end
 
 -- load の非同期版。キャッシュが古い辞書を、UI を止めずに作ってから Library を作る。
 -- 終わったら on_done(lib)
----@param cfg? table
 ---@param on_done fun(lib: skkeleton.Library)
-function M.prepare(cfg, on_done)
-  cfg = cfg or {}
+function M.prepare(on_done)
   local entries = {}
-  for _, e in ipairs(global_dictionaries(cfg)) do
-    if not is_json(e.path) and pcall(skk.check_supported, e.path) then
+  for _, e in ipairs(config.options.globalDictionaries) do
+    if not is_json(e[1]) and pcall(skk.check_supported, e[1]) then
       entries[#entries + 1] = e
     end
   end
-  local dir = db.cache_dir(cfg.databasePath)
+  local dir = db.cache_dir(config.options.databasePath)
   local i = 0
   local function next_entry()
     i = i + 1
     local e = entries[i]
     if not e then
-      return on_done(M.load(cfg))
+      return on_done(M.load())
     end
     -- 失敗しても飛ばす（load がもう一度試して、だめならメモリに読むか警告する）
-    db.ensure_async(e.path, { encoding = e.encoding, dir = dir }, function()
+    db.ensure_async(e[1], { encoding = e[2], dir = dir }, function()
       next_entry()
     end)
   end
@@ -322,13 +289,15 @@ function M.prepare(cfg, on_done)
 end
 
 -- 指定した辞書の DB を作り直す（force が偽なら、古いときだけ）。upstream の updateDatabase 相当
----@param cfg? table
 ---@param path string
 ---@param encoding? string
 ---@param force? boolean
-function M.update_database(cfg, path, encoding, force)
-  cfg = cfg or {}
-  db.ensure(util.expand_home(path), { encoding = encoding, dir = db.cache_dir(cfg.databasePath), force = force })
+function M.update_database(path, encoding, force)
+  db.ensure(util.expand_home(path), {
+    encoding = encoding,
+    dir = db.cache_dir(config.options.databasePath),
+    force = force,
+  })
 end
 
 return M

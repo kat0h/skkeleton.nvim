@@ -79,7 +79,7 @@ end
 function M.initialize(force)
   require("skkeleton.main").init(force)
   local store = require("skkeleton.store")
-  require("skkeleton.dictionary").prepare(require("skkeleton.config").options, function(lib)
+  require("skkeleton.dictionary").prepare(function(lib)
     store.set_library(lib)
   end)
 end
@@ -119,14 +119,9 @@ end
 
 -- ユーザー辞書と補完ランクを保存する
 function M.save_user_dict()
-  local store = require("skkeleton.store")
-  local lib = store.library()
+  local lib = require("skkeleton.store").library()
   if lib then
     lib:save()
-    local config = require("skkeleton.config")
-    if lib.user_dict and config.options.completionRankFile ~= "" then
-      lib.user_dict:save_ranks(config.options.completionRankFile)
-    end
   end
 end
 
@@ -143,7 +138,7 @@ end
 ---@param encoding? string
 ---@param force? boolean
 function M.update_database(path, encoding, force)
-  require("skkeleton.dictionary").update_database(require("skkeleton.config").options, path, encoding, force)
+  require("skkeleton.dictionary").update_database(path, encoding, force)
   vim.cmd(("echomsg 'updated database: \"%s\"'"):format((path:gsub("'", "''"))))
 end
 
