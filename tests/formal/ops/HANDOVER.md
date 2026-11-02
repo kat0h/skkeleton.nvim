@@ -4,18 +4,37 @@ skkeleton.nvim（Neovim の SKK、純 Lua）のモデル検査を、決まった
 
 ## 役割の分け方（いちばん大事）
 
-この作業は **手元だけ** で行います。ブランチの分かれをつくらないためです。
+検査の道具（`poc/formal-ui`）は **手元だけ** で扱います。`poc/formal-ui` からブランチが分かれないようにするためです。一方、プラグインのバグの直しは、main に push してかまいません。
 
+### 検査（この worktree、`poc/formal-ui`）
 - してよいこと
-  - この worktree（`poc/formal-ui`）で検査を流す
-  - 結果と、直し方の案を `.tests/formal-ops/`（git に入らない）にファイルで書く
+  - この worktree で検査を流す
+  - 結果と、検査の直し方の案を `.tests/formal-ops/`（git に入らない）にファイルで書く
 - しないこと
-  - `git commit`、`git push`、`git merge`、`git checkout`、`git stash`、ブランチや worktree を作ること
-  - 追跡されているファイル（`lua/`、`plugin/`、`tests/`、`docs/`、`Makefile` など）を書き換えること。`spec.lua` などの直しは、案を diff のファイルにして出すだけにする
-  - GitHub への書き込み（`gh issue create`、コメント、ラベル、PR）。issue は下書きをファイルで出す
-  - `tests/formal/ops/sync.sh` と `tests/formal/ops/attach.sh` を動かすこと（どちらもコミットと push をする。こちらで動かす）
+  - この worktree での `git commit`、`git push`、`git merge`、`git checkout`、`git stash`
+  - この worktree の追跡されているファイル（`tests/formal/`、`docs/FORMAL.md`、`Makefile` など）を書き換えること。`spec.lua` などの直しは、diff のファイルにして出すだけにする
+  - `tests/formal/ops/sync.sh` と `tests/formal/ops/attach.sh` を動かすこと（どちらも `poc/formal-ui` にコミットして push する。こちらで動かす）
 
-取り込み、コミット、push、issue を立てることは、引き継ぎ元（Claude Code）が報告を読んでから行います。
+### バグの直し（main に push してよい）
+検査で見つけたバグ（区分が「新しいバグ」か「閉じた issue の残り」のもの）は、自分で直して main に push してかまいません。
+
+- **作業場所**：main のツリー（`/home/kat0h/ghq/github.com/kat0h/skkeleton.nvim`）は agy が使っているので、触らない。直すための worktree を 1 つ作り、そこで作業する。
+  ```sh
+  git -C /home/kat0h/ghq/github.com/kat0h/skkeleton.nvim fetch origin
+  git -C /home/kat0h/ghq/github.com/kat0h/skkeleton.nvim worktree add --detach /home/kat0h/ghq/github.com/kat0h/skkeleton.nvim/.claude/worktrees/opencode-fix origin/main
+  ```
+  2 回目からは、その worktree で `git fetch origin && git switch --detach origin/main` をしてから始める。
+- **直すもの**：`lua/`、`plugin/`、`tests/`（`tests/formal/` を除く）、`doc/`。直したら、そのバグの回帰テストを `tests/` に足す。
+- **確かめること**：直した worktree で `make test` と `make lint` を通す。整形には `/home/kat0h/ghq/github.com/kat0h/skkeleton.nvim/.tests/bin/stylua` を使う。足した回帰テストが、直す前の版では落ちて、直したあとでは通ることも確かめる。検査の worktree の `lua/` は古いままなので、モデル検査での確かめ直し（`--regress`）は、push のあとに引き継ぎ元が `sync.sh` で取り込んでから行う。
+- **コミット**：メッセージは英語の conventional commits（`fix(...): ...`）にする。issue があれば本文に `Closes #番号`（閉じた issue の残りなら `Refs #番号`）を書く。issue が無い新しいバグなら、`.tests/formal-ops/issues/` の下書きのファイル名を本文に書く。
+- **push**：`git push origin HEAD:main`（HTTPS）。先に agy の push があって通らなければ、`git pull --rebase origin main` をして、テストを流し直してから push する。force push はしない。
+- **直さずに止めるもの**：直すのに「どちらにするか」を決める必要があるもの、使う人から見た動きが変わるもの、`lua/` を大きく作り直すもの。これは issue の下書きに選択肢を書くだけにする。
+- **互換**：互換のためのコードや警告は足さない。差分は小さくする。
+
+### GitHub
+- issue を立てること、コメント、ラベル、PR はしない。issue は下書きをファイルで出す。コミットの `Closes` で issue が閉じるのはかまわない。
+
+取り込み、`poc/formal-ui` へのコミット、issue を立てることは、引き継ぎ元（Claude Code）が報告を読んでから行います。
 
 ## 決まり
 
@@ -80,7 +99,7 @@ agy（直す係）が、使う人から見た動きを変えない約束で、�
 **作り直しの前に通っていた性質や反例が、作り直しのあとで落ちたら、それは作り直しで入ったバグの見込みが高い**です。その場合は、どのコミットで落ち始めたかを `git log` の版で書いてください。特に見てほしいのは次のプロファイルです。
 
 - `cmdline`、`terminal`、`register`、`regcmd`、`modes`、`misc`：#61、#62 に関係する
-- `blink`、`native`：#58・#64 に関係する
+- `blink`：#58・#64 に関係する（nvim-cmp と組み込み補完はやめた。#69）
 - `undo`、`macro`：#66 に関係する
 
 ### 最初に仕分けてほしいもの（c88679c の `--regress` で出たもの）
@@ -108,6 +127,7 @@ agy（直す係）が、使う人から見た動きを変えない約束で、�
 2. **流したもの**：コマンド、何件・何状態見たか、かかった時間
 3. **結果の一覧**：見つけたものごとに 1 行。区分（新しいバグ / 閉じた issue の残り / 既知 / 検査の誤り / タイミング）、プロファイル、キー列、関係しそうな issue
 4. **置いたファイル**：`issues/` と `patches/` に置いたもの
+5. **push した直し**：main のコミット（版と題）と、直した反例
 
 ## issue の下書きの形
 

@@ -646,37 +646,6 @@ M.undo = {
   dict = dict,
 }
 
--- Neovim 組み込みの補完（completefunc と <C-x><C-u>）
-M.native = {
-  doc = "組み込みの補完（completefunc・<C-x><C-u>）で、▽ の読みから候補を選んで確定する",
-  config = {},
-  setup = [[
-    for _, b in ipairs(vim.api.nvim_list_bufs()) do
-      vim.bo[b].completefunc = "v:lua.require'skkeleton.completion'.completefunc"
-    end
-  ]],
-  alphabet = {
-    "<C-j>",
-    "Kanj",
-    "Kanji",
-    "Kan",
-    "a",
-    "<C-x><C-u>",
-    "<C-n>",
-    "<C-p>",
-    "<C-y>",
-    "<C-e>",
-    "<CR>",
-    "<BS>",
-    "<C-g>",
-    "<Esc>",
-    "i",
-    "<Space>",
-  },
-  inits = line_inits,
-  dict = dict,
-}
-
 -- 矩形選択（<C-v> で選んで I か A）。Vim は <Esc> で、入力した文字を選んだ全部の行に繰り返す。
 -- 全部の行が同じ文字列で、マーカーや pre-edit が混じっていないかを見る（spec.lua の block_done）
 M.block = {

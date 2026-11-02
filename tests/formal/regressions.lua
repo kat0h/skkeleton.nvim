@@ -31,7 +31,6 @@ return {
   { issue = 38, profile = "steal", keys = { "#eol", "<C-j>", "<Insert>", "<Insert>", "a" } },
   { issue = 39, profile = "options", keys = { "#list", "<Right>" } },
   { issue = 44, keys = { "#mid", "<C-j>", "A", "A", "<Space>", "K", "a", "n", "<C-c>", "A", "A", "<Space>", "<Up>" } },
-  { issue = 45, profile = "native", keys = { "#mid", "<C-j>", "Kanj", "<C-x><C-u>" } },
   { issue = 12, profile = "cmdline", keys = { "#cmd-on", "Kan", "<C-y>" } },
   { issue = 12, profile = "cmdline", keys = { "#cmd-on", "Kan", "<C-k>a:" } },
   { issue = 12, profile = "cmdline", keys = { "#cmd-on", "Kan", "<C-x>" } },
