@@ -413,7 +413,7 @@ function M.commit_preedit()
     common_func.kakutei(ctx)
     local pre = ctx:to_string()
     update_state_variable(pre)
-    render.update(ctx, nil, pre)
+    render.update(ctx, pre)
   end)
   handling_depth = handling_depth - 1
   if not ok then

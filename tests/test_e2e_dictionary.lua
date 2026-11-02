@@ -234,21 +234,26 @@ T["register"]["the cursor stays at the end of a line when cancelled with <Esc> o
   eq(helpers.preedit(child), "▽よみ")
 end
 
-T["register"]["moving the cursor or deleting in the registration prompt drops the pre-edit without leaking markers"] = function()
+T["register"]["moving the cursor in the registration prompt commits the reading first (#56)"] = function()
   enable()
   type("A<Space>A")
   eq(child.fn.mode(), "c")
   eq(child.fn.getcmdline(), "▽あ")
-  -- <Left> でカーソルを動かしてから <CR> を押すと、未確定の ▽あ は破棄されて空入力（取り消し）になる
+  -- <Left> は pre-edit を確定してからカーソルを動かす (#56)
   child.type_keys("<Left>")
+  helpers.settle(child)
+  eq(child.fn.getcmdline(), "あ")
   type("<CR>")
   eq(child.fn.mode(), "i")
-  eq(helpers.buffer(child), { "" })
-  eq(helpers.preedit(child), "▽あ")
+  eq(helpers.buffer(child), { "あ" })
+  eq(helpers.preedit(child), "")
   eq(user_dictionary():find("▽", 1, true), nil)
+  eq(user_dictionary():find("あ /あ/", 1, true) ~= nil, true)
+end
 
-  -- <C-w> で読みの一部を消したときも、残った ▽ が取り除かれる
-  type("<Space>Kan")
+T["register"]["deleting with <C-w> in the registration prompt drops the pre-edit (#12)"] = function()
+  enable()
+  type("A<Space>Kan")
   eq(child.fn.getcmdline(), "▽かn")
   child.type_keys("<C-w>")
   helpers.settle(child)
@@ -257,9 +262,11 @@ T["register"]["moving the cursor or deleting in the registration prompt drops th
   eq(child.fn.mode(), "i")
   eq(helpers.buffer(child), { "" })
   eq(helpers.preedit(child), "▽あ")
+end
 
-  -- <C-k>a:（ダイグラフ）で文字が入ったときも、残った ▽ が取り除かれる (#12)
-  type("<Space>Kan")
+T["register"]["digraph in the registration prompt drops the pre-edit (#12)"] = function()
+  enable()
+  type("A<Space>Kan")
   eq(child.fn.getcmdline(), "▽かn")
   child.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-k>a:", true, true, true), "nt", false)
   helpers.settle(child)
