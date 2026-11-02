@@ -3,6 +3,8 @@
 -- Ported from skkeleton (autoload/skkeleton.vim の skkeleton#disable、function/dictionary.ts の registerWord の UI 部分)
 -- Copyright (c) 2021 kuuote, zlib license (see LICENSES/skkeleton.txt)
 -- Modified for skkeleton.nvim: rewritten in Lua.
+local marker = require("skkeleton.marker")
+
 local M = {}
 
 local function doautocmd(name)
@@ -185,39 +187,21 @@ function M.input(prompt)
       callback = function()
         map.map()
         for _, k in ipairs({ "<Esc>", "<C-g>" }) do
-          vim.api.nvim_buf_set_keymap(frame.buf, "c", k, "__skkeleton_return__<CR>", { noremap = true, silent = true })
+          vim.api.nvim_buf_set_keymap(frame.buf, "c", k, marker.CANCEL .. "<CR>", { noremap = true, silent = true })
         end
       end,
     })
     return vim.fn.input(prompt)
   end)
-  local ok_h, last_hist = pcall(vim.fn.histget, "@", -1)
-  if
-    ok_h
-    and type(last_hist) == "string"
-    and (last_hist == "__skkeleton_return__" or last_hist:find("▽", 1, true) or last_hist:find("▼", 1, true))
-  then
-    pcall(vim.fn.histdel, "@", -1)
-  end
+  marker.drop_marker_history("@")
 
   pop_input_frame(frame)
 
   if not ok then
     error(res, 0)
   end
-  if type(res) == "string" then
-    local options = require("skkeleton.config").options
-    local mh = options.markerHenkan
-    local ms = options.markerHenkanSelect
-    if
-      res:find("▽", 1, true)
-      or res:find("▼", 1, true)
-      or (mh and mh ~= "" and res:find(mh, 1, true))
-      or (ms and ms ~= "" and res:find(ms, 1, true))
-      or res:find("__skkeleton_return__", 1, true)
-    then
-      return ""
-    end
+  if marker.contains_marker(res) then
+    return ""
   end
   return res
 end

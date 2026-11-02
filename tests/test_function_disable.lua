@@ -109,9 +109,6 @@ T["Don't put string when register dictionary was cancelled"] = function()
   child.lua([[H.ret.input = nil]])
   eq(child.lua_get([[dictionary.register_word(ctx)]]), false)
   eq(child.lua_get([[ctx.preedit:output("")]]), "")
-  -- UI が内部のマーカーで返したときも取り消し
-  child.lua([[H.ret.input = "__skkeleton_return__"]])
-  eq(child.lua_get([[dictionary.register_word(ctx)]]), false)
   -- 入力中に例外が起きても取り消しとして扱う
   child.lua([[H.ret.input = function() error("interrupted") end]])
   eq(child.lua_get([[dictionary.register_word(ctx)]]), false)

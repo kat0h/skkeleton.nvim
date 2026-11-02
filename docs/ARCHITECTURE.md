@@ -21,6 +21,7 @@ skkeleton.nvim のモジュールの構成と、モジュールのあいだの�
 | `lua/skkeleton/notation.lua` | コア | キー表記の正規化（`<C-j>` → `<nl>` など） |
 | `lua/skkeleton/kana/{init,rom_hira,rom_zen,hira_kata,hira_hankata}.lua` | コア | かなテーブル（Trie）とかな変換 |
 | `lua/skkeleton/{state,context,candidate,okuri,preedit,store,host}.lua` | コア | 入力状態、Context、確定文字列のバッファ |
+| `lua/skkeleton/marker.lua` | コア | 辞書登録の取り消しの印と設定したマーカーの判定、履歴の掃除 |
 | `lua/skkeleton/keymap.lua` | コア | 状態ごとのキーマップと `handle_key` |
 | `lua/skkeleton/function/{init,common,input,henkan,mode,disable,dictionary}.lua` | コア | upstream の `function/*.ts` に対応する各機能 |
 | `lua/skkeleton/dictionary/{init,skk,db,user,numeral}.lua` | 辞書 | 辞書管理（Library、SKK 辞書、DB キャッシュ、ユーザー辞書、数値変換） |
