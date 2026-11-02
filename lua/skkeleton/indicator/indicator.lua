@@ -222,24 +222,55 @@ function Indicator:insert_rect(mode, border)
   local text_w = info.width - info.textoff
   local width = vim.fn.strdisplaywidth(require("skkeleton.render").preedit_text())
   local row, rel = sp.row - 1, sp.col - 1 - text_left
+  -- Neovim 0.13+ では screenpos() が inline virtual text を含んだ後の位置を返す (#21, #47)
+  local sp_includes_preedit = false
+  if width > 0 then
+    if cur[2] > 0 then
+      local prev_byte = math.min(cur[2], #line)
+      local prev_sp = vim.fn.screenpos(win, cur[1], prev_byte)
+      if prev_sp.row > 0 then
+        local prev_char = vim.fn.strcharpart(line:sub(1, prev_byte), vim.fn.strchars(line:sub(1, prev_byte)) - 1, 1)
+        local prev_w = vim.fn.strdisplaywidth(prev_char)
+        if sp.row > prev_sp.row or (sp.row == prev_sp.row and sp.col > prev_sp.col + prev_w) then
+          sp_includes_preedit = true
+        end
+      end
+    elseif #line > 0 then
+      local first_sp = vim.fn.screenpos(win, cur[1], 1)
+      if first_sp.row > sp.row or first_sp.col > 1 then
+        sp_includes_preedit = true
+      end
+    elseif sp.row > 1 or sp.col > 1 then
+      sp_includes_preedit = true
+    end
+  end
+
   -- pre-edit のセルの範囲 { 行, 列, 高さ, 幅 }。inline の virtual text は、全角文字も含めて
   -- 1 桁ずつ次の画面の行へ折り返す（バッファの文字のように行末で詰めない）。
   -- 行がちょうど右端まで埋まったとき、カーソルは次の画面の行の左端に出る
   local occupied = {}
-  local left = width
   local wrap = vim.wo[win].wrap
-  while left > 0 do
-    local n = wrap and math.min(left, text_w - rel) or left
-    occupied[#occupied + 1] = { row, text_left + rel, 1, n }
-    left = left - n
-    rel = rel + n
-    if wrap and rel >= text_w then
-      row, rel = row + 1, 0
+  local ccol, cursor_row
+  if sp_includes_preedit then
+    ccol = text_left + rel
+    cursor_row = row
+    -- 占有領域としてカーソルの手前を記録
+    occupied[#occupied + 1] = { cursor_row, math.max(text_left, ccol - width), 1, width }
+  else
+    local left = width
+    while left > 0 do
+      local n = wrap and math.min(left, text_w - rel) or left
+      occupied[#occupied + 1] = { row, text_left + rel, 1, n }
+      left = left - n
+      rel = rel + n
+      if wrap and rel >= text_w then
+        row, rel = row + 1, 0
+      end
     end
+    -- カーソルのセル（pre-edit の直後）
+    ccol = text_left + rel
+    cursor_row = row
   end
-  -- カーソルのセル（pre-edit の直後）
-  local ccol = text_left + rel
-  local cursor_row = row
   -- virtualedit でタブの途中や行末以降にカーソルが進んだ場合、
   -- バッファ上の列は変わらないが getcurpos()[4] (coladd) に仮想列オフセットが入る (#39)。
   -- ※ イベントハンドラ内では Neovim の再描画前のため screencol() は古い値を返す場合があるため、
