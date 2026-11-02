@@ -162,15 +162,13 @@ function M.setup()
   local group = vim.api.nvim_create_augroup("skkeleton-internal", { clear = true })
   -- モード遷移に伴う後片付けの遷移表 (#62)
   -- 移る前と後のモードに応じて、片付け方（"reset"、"safe_reset"、"none"）を引く
-  -- <C-o>: で cmdline に入って戻ったときは、pre-edit を残す (#86)
-  local from_insert_normal_cmdline = false
   local MODE_TRANSITIONS = {
     -- 1. insert / completion 中から visual / select モードへの直接遷移（マウス選択など）
     { from = "^i", to = "^[vV\022sS\019]", action = "reset" },
     -- 2. insert 中から <Insert> キーで置換モードへの遷移
     { from = "^i", to = "^R", action = "reset" },
     -- 3. <C-o> で insert-normal に入って、そのまま insert に戻ったとき (#117)
-    { from = "^ni", to = "^i", action = "commit" },
+    { from = "^ni", to = "^i", action = "stale" },
     -- 4. normal モードへの遷移（プラグイン等による一瞬の遷移を SafeState で待つ）
     { from = ".*", to = "^n", action = "safe_reset" },
     -- 5. cmdline から visual / select / operator-pending などへ戻ったとき
@@ -182,13 +180,6 @@ function M.setup()
     callback = function()
       local old_mode = vim.v.event.old_mode
       local new_mode = vim.v.event.new_mode
-      -- <C-o> の間に cmdline に入ったかを覚えておく。戻ったときに pre-edit を残すため (#86)
-      if not (old_mode:sub(1, 1) == "c" or old_mode:sub(1, 2) == "ni") then
-        from_insert_normal_cmdline = false
-      end
-      if old_mode:sub(1, 2) == "ni" and new_mode:sub(1, 1) == "c" then
-        from_insert_normal_cmdline = true
-      end
       if old_mode:sub(1, 1) == "c" then
         clean_history()
       end
@@ -206,16 +197,9 @@ function M.setup()
           reset()
           host.disable()
         end
-      elseif action == "commit" then
-        if from_insert_normal_cmdline then
-          -- <C-o>: から戻ったときは、#86 のとおり pre-edit を残す
-          from_insert_normal_cmdline = false
-        elseif not host.is_in_input() then
-          -- <C-o>l などで一瞬 normal に移って戻ったときも、捨てずに確定する (#117)
-          commit_preedit()
-          render.clear()
-          M.update_state_variable()
-        end
+      elseif action == "stale" then
+        -- <C-o> から戻ったとき、カーソルだけが動いていれば確定する (#117)
+        M.reset_if_stale("i")
       elseif action == "safe_reset" and store.context().state.type == "escape" and not host.is_in_input() then
         -- skkeleton の <Esc> はもう確定して無効にしてある。SafeState を待つと、すぐ次の a などで
         -- insert に戻ったときに escape の状態が残るので、ここで片付ける (#32)

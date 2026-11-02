@@ -382,6 +382,18 @@ T["<C-o>l in the middle of pre-edit commits the reading (#117)"] = function()
   eq(helpers.buffer(child), { "かんabcd" })
 end
 
+T["<C-o>zz in the middle of pre-edit keeps it (#117)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "abcd" })
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.type_keys("i")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+
+  child.type_keys("<C-o>zz")
+  helpers.settle(child)
+  eq(helpers.preedit(child), "▽かn")
+end
+
 T["<Insert> during pre-edit keeps the reading as text (#111)"] = function()
   child.api.nvim_buf_set_lines(0, 0, -1, false, { "" })
   child.api.nvim_win_set_cursor(0, { 1, 0 })
