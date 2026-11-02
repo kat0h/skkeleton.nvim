@@ -84,6 +84,17 @@ function M._is_physical_special(key)
   return not pass[base]
 end
 
+-- skkeleton 自身が pre-edit の書き直しに流す制御バイト。terminal では feedkeys の
+-- "t" で流すので on_key には打鍵と同じ形で見える。これらは確定の対象にしない。
+local own_output = {
+  [0x07] = true, -- <C-g>（undo の区切り）
+  [0x08] = true, -- \b（pre-edit の削除）
+  [0x09] = true, -- <Tab>
+  [0x0a] = true, -- <NL>
+  [0x0d] = true, -- <CR>
+  [0x1b] = true, -- <Esc>
+}
+
 -- terminal でジョブに渡す前に確定すべきキーか。
 -- Ctrl + 文字は KS_MODIFIER (0x80 0xfc) で届くので、単バイトの制御キーだけでなく
 -- KS_MODIFIER も対象にする (#121)。
@@ -92,7 +103,10 @@ end
 function M._is_terminal_unmapped(key)
   if #key == 1 then
     local b = key:byte(1)
-    return b < 0x20 or b == 0x7f
+    if b >= 0x20 and b ~= 0x7f then
+      return false
+    end
+    return not own_output[b]
   end
   return key:byte(1) == 0x80 and key:byte(2) == 0xfc
 end

@@ -28,6 +28,9 @@ T["terminal keys are detected"] = function()
   end
   eq(guard._is_terminal_unmapped("a"), false)
   eq(guard._is_terminal_unmapped("あ"), false)
+  -- skkeleton 自身が pre-edit の書き直しに流すキーは確定しない
+  eq(guard._is_terminal_unmapped(tc("<C-h>")), false)
+  eq(guard._is_terminal_unmapped(tc("<Tab>")), false)
 end
 
 T["text and escaped bytes are not special keys"] = function()
