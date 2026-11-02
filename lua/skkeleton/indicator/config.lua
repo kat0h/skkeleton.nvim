@@ -4,7 +4,7 @@
 
 ---@alias skkeleton.IndicatorBorder "none"|"single"|"double"|"rounded"|"solid"|"shadow"|string[]|string[][]
 ---@alias skkeleton.IndicatorBorderOpt skkeleton.IndicatorBorder|fun(args: { mode: string }): skkeleton.IndicatorBorder?
----@alias skkeleton.IndicatorStyle "default"|"rounded"|"pill"|"minimal"
+---@alias skkeleton.IndicatorStyle "default"|"pill"|"minimal"
 
 ---@class skkeleton.IndicatorOpts
 ---@field eijiHlName? string
@@ -99,7 +99,6 @@ local minimal_texts = {
 
 local valid_styles = {
   default = true,
-  rounded = true,
   pill = true,
   minimal = true,
 }
@@ -158,9 +157,7 @@ function M.setup(opts)
     error("skkeleton.indicator: invalid style: " .. tostring(style), 2)
   end
 
-  if style == "rounded" and raw.border == nil then
-    raw.border = "rounded"
-  elseif style == "pill" and raw.border == nil then
+  if style == "pill" and raw.border == nil then
     raw.border = "none"
   elseif style == "minimal" then
     for k, v in pairs(minimal_texts) do
