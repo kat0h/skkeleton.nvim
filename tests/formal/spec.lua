@@ -1266,6 +1266,14 @@ M.action["unmapped: 未マップの特殊キーのあと、打った読みが黙
   if not at_preedit(p, key) or s.ctx_text == p.ctx_text then
     return
   end
+  -- cmdline を抜けた（<S-CR> などでコマンドを実行した）ときは、確定した読みはコマンドに渡っている
+  if p.cmdline ~= nil and s.cmdline == nil then
+    return
+  end
+  -- terminal でシェルが自分の行を書き換えている（<C-r> の履歴の検索など）ときは見ない
+  if p.vim_mode:sub(1, 1) == "t" and table.concat(p.lines or {}, "\n"):find("reverse%-i%-search") then
+    return
+  end
   local reading, cand = typed_reading(p)
   if reading == "" then
     return
@@ -1373,5 +1381,14 @@ function M.is_known(name, keys, msg)
     end
   end
 end
+
+-- terminal で ▽ の途中に <C-a> などを押すと、シェルのカーソルだけが動いて行が崩れる（#121）
+M.known[#M.known + 1] = {
+  property = "unmapped: 未マップの特殊キーのあと、pre-edit は元のままか、きれいにリセットされる",
+  match = function(keys)
+    return vim.tbl_contains(keys, "#term") and vim.tbl_contains(keys, "<C-S-a>")
+  end,
+  reason = "#121: terminal で ▽ の途中に <C-a> などを押すと、シェルのカーソルだけが動いて行が崩れる",
+}
 
 return M
