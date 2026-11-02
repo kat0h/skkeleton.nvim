@@ -159,17 +159,12 @@ get_completion_ranks()
 	ユーザー辞書および |skkeleton-config-completionRankFile| に保存され
 	ている候補のランクテーブル（`table<string, integer>`）を返します。
 
-                                              *skkeleton.complete_callback()*
-complete_callback({kana}, {word} [, {kind}])
-	補完で選んだ候補をユーザー辞書に登録し、選択履歴のランクを更新しま
-	す（pre-edit の消去やバッファへの挿入は行いません）。{kind} は省略時
-	`"okurinasi"` です。
-
                                                         *skkeleton.complete()*
 complete({kana}, {word} [, {kind}])
 	補完候補で確定します。pre-edit を破棄して {word} をバッファに挿入・
 	確定し、ユーザー辞書への登録とランク更新を行います。入力モードの変
-	換関数（converter）が設定されている場合は適用されます。
+	換関数（converter）が設定されている場合は適用されます。insert モード
+	で ▽ の読みを入力している間だけ効き、それ以外では何もしません。
 
                                                   *skkeleton.save_user_dict()*
 save_user_dict()

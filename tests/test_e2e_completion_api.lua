@@ -1,4 +1,4 @@
--- 補完の Lua API（get_prefix、get_preedit、get_completion_result、complete_callback、complete）
+-- 補完の Lua API（get_prefix、get_preedit、get_completion_result、complete）
 local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 
@@ -60,19 +60,6 @@ T["get_completion_result lists the readings that start with the pre-edit"] = fun
   })
 end
 
-T["complete_callback registers the word and sets the last candidate"] = function()
-  enable()
-  child.lua("require('skkeleton').complete_callback('かんじ', '感じ')")
-  eq(
-    api("return require('skkeleton.store').library():get_henkan_result('okurinasi', 'かんじ')"),
-    { "感じ", "漢字", "幹事" }
-  )
-  eq(
-    api("return require('skkeleton.store').context().last_candidate"),
-    { type = "okurinasi", word = "かんじ", candidate = "感じ" }
-  )
-end
-
 T["complete discards the pre-edit and commits the word"] = function()
   enable()
   type("Kanj")
@@ -87,19 +74,35 @@ T["complete discards the pre-edit and commits the word"] = function()
     api("return require('skkeleton.store').library():get_henkan_result('okurinasi', 'かんじ')[1]"),
     "漢字;annotation"
   )
+  eq(
+    api("return require('skkeleton.store').context().last_candidate"),
+    { type = "okurinasi", word = "かんじ", candidate = "漢字;annotation" }
+  )
   -- そのまま続けて打てる（モードは変わらない）
   eq(helpers.mode(child), "hira")
   type("a")
   eq(helpers.buffer(child), { "漢字あ" })
 end
 
+T["complete puts the chosen word at the head of the candidates"] = function()
+  enable()
+  type("Kanj")
+  child.lua("require('skkeleton').complete('かんじ', '感じ')")
+  eq(
+    api("return require('skkeleton.store').library():get_henkan_result('okurinasi', 'かんじ')"),
+    { "感じ", "漢字", "幹事" }
+  )
+end
+
 T["complete is one undo unit"] = function()
   enable()
+  -- 確定の前にも文字を打っておき、undo の区切りが無くなったら落ちるようにする
+  type("aiu")
   type("Kanj")
   child.lua("require('skkeleton').complete('かんじ', '漢字')")
   helpers.settle(child)
   type("<Esc>u")
-  eq(helpers.buffer(child), { "" })
+  eq(helpers.buffer(child), { "あいう" })
 end
 
 T["get_completion_result returns numeral converted candidates (#50)"] = function()

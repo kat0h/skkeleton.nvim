@@ -666,4 +666,40 @@ T["core"]["items returns structured items sharing candidates and annotations"] =
   eq(items[3].annotation, nil)
 end
 
+T["core"]["confirm commits the word, registers it, and is one undo unit"] = function()
+  enable()
+  -- 確定の前にも文字を打っておき、undo の区切りが無くなったら落ちるようにする
+  type("aiu")
+  type("Kanj")
+
+  child.lua([[require("skkeleton.completion").confirm("かんじ", "漢字;annotation")]])
+  helpers.settle(child)
+
+  eq(helpers.buffer(child), { "あいう漢字" })
+  eq(helpers.preedit(child), "")
+  eq(child.lua_get([[require("skkeleton.store").context().last_candidate.candidate]]), "漢字;annotation")
+  eq(
+    child.lua_get([=[require("skkeleton.store").library():get_henkan_result("okurinasi", "かんじ")[1]]=]),
+    "漢字;annotation"
+  )
+
+  -- 確定は 1 回の undo で戻り、その前の文字は残る
+  type("<Esc>u")
+  eq(helpers.buffer(child), { "あいう" })
+end
+
+T["core"]["confirm does nothing after leaving the pre-edit"] = function()
+  enable()
+  type("Kanj<Esc>")
+
+  child.lua([[require("skkeleton.completion").confirm("かんじ", "漢字")]])
+  helpers.settle(child)
+
+  eq(helpers.buffer(child), { "かんj" })
+  eq(
+    child.lua_get([[require("skkeleton.store").context().last_candidate]]),
+    { type = "okurinasi", word = "", candidate = "" }
+  )
+end
+
 return T

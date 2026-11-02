@@ -382,6 +382,16 @@ function M.handle_inner(func, opts)
   render.update(ctx, prefix)
 end
 
+-- 補完で選んだ語をユーザー辞書に登録して、直前の候補にする
+---@param kana string
+---@param word string
+---@param kind? skkeleton.HenkanType
+local function register_completion(kana, word, kind)
+  kind = kind or "okurinasi"
+  store.library():register_henkan_result(kind, kana, word)
+  store.context().last_candidate = { type = kind, word = kana, candidate = word }
+end
+
 -- 補完で語を選んだとき。pre-edit を捨てて語を確定し、ユーザー辞書に登録する。
 -- kana は読み、word は辞書の候補（注釈つきでもよい）、kind は変換の種類（既定は "okurinasi"）
 ---@param kana string
@@ -398,7 +408,7 @@ function M.complete(kana, word, kind)
     local conv = ctx.state.converter
     -- 変換中の状態は捨てる。モード（ひらがななど）は変えない
     mode_mod.initialize_state_with_abbrev(ctx, { "converter", "table" })
-    M.complete_callback(kana, word, kind)
+    register_completion(kana, word, kind)
     local text = candidate.modify(word or kana or "") or ""
     if conv then
       text = conv(text)
@@ -411,16 +421,6 @@ function M.complete(kana, word, kind)
   if not ok then
     error(err, 0)
   end
-end
-
--- 補完で選んだ語をユーザー辞書に登録して、直前の候補にする
----@param kana string
----@param word string
----@param kind? skkeleton.HenkanType
-function M.complete_callback(kana, word, kind)
-  kind = kind or "okurinasi"
-  store.library():register_henkan_result(kind, kana, word)
-  store.context().last_candidate = { type = kind, word = kana, candidate = word }
 end
 
 return M
