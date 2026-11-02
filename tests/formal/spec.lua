@@ -95,6 +95,10 @@ local function cells_of(str)
 end
 
 M.state["screen: 画面の行はバッファに pre-edit を差し込んだもの"] = function(s)
+  -- cmdline window の行は端末では "@ " などの印が頭に付く。skkeleton のバッファではないので見ない
+  if s.cmdwin ~= "" then
+    return
+  end
   -- float の中では headless の screenrow()/screencol() が正しい値を返さない
   -- 'list' のときは listchars（タブや行末の空白の記号）で画面が変わるので比べない
   if not insert_mode(s) or s.pending or s.screen_row <= 0 or s.win_float or s.list then
@@ -218,6 +222,10 @@ M.state["disabled: マッピング・インジケータ・popup が残らない"
 end
 
 M.state["mapping: 有効なら今のバッファにマッピングがある"] = function(s)
+  -- cmdline window の中は skkeleton のバッファではない（登録のプロンプトは続いている）。e91f913 の緩和と同じ
+  if s.cmdwin ~= "" then
+    return
+  end
   if s.enabled and insert_mode(s) and s.skk_maps_here == 0 then
     return "有効なのに今のバッファにマッピングが無い"
   end
@@ -987,7 +995,19 @@ M.action["register: ユーザー辞書は空でない確定のときだけ増え
   -- 普通の変換（▼ の確定）でも、辞書にある語の見出しは作られる。ここで見るのはプロンプトの取り消しや空の確定
   -- 打ちかけのローマ字（"えr" の r）が残ったままの <CR> も、cmdline の中身を登録する（upstream も同じ）
   local dirty_confirm = key == "<CR>" and (p.cmdline or "") ~= "" and (p.input_depth or 0) == (s.input_depth or 0) + 1
-  if #grown > 0 and not word and not dirty_confirm and p.state.type ~= "henkan" then
+  -- 補完の候補を選んだとき（blink.cmp の <Tab> など）は確定としてユーザー辞書に覚える（main.complete_callback）
+  local completed = (p.menu or p.pum)
+    and (key == "<Tab>" or key == "<C-n>" or key == "<C-p>" or key == "<C-y>" or key == "<CR>")
+  -- "KaN" のようなローマ字のまとまりは、1 つのキー列の中で変換と確定が起きる（upstream も同じ）
+  local romaji_macro = #key > 1 and not key:find("<", 1, true)
+  if
+    #grown > 0
+    and not word
+    and not dirty_confirm
+    and not completed
+    and not romaji_macro
+    and p.state.type ~= "henkan"
+  then
     return ("プロンプトの確定でも変換の確定でもないのに辞書の見出し %s が増えた（%s）"):format(
       short(grown),
       key

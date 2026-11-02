@@ -321,20 +321,8 @@ if vim.tbl_isempty(found) then
   vim.cmd("qall!")
 end
 -- 見つかったが、まだ直っていないもの（issue の番号と、反例の操作で見分ける）。
--- #37・#49・#50 は直った。新しい未修正の件はここに { issue = N, match = function(f) … end } で足す
-local KNOWN = {
-  {
-    -- (concat で始まる語そのものを登録すると、読み直したときに式として展開される（#53。#37 の残り）
-    issue = 53,
-    match = function(f)
-      for _, o in ipairs(f.ops) do
-        if o[1] == "reg" and o[4]:find("^%(concat") then
-          return true
-        end
-      end
-    end,
-  },
-}
+-- #37・#49・#50・#53 は直った。新しい未修正の件はここに { issue = N, match = function(f) … end } で足す
+local KNOWN = {}
 local failed = false
 for _, f in pairs(found) do
   local known

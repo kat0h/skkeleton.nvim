@@ -155,7 +155,12 @@ function Session.new()
     vim.uv.sleep(10)
   end
   -- 手元のクリップボード（中クリックの * レジスタなど）を子に読ませない。検査の結果に利用者の手元の文字が混ざるのを防ぐ
-  vim.rpcrequest(self.chan, "nvim_exec_lua", "vim.g.clipboard = false", {})
+  vim.rpcrequest(
+    self.chan,
+    "nvim_exec_lua",
+    'vim.g.clipboard = { name = "formal-fake", copy = { ["+"] = function() end, ["*"] = function() end }, paste = { ["+"] = function() return { "PASTED" } end, ["*"] = function() return { "PASTED" } end } }',
+    {}
+  )
   return self
 end
 
@@ -433,6 +438,10 @@ end
 
 -- 端末で確かめる性質: 端末のカーソルは pre-edit の直後にあり、画面の行はバッファに pre-edit を差し込んだもの
 local function check_terminal(s)
+  -- cmdline window の行は端末では "@ " などの印が頭に付く。skkeleton のバッファではないので見ない
+  if s.cmdwin ~= "" then
+    return
+  end
   if s.vim_mode:sub(1, 1) ~= "i" or s.pending or s.screen_row <= 0 then
     return
   end

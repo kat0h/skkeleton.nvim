@@ -38,7 +38,9 @@ for _, impl in ipairs({ "lua", "denops" }) do
   child.restart = function(...)
     restart(...)
     -- 手元のクリップボード（中クリックの * レジスタなど）を子に読ませない。検査の結果に利用者の手元の文字が混ざるのを防ぐ
-    child.lua("vim.g.clipboard = false")
+    child.lua(
+      'vim.g.clipboard = { name = "formal-fake", copy = { ["+"] = function() end, ["*"] = function() end }, paste = { ["+"] = function() return { "PASTED" } end, ["*"] = function() return { "PASTED" } end } }'
+    )
     child.lua([[vim.keymap.set({ "i", "c", "t" }, "<C-j>", "<Plug>(skkeleton-toggle)")]])
   end
   results[impl] = driver.run(impl, child, profiles.default.dict, keys)
