@@ -221,11 +221,57 @@ T["hooks"]["テキストの設定を変えられる（camelCase）"] = function(
   eq({ f.text, f.width, f.hl }, { "あ", 2, "MyHira" })
 end
 
-T["hooks"]["CursorMovedI で表示が残る"] = function()
+T["hooks"]["入力が始まると閉じる"] = function()
   setup({})
-  child.type_keys("ihello<Esc>o")
+  child.type_keys("i")
   eq(#floats(), 1)
-  child.type_keys("abc")
+  child.g["skkeleton#state"] = { phase = "input", henkanFeed = "", preedit = "▽か" }
+  child.lua("_G.fire('skkeleton-handled')")
+  eq(#floats(), 0)
+end
+
+T["hooks"]["補完メニューが開いている間の文字入力でも閉じる"] = function()
+  setup({})
+  child.type_keys("i")
+  eq(#floats(), 1)
+  child.lua("vim.api.nvim_exec_autocmds('TextChangedP', {})")
+  eq(#floats(), 0)
+end
+
+T["hooks"]["スクロールやウィンドウの大きさが変わったら閉じる"] = function()
+  setup({})
+  child.type_keys("i")
+  eq(#floats(), 1)
+  child.lua("vim.api.nvim_exec_autocmds('WinScrolled', {})")
+  eq(#floats(), 0)
+
+  child.g["skkeleton#mode"] = "hira"
+  child.lua("_G.fire('skkeleton-mode-changed')")
+  wait(30)
+  eq(#floats(), 1)
+  child.lua("vim.api.nvim_exec_autocmds('WinResized', {})")
+  eq(#floats(), 0)
+end
+
+T["hooks"]["出したときのカーソル位置から動くと閉じる"] = function()
+  setup({})
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "ab" })
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.type_keys("i")
+  eq(#floats(), 1)
+  child.type_keys("<Right>")
+  wait(30)
+  eq(#floats(), 0)
+end
+
+T["hooks"]["A や o で insert に入った直後は閉じない"] = function()
+  setup({})
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "hello" })
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.type_keys("A")
+  eq(#floats(), 1)
+  child.type_keys("<Esc>o")
+  wait(30)
   eq(#floats(), 1)
 end
 
@@ -237,7 +283,7 @@ T["hooks"]["setup を何度呼んでも 1 つしか出ない。設定は最後�
   local f = floats()
   eq(#f, 1)
   eq(f[1].text, "Aa")
-  eq(#child.api.nvim_get_autocmds({ group = "skkeleton-indicator" }), 15)
+  eq(#child.api.nvim_get_autocmds({ group = "skkeleton-indicator" }), 17)
 end
 
 T["hooks"]["style = minimal / pill と border = rounded、winblend が反映される"] = function()
@@ -278,10 +324,20 @@ T["hooks"]["コマンドラインモード（: や /）でもインジケータ�
 
   child.g["skkeleton#mode"] = "hira"
   child.lua("_G.fire('skkeleton-mode-changed')")
+  wait(30)
   eq(floats()[1].text, "あ")
 
   child.type_keys("<Esc>")
   eq(#floats(), 0)
+end
+
+T["hooks"]["cmdline では最初の文字入力で閉じる"] = function()
+  setup({})
+  child.type_keys(":")
+  eq(#floats(), 1)
+  child.type_keys("a")
+  eq(#floats(), 0)
+  child.type_keys("<Esc>")
 end
 
 T["hooks"]["insert 中に setup すると設定が反映される"] = function()
@@ -435,23 +491,11 @@ T["hooks"]["cmdline 中に mode-changed すると画面上のインジケータ�
 
   child.g["skkeleton#mode"] = "hira"
   child.lua("_G.fire('skkeleton-mode-changed')")
+  wait(30)
   eq(screen_row(23):find("あ") ~= nil, true)
 
   child.type_keys("<Esc>")
   eq(#floats(), 0)
-end
-
-T["hooks"]["補完で候補が入ったときにインジケーターが追従する"] = function()
-  setup({})
-  child.api.nvim_buf_set_lines(0, 0, -1, false, { "ab cd" })
-  child.api.nvim_win_set_cursor(0, { 1, 0 })
-  child.type_keys("i")
-  local before_col = floats()[1].col
-
-  child.type_keys("<C-x><C-n>")
-  wait(30)
-  local after_col = floats()[1].col
-  eq(after_col > before_col, true)
 end
 
 T["hooks"]["indicator のバッファは閉じたときに wipe される"] = function()
