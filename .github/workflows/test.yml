@@ -2,6 +2,7 @@ name: test
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
@@ -15,10 +16,14 @@ jobs:
         neovim: [stable, nightly]
     steps:
       - uses: actions/checkout@v7
-      - uses: rhysd/action-setup-vim@v1
-        with:
-          neovim: true
-          version: ${{ matrix.neovim }}
+      - name: Install Neovim
+        run: |
+          set -euo pipefail
+          url="https://github.com/neovim/neovim/releases/download/${{ matrix.neovim }}/nvim-linux-x86_64.tar.gz"
+          curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/nvim.tar.gz" "$url"
+          mkdir -p "$RUNNER_TEMP/nvim"
+          tar -xzf "$RUNNER_TEMP/nvim.tar.gz" -C "$RUNNER_TEMP/nvim" --strip-components=1
+          echo "$RUNNER_TEMP/nvim/bin" >> "$GITHUB_PATH"
       - name: Show Neovim version
         run: nvim --version
       # SKK-JISYO.L を使うテストは、辞書が無ければ skip になる
