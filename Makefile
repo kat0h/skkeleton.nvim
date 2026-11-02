@@ -6,7 +6,7 @@ STYLUA ?= $(if $(wildcard .tests/bin/stylua),.tests/bin/stylua,stylua)
 # make test FILE=tests/test_kana.lua で 1 ファイルだけ動かす
 FILE ?=
 
-.PHONY: test deps lint fmt difftest
+.PHONY: test deps lint fmt difftest jisyotest
 
 test: deps
 	MINI_PATH=$(MINI_PATH) $(NVIM) --headless --noplugin -u tests/minimal_init.lua \
@@ -28,3 +28,8 @@ fmt:
 ARGS ?=
 difftest: deps
 	MINI_PATH=$(MINI_PATH) $(NVIM) --headless -u NONE -i NONE -l tests/diff/run.lua $(ARGS)
+
+# SKK-JISYO.L の全候補が変換で出るか確かめる（重いので make test には入れない）。
+# make jisyotest ARGS="--sample 2000" のように絞れる
+jisyotest: deps
+	MINI_PATH=$(MINI_PATH) $(NVIM) --headless -u NONE -i NONE -l tests/jisyo/run.lua $(ARGS)
