@@ -7,12 +7,10 @@ local T, child = helpers.child_set()
 
 local function init()
   child.lua([[
-    H = require("core_helpers")
-    lib = H.setup_library()
+    require("core_helpers").init_core({ spy_host = true })
     lib:register_henkan_result("okurinasi", "あ", "亜")
     lib:register_henkan_result("okurinasi", "われ", "我")
     lib:register_henkan_result("okuriari", "おもu", "思")
-    Context = require("skkeleton.context")
     keymap = require("skkeleton.keymap")
     notation = require("skkeleton.notation")
     -- 未加工のキーを、skkeleton#handle と同じように正規化して handle_key に渡す
@@ -26,7 +24,6 @@ local function init()
       press(ctx, keys)
       return ctx:to_string()
     end
-    H.spy_host()
   ]])
 end
 

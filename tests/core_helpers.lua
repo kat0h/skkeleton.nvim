@@ -50,6 +50,19 @@ function M.setup_library()
   return lib
 end
 
+-- 子の _G に共通の名前を置く。opts.spy_host なら host を差し替える
+---@param opts? { spy_host?: boolean }
+function M.init_core(opts)
+  opts = opts or {}
+  _G.H = M
+  _G.lib = M.setup_library()
+  _G.Context = require("skkeleton.context")
+  _G.config = require("skkeleton.config")
+  if opts.spy_host then
+    M.spy_host()
+  end
+end
+
 -- keys を 1 文字ずつ ctx に流す
 function M.dispatch(ctx, keys)
   local input = require("skkeleton.function.input")
