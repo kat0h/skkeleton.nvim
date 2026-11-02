@@ -950,7 +950,9 @@ M.action["register: 閉じたあとのバッファは登録した語か元の �
     local pre = b.ctx_text or ""
     if pre ~= "" and b.cmdline:sub(-#pre) == pre then
       local want = b.cmdline:sub(1, #b.cmdline - #pre) .. word
-      if s.cmdline ~= want then
+      -- 送りありの登録は、語のあとに送り仮名が付く（insert のときと同じ。upstream も同じ）
+      local okuri_ok = b.state.mode == "okuriari" and s.cmdline:sub(1, #want) == want
+      if s.cmdline ~= want and not okuri_ok then
         return ("外側のプロンプトが %q（期待 %q）"):format(s.cmdline, want)
       end
     end
@@ -1076,7 +1078,8 @@ M.action["register: ユーザー辞書は空でない確定のときだけ増え
   local completed = (p.menu or p.pum)
     and (key == "<Tab>" or key == "<C-n>" or key == "<C-p>" or key == "<C-y>" or key == "<CR>")
   -- "KaN" のようなローマ字のまとまりは、1 つのキー列の中で変換と確定が起きる（upstream も同じ）
-  local romaji_macro = #key > 1 and not key:find("<", 1, true)
+  -- 1 つのキーの表記（<Space> など）でなければ、まとめて流したキー列として扱う（Kanji<Space> など）
+  local romaji_macro = #key > 1 and not key:match("^<[^<>]+>$")
   if
     #grown > 0
     and not word
@@ -1117,9 +1120,9 @@ M.action["register: 閉じたあとのモードと状態が登録の前と同じ
     end
     return
   end
-  -- abbrev から始めた登録は、確定するとひらがなに戻る（abbrev の確定と同じ。upstream も同じ）
+  -- abbrev・カタカナ・半角カタカナから始めた登録は、確定するとひらがなに戻る（upstream も同じ）
   local want_mode = b.skk_mode
-  if b.skk_mode == "abbrev" and word then
+  if (word or key == "<CR>") and (b.skk_mode == "abbrev" or b.skk_mode == "kata" or b.skk_mode == "hankata") then
     want_mode = "hira"
   end
   if s.enabled ~= b.enabled or s.skk_mode ~= want_mode then
