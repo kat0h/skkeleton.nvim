@@ -14,7 +14,7 @@ if vim.g["skkeleton#mode"] == nil then
   vim.g["skkeleton#mode"] = ""
 end
 if vim.g["skkeleton#state"] == nil then
-  vim.g["skkeleton#state"] = { phase = "", henkanFeed = "" }
+  vim.g["skkeleton#state"] = { phase = "", henkanFeed = "", preedit = "" }
 end
 
 for _, name in ipairs({ "enable", "disable", "toggle" }) do

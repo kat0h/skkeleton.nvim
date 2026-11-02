@@ -96,8 +96,7 @@ require("skkeleton").setup({
 - `require("skkeleton").get_pre_edit()` (`get_preedit()`): 現在の pre-edit 文字列を取得
 - `require("skkeleton").get_completions()` (`get_completion_result()`): 補完候補一覧を取得
 - `require("skkeleton").get_completion_ranks()`: 候補のランクテーブルを取得
-- `require("skkeleton").complete_callback(kana, word)`: 選択した候補を辞書とランクに登録
-- `require("skkeleton").complete(kana, word)`: 候補を確定してバッファに挿入
+- `require("skkeleton").complete(kana, word)`: 候補を確定してバッファに挿入し、辞書とランクに登録
 
 ## skkeleton からの移行
 

@@ -25,7 +25,7 @@ skkeleton.nvim のモジュールの構成と、モジュールのあいだの�
 | `lua/skkeleton/function/{init,common,input,henkan,mode,disable,dictionary}.lua` | コア | upstream の `function/*.ts` に対応する各機能 |
 | `lua/skkeleton/dictionary/{init,skk,db,user,numeral}.lua` | 辞書 | 辞書管理（Library、SKK 辞書、DB キャッシュ、ユーザー辞書、数値変換） |
 | `lua/skkeleton/indicator/{init,indicator,config,modes,strings}.lua` | インジケータ | `skkeleton_indicator.nvim` の移植。本体の中を見ない（下の indicator） |
-| `lua/skkeleton/completion/{init,blink,sort}.lua` | 補完 | blink.cmp の source と、候補作り・判定の共通の処理（`can_complete()`、`items()`）。補完は blink.cmp だけ（#69） |
+| `lua/skkeleton/completion/{init,blink,sort}.lua` | 補完 | blink.cmp の source と、候補作り・判定・確定の共通の処理（`can_complete()`、`items()`、`confirm()`）。補完は blink.cmp だけ（#69） |
 | `lua/skkeleton/{init,main,render,popup,map}.lua`、`plugin/skkeleton.lua`、`autoload/skkeleton.vim`、`host.lua` の UI 部分 | UI | Neovim との結合。`main.lua` が enable/disable/toggle/handle と autocmd、`render.lua` が描画、`popup.lua` が候補ポップアップ、`map.lua` がマッピングとオプションの退避・復元を担当 |
 | `tests/helpers.lua` のキー入力ドライバ、E2E テスト | UI | 結合テスト・E2E テスト基盤 |
 
@@ -123,7 +123,8 @@ DB の形式 v1（`lua/skkeleton/dictionary/db.lua`）:
 ```lua
 require("skkeleton.indicator").setup(opts)  -- opts は skkeleton_indicator と同じキー（camelCase）。false で無効化
 ```
-インジケータは本体から切り離す。本体が公開する状態（`g:skkeleton#mode`、`g:skkeleton#enabled`、`g:skkeleton#state`）と User イベント（`skkeleton-mode-changed`、`skkeleton-enable-post`、`skkeleton-disable-post`、`skkeleton-handled`）だけを読み、`skkeleton.render` などを `require` しない。本体からインジケータを呼ぶのは `init.lua` の `setup` だけにする。今は本体から `move()` を呼んでいるところと、インジケータが `skkeleton.render` を読んでいるところが残っていて、#63 で消す。
+インジケータは本体から切り離す。本体が公開する状態（`g:skkeleton#mode`、`g:skkeleton#enabled`、`g:skkeleton#state`）と User イベント（`skkeleton-mode-changed`、`skkeleton-enable-post`、`skkeleton-disable-post`、`skkeleton-handled`）だけを読み、`skkeleton.render` などを `require` しない。本体からインジケータを呼ぶのは `init.lua` の `setup` だけにする。
+インジケータは、挿入モード・コマンドラインモードに入ったときと、skkeleton のモードが変わったときにカーソルの右下に出す。入力が始まったとき（`g:skkeleton#state.preedit` が空でない）、文字が入ったとき、カーソルが動いたとき、`fadeOutMs` がたったときに消す（#63）。挿入に入ってすぐ文字が入ったとき（`Afoo` のようなマッピング）は出さない。
 
 ### 公開インターフェース（UI、upstream と互換）
 - 変数: `g:skkeleton#enabled`、`g:skkeleton#mode`
@@ -131,7 +132,7 @@ require("skkeleton.indicator").setup(opts)  -- opts は skkeleton_indicator と�
 - `<Plug>(skkeleton-enable)`、`<Plug>(skkeleton-disable)`、`<Plug>(skkeleton-toggle)`（`i` / `c` / `t` モード）
 - Lua API: `require("skkeleton").setup(opts)`、`.enable()`、`.disable()`、`.toggle()`、`.mode()`、`.is_enabled()`、`.register_keymap(state, key, func)`、`.register_kanatable(name, tbl, create)`、`.register_kanatable_file(...)`、`.get_config()`、`.initialize()`、`.update_database(path, encoding, force)`
 - pre-edit 用 extmark の namespace は `skkeleton-preedit`、ハイライトグループは `SkkeletonPreedit`（既定では属性未設定）
-- `g:skkeleton#state`（`{ phase, henkanFeed }`）はキー処理（handle）のたびに更新する
+- `g:skkeleton#state`（`{ phase, henkanFeed, preedit }`）はキー処理（handle）のたびに更新する
 - `autoload/skkeleton.vim` にはステータスライン連携用の `skkeleton#mode()` と `skkeleton#is_enabled()` のみを配置する
 
 ### 描画フロー（render）
