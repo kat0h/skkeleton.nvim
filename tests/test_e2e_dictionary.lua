@@ -393,7 +393,9 @@ T["C-f in dictionary input opens cmdline window without cancelling (#54)"] = fun
   type("A<Space>")
   eq(child.fn.mode(), "c")
   child.type_keys("<C-f>")
-  helpers.settle(child)
+  vim.wait(1000, function()
+    return child.fn.getcmdwintype() == "@"
+  end, 10)
   eq(child.fn.getcmdwintype(), "@")
   eq(child.fn.mode(), "n")
   type("ikouho<CR>")
