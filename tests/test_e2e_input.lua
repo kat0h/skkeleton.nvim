@@ -368,6 +368,32 @@ T["<Insert> で置換モードに移ると pre-edit を捨てて無効になる 
   eq(#marks, 0)
 end
 
+T["<C-o>l in the middle of pre-edit commits the reading (#117)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "abcd" })
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.type_keys("i")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+  eq(helpers.preedit(child), "▽かn")
+
+  child.type_keys("<C-o>l")
+  helpers.settle(child)
+  eq(helpers.preedit(child), "")
+  eq(helpers.buffer(child), { "かんabcd" })
+end
+
+T["<C-o>zz in the middle of pre-edit keeps it (#117)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "abcd" })
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.type_keys("i")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+
+  child.type_keys("<C-o>zz")
+  helpers.settle(child)
+  eq(helpers.preedit(child), "▽かn")
+end
+
 T["an unmapped special key that commits also closes the candidate popup (#115)"] = function()
   start()
   type("Kan<Space><Space><Space><Space><Space>")

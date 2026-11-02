@@ -161,15 +161,17 @@ end
 function M.setup()
   local group = vim.api.nvim_create_augroup("skkeleton-internal", { clear = true })
   -- モード遷移に伴う後片付けの遷移表 (#62)
-  -- 移る前と後のモードに応じて、片付け方（"reset"、"safe_reset"、"none"）を引く
+  -- 移る前と後のモードに応じて、片付け方（"reset"、"safe_reset"、"stale"、"none"）を引く
   local MODE_TRANSITIONS = {
     -- 1. insert / completion 中から visual / select モードへの直接遷移（マウス選択など）
     { from = "^i", to = "^[vV\022sS\019]", action = "reset" },
     -- 2. insert 中から <Insert> キーで置換モードへの遷移
     { from = "^i", to = "^R", action = "reset" },
-    -- 3. normal モードへの遷移（プラグイン等による一瞬の遷移を SafeState で待つ）
+    -- 3. <C-o> で insert-normal に入って、そのまま insert に戻ったとき (#117)
+    { from = "^ni", to = "^i", action = "stale" },
+    -- 4. normal モードへの遷移（プラグイン等による一瞬の遷移を SafeState で待つ）
     { from = ".*", to = "^n", action = "safe_reset" },
-    -- 4. cmdline から visual / select / operator-pending などへ戻ったとき
+    -- 5. cmdline から visual / select / operator-pending などへ戻ったとき
     { from = "^c", to = "^[^ictn]", action = "safe_reset" },
   }
 
@@ -195,6 +197,9 @@ function M.setup()
           reset()
           host.disable()
         end
+      elseif action == "stale" then
+        -- <C-o> から戻ったとき、カーソルだけが動いていれば確定する (#117)
+        M.reset_if_stale("i")
       elseif action == "safe_reset" and store.context().state.type == "escape" and not host.is_in_input() then
         -- skkeleton の <Esc> はもう確定して無効にしてある。SafeState を待つと、すぐ次の a などで
         -- insert に戻ったときに escape の状態が残るので、ここで片付ける (#32)
