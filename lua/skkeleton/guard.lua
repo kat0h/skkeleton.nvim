@@ -84,6 +84,19 @@ function M._is_physical_special(key)
   return not pass[base]
 end
 
+-- terminal でジョブに渡す前に確定すべきキーか。
+-- Ctrl + 文字は KS_MODIFIER (0x80 0xfc) で届くので、単バイトの制御キーだけでなく
+-- KS_MODIFIER も対象にする (#121)。
+---@param key string
+---@return boolean
+function M._is_terminal_unmapped(key)
+  if #key == 1 then
+    local b = key:byte(1)
+    return b < 0x20 or b == 0x7f
+  end
+  return key:byte(1) == 0x80 and key:byte(2) == 0xfc
+end
+
 -- vim.on_key のコールバック。"" を返すとそのキーは捨てられる
 ---@param key string マッピング適用後のキー
 ---@param typed string マッピング適用前の打鍵。feedkeys などでは空
@@ -99,7 +112,17 @@ function M._on_key(key, typed)
   if typed == "" then
     return
   end
-  if not M._is_physical_special(key) then
+  local mode = vim.api.nvim_get_mode().mode:sub(1, 1)
+  if mode ~= "i" and mode ~= "c" and mode ~= "t" then
+    return
+  end
+  local commit = M._is_physical_special(key)
+  -- terminal ではジョブが行を書き換えたことをあとから知れないので、Ctrl + 文字も
+  -- ジョブに渡す前に確定する (#121)。insert と cmdline は check_stale に任せる。
+  if not commit and mode == "t" then
+    commit = M._is_terminal_unmapped(key)
+  end
+  if not commit then
     return
   end
   local enabled = vim.g["skkeleton#enabled"]
@@ -109,10 +132,6 @@ function M._on_key(key, typed)
   -- 本体が公開している状態だけで、pre-edit が出ているかを知る
   local state = vim.g["skkeleton#state"]
   if type(state) ~= "table" or (state.preedit or "") == "" then
-    return
-  end
-  local mode = vim.api.nvim_get_mode().mode:sub(1, 1)
-  if mode ~= "i" and mode ~= "c" and mode ~= "t" then
     return
   end
 

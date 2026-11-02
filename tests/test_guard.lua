@@ -22,6 +22,14 @@ T["Ctrl with a letter is not a special key"] = function()
   end
 end
 
+T["terminal keys are detected"] = function()
+  for _, notation in ipairs({ "<C-a>", "<C-e>", "<C-k>", "<C-\\>" }) do
+    eq(guard._is_terminal_unmapped(tc(notation)), true)
+  end
+  eq(guard._is_terminal_unmapped("a"), false)
+  eq(guard._is_terminal_unmapped("あ"), false)
+end
+
 T["text and escaped bytes are not special keys"] = function()
   eq(guard._is_physical_special("a"), false)
   eq(guard._is_physical_special("あ"), false)
