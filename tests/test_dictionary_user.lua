@@ -53,6 +53,25 @@ T["purges a candidate, and the entry when it becomes empty"] = function()
   )
 end
 
+T["purging a candidate keeps its rank for other readings (#129)"] = function()
+  eq(
+    run([[
+      local u = User.new()
+      u:register_henkan_result("okurinasi", "かん", "漢")
+      u:register_henkan_result("okurinasi", "かんじ", "漢")
+      local before = u:get_ranks()["漢"]
+      u:purge_candidate("okurinasi", "かん", "漢")
+      return {
+        before ~= nil,
+        u:get_ranks()["漢"] == before,
+        u:get_henkan_result("okurinasi", "かん"),
+        u:get_henkan_result("okurinasi", "かんじ"),
+      }
+    ]]),
+    { true, true, {}, { "漢" } }
+  )
+end
+
 T["reads and writes an SKK dictionary"] = function()
   -- upstream の "read/write skk jisyo"
   eq(
