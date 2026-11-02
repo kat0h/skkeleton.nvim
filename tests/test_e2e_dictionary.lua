@@ -187,6 +187,18 @@ T["register"]["<C-g> cancels"] = function()
   eq(child.g["skkeleton#enabled"], true)
 end
 
+T["register"]["<C-c> cancels"] = function()
+  enable()
+  type("Yomi<Space>")
+  type("y")
+  child.type_keys("<C-c>")
+  helpers.settle(child)
+  eq(child.fn.mode(), "i")
+  eq(helpers.buffer(child), { "" })
+  eq(child.g["skkeleton#enabled"], true)
+  eq(user_dictionary():find("よみ", 1, true), nil)
+end
+
 T["register"]["an empty input cancels"] = function()
   enable()
   type("Yomi<Space><CR>")
@@ -421,6 +433,20 @@ T["C-f in dictionary input opens cmdline window without cancelling (#54)"] = fun
   helpers.settle(child)
   eq(helpers.buffer(child), { "kouho" })
   eq(#child.api.nvim_tabpage_list_wins(0), 1)
+end
+
+T["dictionary input clears the state variable and the outer pre-edit (#54)"] = function()
+  enable()
+  type("A")
+  eq(helpers.preedit(child), "▽あ")
+  type("<Space>")
+  eq(child.fn.mode(), "c")
+  -- 登録の Context は新しく作られるので、参照用の変数もその状態に合わせる
+  eq(child.g["skkeleton#state"].henkanFeed, "")
+  -- 外側の pre-edit の extmark は残らない
+  eq(child.lua_get([[#vim.api.nvim_buf_get_extmarks(0, require("skkeleton.render").ns, 0, -1, {})]]), 0)
+  child.type_keys("<Esc>")
+  helpers.settle(child)
 end
 
 T["C-f in dictionary input keeps cmdline mode when cmdwin cannot open (#54)"] = function()

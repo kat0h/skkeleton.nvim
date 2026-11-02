@@ -16,9 +16,6 @@ local keymap = util.lazy("skkeleton.keymap")
 
 local M = {}
 
--- henkan_first の再入を防ぐ
-local locked = false
-
 ---@param ctx skkeleton.Context
 ---@param key string
 function M.henkan_first(ctx, key)
@@ -35,18 +32,7 @@ function M.henkan_first(ctx, key)
   input.kakutei_feed(ctx)
 
   if ctx.state.mode == "direct" then
-    -- Note: ユーザーが key 単体に henkanFirst を振ってると無限ループが起こるので
-    --       繰り返し呼ばれた場合やかナーブルで key が henkan_first に割り当てられている場合は直接入力にフォールバックする
-    if locked or (ctx.state.table and ctx.state.table:find(key) == M.henkan_first) then
-      ctx:kakutei(key)
-    else
-      locked = true
-      local ok, err = pcall(input.kana_input, ctx, key)
-      locked = false
-      if not ok then
-        error(err, 0)
-      end
-    end
+    input.kana_input(ctx, key)
     return
   end
 

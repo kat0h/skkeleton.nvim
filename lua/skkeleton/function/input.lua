@@ -17,7 +17,7 @@ function M.kakutei_feed(ctx)
   end
   local state = ctx.state
   local queue_as_kana = state.table:find(state.feed)
-  if type(queue_as_kana) == "table" then
+  if queue_as_kana then
     M.kakutei_kana(state, ctx.preedit, queue_as_kana[1], "")
   end
 end
@@ -69,13 +69,21 @@ end
 
 ---@param ctx skkeleton.Context
 ---@param result skkeleton.KanaResult
----@param feed string
-function M.accept_result(ctx, result, feed)
-  if type(result) == "table" then
-    do_kakutei(ctx, result[1], result[2])
+function M.accept_result(ctx, result)
+  do_kakutei(ctx, result[1], result[2])
+end
+
+-- 打ちかけの feed を確定する（kana_input で、キーがテーブルに続かないときの処理）
+---@param ctx skkeleton.Context
+function M.flush_feed(ctx)
+  local state = ctx.state
+  local current = state.table:find(state.feed)
+  if current then
+    M.accept_result(ctx, current)
+  elseif options.acceptIllegalResult then
+    M.kakutei_kana(state, ctx.preedit, state.feed, "")
   else
-    ctx.state.feed = ""
-    result(ctx, feed)
+    state.feed = ""
   end
 end
 
@@ -101,26 +109,43 @@ function M.kana_input(ctx, char)
   local node = state.table:node(nxt)
   if node and node.count == 1 and node.result ~= nil then
     -- 正確にマッチした場合はそのまま確定
-    M.accept_result(ctx, node.result, nxt)
+    M.accept_result(ctx, node.result)
   elseif node then
     -- テーブルに残余があったら feed に積む
     state.feed = nxt
   elseif state.feed ~= "" then
     -- テーブルとマッチせず feed が存在した場合は
     -- feed を確定し、もう一度 kana_input に通す
-    local current = state.table:find(state.feed)
-    if current then
-      M.accept_result(ctx, current, state.feed)
-    elseif options.acceptIllegalResult then
-      M.kakutei_kana(state, ctx.preedit, state.feed, "")
-    else
-      state.feed = ""
-    end
+    M.flush_feed(ctx)
     M.kana_input(ctx, char)
   else
     -- feed が無い場合(=テーブルに存在しない文字)
     -- そのまま確定してしまう
     M.kakutei_kana(state, ctx.preedit, char, "")
+  end
+end
+
+-- 既定のかなテーブルにあった関数のキー（l q ; / L）を、キーマップから呼ぶための包み (#67)。
+-- 次の場合は包まず kana_input に渡す。
+--   - 既定のかなテーブルではない（abbrev・全角・独自のテーブル）。以前もこれらのキーは関数ではなく文字だった
+--   - テーブルが同じキーの単独のエントリを持つ（使う人がテーブルで l などを上書きした）
+-- 関数に渡す前に打ちかけの feed を確定する。以前の kana_input の流れ（feed を確定してもう一度通す）と同じ
+---@param fn skkeleton.Func
+---@return skkeleton.Func
+function M.kana_function(fn)
+  return function(ctx, char)
+    local state = ctx.state
+    local table_ = state.table
+    local key = char:match("^[A-Z]$") and ("<s-" .. char:lower() .. ">") or char
+    if not (table_ and table_.kana_functions) or (state.feed == "" and table_:node(key)) then
+      return M.kana_input(ctx, char)
+    end
+    if state.feed ~= "" then
+      M.flush_feed(ctx)
+    end
+    state.type = "input"
+    state.feed = ""
+    fn(ctx, char)
   end
 end
 
@@ -146,9 +171,7 @@ function M.henkan_point(ctx)
     if state.feed == "" or not node then
       state.feed = ""
     elseif node.result ~= nil then
-      if type(node.result) == "table" then
-        state.henkan_feed = state.henkan_feed .. node.result[1]
-      end
+      state.henkan_feed = state.henkan_feed .. node.result[1]
       state.feed = ""
     else
       state.previous_feed = true
@@ -196,7 +219,7 @@ function M.prefix(ctx, key)
   local state = ctx.state
   if not state.direct_input and state.henkan_feed ~= "" and (state.mode == "okurinasi" or state.mode == "okuriari") then
     M.kakutei_feed(ctx)
-    M.accept_result(ctx, { ">", "" }, "")
+    M.accept_result(ctx, { ">", "" })
     ctx.state.affix = "prefix"
     henkan.henkan_first(ctx, key)
     return

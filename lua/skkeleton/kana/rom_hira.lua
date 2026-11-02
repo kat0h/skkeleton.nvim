@@ -5,26 +5,15 @@ local KanaTable = require("skkeleton.kana").KanaTable
 
 local M = {}
 
--- 関数の値は kana テーブルの構築時に読み込む（function/ とは循環するので、require は遅らせる）
+-- 変換などの関数のキー（" " ";" "/" "<s-l>" "l" "q"）はここには置かず、
+-- keymap.lua の input の既定のキーマップに置く (#67)。かなテーブルは文字だけ。
 function M.new()
-  local F = {
-    disable = require("skkeleton.function.disable").disable,
-    henkan_first = require("skkeleton.function.henkan").henkan_first,
-    henkan_point = require("skkeleton.function.input").henkan_point,
-    abbrev = require("skkeleton.function.mode").abbrev,
-    zenkaku = require("skkeleton.function.mode").zenkaku,
-    katakana = require("skkeleton.function.mode").katakana,
-  }
-  return KanaTable.new({
-    { " ", F.henkan_first },
+  local t = KanaTable.new({
     { "!", { "！", "" } },
     { ",", { "、", "" } },
     { "-", { "ー", "" } },
     { ".", { "。", "" } },
-    { "/", F.abbrev },
     { ":", { "：", "" } },
-    { ";", F.henkan_point },
-    { "<s-l>", F.zenkaku },
     { "?", { "？", "" } },
     { "[", { "「", "" } },
     { "]", { "」", "" } },
@@ -124,7 +113,6 @@ function M.new()
     { "kyi", { "きぃ", "" } },
     { "kyo", { "きょ", "" } },
     { "kyu", { "きゅ", "" } },
-    { "l", F.disable },
     { "ma", { "ま", "" } },
     { "me", { "め", "" } },
     { "mi", { "み", "" } },
@@ -161,7 +149,6 @@ function M.new()
     { "pyi", { "ぴぃ", "" } },
     { "pyo", { "ぴょ", "" } },
     { "pyu", { "ぴゅ", "" } },
-    { "q", F.katakana },
     { "ra", { "ら", "" } },
     { "re", { "れ", "" } },
     { "ri", { "り", "" } },
@@ -265,6 +252,9 @@ function M.new()
     { "zyu", { "じゅ", "" } },
     { "zz", { "っ", "z" } },
   })
+  -- この印があるテーブルでは、上の関数のキーがキーマップから効く（abbrev・全角・独自のテーブルでは効かない）
+  t.kana_functions = true
+  return t
 end
 
 return M

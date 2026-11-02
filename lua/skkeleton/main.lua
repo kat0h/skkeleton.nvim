@@ -16,6 +16,7 @@ local store = require("skkeleton.store")
 local util = require("skkeleton.util")
 
 local functions = util.lazy("skkeleton.function")
+local common_func = util.lazy("skkeleton.function.common")
 local disable_func = util.lazy("skkeleton.function.disable")
 
 local options = config.options
@@ -48,6 +49,23 @@ end
 local function reset()
   store.init_context()
   update_state_variable()
+end
+
+-- insert から normal へ移ったとき、今の pre-edit を <Esc> と同じ文字列としてバッファに書く (#70)。
+-- <Esc> はマップされた escape が確定してから抜けるが、<C-c> はマップされていないのでここで確定する
+local function commit_preedit()
+  local buf, row, col = render.preedit_position()
+  if not buf then
+    return
+  end
+  local ctx = store.context()
+  -- kakutei の undo point を付けずに、確定する文字列だけ取り出す
+  ctx.vim_mode = "n"
+  common_func.kakutei(ctx)
+  local text = ctx.preedit:take_kakutei()
+  if text ~= "" then
+    vim.api.nvim_buf_set_text(buf, row, col, row, col, { text })
+  end
 end
 
 local function should_delete_hist(item)
@@ -164,6 +182,8 @@ function M.init(force)
           host.disable()
         end
       elseif action == "safe_reset" then
+        -- insert から normal へ抜けたときは、捨てずに <Esc> と同じく確定する
+        local commit = old_mode:sub(1, 1) == "i"
         vim.api.nvim_create_autocmd("SafeState", {
           group = group,
           once = true,
@@ -171,6 +191,9 @@ function M.init(force)
             local m = vim.fn.mode()
             local s = m:sub(1, 1)
             if s ~= "i" and s ~= "c" and s ~= "t" and not vim.startswith(m, "ni") and not host.is_in_input() then
+              if commit then
+                commit_preedit()
+              end
               reset()
               host.disable()
             end
@@ -241,16 +264,6 @@ local function handle_keys(opts, vim_mode)
   local ctx = store.context()
   ctx.vim_mode = vim_mode:sub(1, 1)
   local keys = normalize_keys(opts.key)
-
-  -- 補完の pum が出ているときの <CR>。native の pum だけ対応する
-  if vim.fn.pumvisible() == 1 and table.concat(keys) == "<cr>" and options.eggLikeNewline then
-    local ok, info = pcall(vim.fn.complete_info, { "selected" })
-    if ok and info.selected >= 0 then
-      mode_mod.initialize_state_with_abbrev(ctx, { "converter" })
-      ctx.preedit:output("")
-      return "\25"
-    end
-  end
 
   -- blink.cmp のメニューで項目を選んでいるときの <CR>。選んだ項目で確定する（確定は completion の execute が行う）
   if table.concat(keys) == "<cr>" and options.eggLikeNewline and require("skkeleton.completion").accept_selected() then

@@ -209,6 +209,12 @@ input:
 	<Esc>     |skkeleton-functions-escape|
 	<NL>      |skkeleton-functions-kakutei|
 	>         |skkeleton-functions-prefix|
+	<Space>   |skkeleton-functions-henkanFirst|
+	l         |skkeleton-functions-disable|
+	q         |skkeleton-functions-katakana|
+	;         |skkeleton-functions-henkanPoint|
+	/         |skkeleton-functions-abbrev|
+	L         |skkeleton-functions-zenkaku|
 henkan:
 	<C-g>     |skkeleton-functions-cancel|
 	<CR>      |skkeleton-functions-newline|
@@ -494,8 +500,7 @@ userDictionary                               *skkeleton-config-userDictionary*
 ==============================================================================
 補完                                                    *skkeleton-completion*
 
-skkeleton.nvim は、送りなし変換の入力中に 3 種類の補完方式（blink.cmp、
-nvim-cmp、Neovim 組み込みの completefunc）に対応しています。
+skkeleton.nvim は、送りなし変換の入力中に blink.cmp による補完に対応しています。
 
 補完候補は以下の 3 段階でソートされます。
 1. 読みの長さ（短い読みが優先）
@@ -523,35 +528,6 @@ blink.cmp を使用する場合は、sources の providers に設定を追加し
 いる状態で <CR> を押した際に候補が確定されます。
 
 ------------------------------------------------------------------------------
-nvim-cmp の設定                                    *skkeleton-completion-cmp*
-
-nvim-cmp を使用する場合は、sources に `"skkeleton"` を指定します。
->lua
-    local cmp = require("cmp")
-    cmp.setup({
-      sources = cmp.config.sources({
-        { name = "skkeleton" },
-      }, {
-        { name = "buffer" },
-      }),
-    })
-<
-|skkeleton.setup()| 呼び出し時にソースが自動登録されます。手動で登録する場
-合は `require("skkeleton.completion.cmp").register()` を呼び出してください。
-
-------------------------------------------------------------------------------
-completefunc の設定                             *skkeleton-completion-native*
-
-Neovim 組み込みの補完を使用する場合は、バッファまたはファイルタイプごとに
-'completefunc' を設定します。
->lua
-    vim.bo.completefunc = "v:lua.require'skkeleton.completion'.completefunc"
-<
-入力中に `<C-x><C-u>` を押すと補完メニューが表示されます。候補を選択して
-確定（`CompleteDone`）すると、自動的にユーザー辞書への登録とランク更新が行
-われます。
-
-------------------------------------------------------------------------------
 補完オプション                                 *skkeleton-completion-options*
 
 |skkeleton.setup()| の引数に `completion` テーブルを渡すことで、補完動作を
@@ -574,17 +550,21 @@ register_kanatable({name}, {tbl} [, {create}])
 	名を指定する場合は、{create} に `true` を渡す必要があります（省略時ま
 	たは `false` の場合はエラーになります）。{tbl} の各キー（入力文字列）
 	に対する値には以下を指定できます。
-	- 文字列: |skkeleton-functions| の機能名。
 	- 要素数 1 または 2 の文字列配列:
 	  `{ 確定するかな, 次の入力に残す文字 }` の組。第 2 要素を省略した場合
 	  は空文字列になります（`tt` で「っ」を入力し、次の入力用に `t` を残す
 	  場合などに使用します）。
 	- `false`: そのキーの規則をテーブルから削除します。
+	かなテーブルには文字の規則だけを書きます。機能名や関数は書けません
+	（エラーになります）。変換や無効化などの機能は
+	|skkeleton.register_keymap()| で割り当ててください。以前のかなテーブル
+	に書いていた `<Space>`、`l`、`q`、`;`、`/`、`L` の機能は、既定のキー
+	マップに移りました。かなテーブルに同じキーの規則を書くと、`<Space>` を
+	除いてそのキーの機能の代わりに規則が使われます。
 >lua
     local skkeleton = require("skkeleton")
     skkeleton.register_kanatable("rom", {
       hh = { "お", "h" },
-      jj = "escape",
       ["z,"] = { "―" },
     })
     -- カンマ・ピリオドを全角にする
@@ -612,6 +592,12 @@ register_keymap({state}, {key}, {func})
 	{func} には |skkeleton-functions| の機能名、または Lua の関数を指定し
 	ます。空文字列（`""`）または `false` を渡すと、そのキーの割り当てを解
 	除します。
+	機能はかなテーブルではなくこちらに割り当てます。1 打ごとに、まず打ち
+	かけの入力とそのキーをつないだものがかなテーブルにあればかなテーブル
+	を使い、なければここで割り当てた機能を使います。ただし打ちかけがない
+	ときは、そのキーだけで完結するかなテーブルの規則より、ここで割り当て
+	た機能を優先します（かなテーブルで `<Space>` を全角スペースにしても、
+	変換のキーは消えません）。
 	割り当てたいキーが既定でマッピング対象になっていない場合は、
 	|g:skkeleton#mapped_keys| に追加してください。
 >lua
@@ -965,8 +951,7 @@ skkeleton からの移行                                     *skkeleton-migrati
 非対応の機能~
 - skkserv および Google 日本語入力（`sources` の `"skk_server"`、
   `"google_japanese_input"`）
-- ddc.vim の補完ソース（blink.cmp、nvim-cmp、組み込み completefunc に対応
-  しています）
+- ddc.vim の補完ソース（blink.cmp に対応しています）
 - YAML 形式・MessagePack 形式の辞書（JSON 形式の辞書には対応しています）
 - `skkeleton#handle()`、`skkeleton#dangerously_clear_buffer_local_mappings()`
 

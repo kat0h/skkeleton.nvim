@@ -135,6 +135,15 @@ local function feed(keys, cmd, mode)
   vim.api.nvim_feedkeys(keys .. (cmd or ""), flags, false)
 end
 
+-- 今出している pre-edit を書く位置（バッファと 0 起点の行・列）。出していなければ nil
+---@return integer? buf, integer? row, integer? col
+function M.preedit_position()
+  if not mark or not vim.api.nvim_buf_is_valid(mark.buf) or mark.buf ~= vim.api.nvim_get_current_buf() then
+    return nil
+  end
+  return mark.buf, mark.row, mark.col
+end
+
 -- pre-edit の extmark を消す
 function M.clear()
   pending = false
