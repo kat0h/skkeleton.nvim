@@ -68,6 +68,19 @@ T["closes when the cursor moves from where it was shown"] = function()
   eq(positions(), vim.NIL)
 end
 
+T["closes when the window changes in insert (#85)"] = function()
+  child.cmd("vsplit")
+  child.cmd("wincmd p")
+  child.type_keys("i")
+  helpers.settle(child)
+  eq(positions() ~= nil, true)
+
+  -- insert のまま別のウィンドウへ移る。relative = "cursor" のままだと移った先へ動く
+  child.type_keys("<Cmd>wincmd w<CR>")
+  helpers.settle(child)
+  eq(positions(), vim.NIL)
+end
+
 T["closes when the preedit starts"] = function()
   start()
   eq(positions() ~= nil, true)
