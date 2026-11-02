@@ -1,6 +1,7 @@
 -- SKK-JISYO.L の全候補が変換で出ることの確認。重いので make test には入れず、必要なときだけ流す。
 -- 使い方: make jisyotest ARGS="--sample 2000"
 --   nvim --headless -u NONE -i NONE -l tests/jisyo/run.lua [--dict PATH] [--sample N] [--seed S] [--jobs J] [--filter 読みの前方一致] [--max-fail N]
+-- 辞書が無ければ skip して終了コード 0 で終わる（CI では流さないが、手元で落ちないように）。
 -- 読みごとに、ローマ字で打って Space を候補の数だけ押し、そのつど pre-edit が「▼候補」になるか見る。
 -- 期待値は辞書ファイルを自前で読んで作る（本体の辞書パーサは使わない）。
 -- 対象外（件数は数えて出す）: 読みに打てない文字を含むもの、候補が (concat ...) などの式のもの、
@@ -356,6 +357,15 @@ if opts.worker then
 end
 
 -- 親: 辞書を読み、絞り込み、worker に分けて流す
+-- 辞書が無い環境（CI など）では落とさず、skip して終わる
+do
+  local f = io.open(opts.dict, "rb")
+  if not f then
+    print(string.format("skip: 辞書が無い（%s）", opts.dict))
+    os.exit(0)
+  end
+  f:close()
+end
 local entries, skipped = load_entries(opts.dict)
 local total_cands = 0
 for _, e in ipairs(entries) do
