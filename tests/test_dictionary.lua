@@ -12,6 +12,7 @@ local User = require("skkeleton.dictionary.user")
 local numeral = require("skkeleton.dictionary.numeral")
 local skk = require("skkeleton.dictionary.skk")
 local db = require("skkeleton.dictionary.db")
+local config = require("skkeleton.config")
 local TD = %q
 -- 同じ辞書をメモリと DB の両方で開く（upstream の test() が SkkDictionary と DenoKvDictionary で回すのに当たる）
 local function backends(path, enc)
@@ -190,7 +191,7 @@ T["immediatelyDictionaryRW saves after register/purge and loads before lookup"] 
       local path = TMP .. "/user"
       local user = User.new()
       user:load({ path = path })
-      local lib = Library.new({}, user, { immediatelyDictionaryRW = true })
+      local lib = Library.new({}, user, true)
       lib:register_henkan_result("okurinasi", "あ", "亜")
       lib:register_henkan_result("okurinasi", "あ", "阿")
       local saved = read(path)
@@ -215,7 +216,7 @@ T["without immediatelyDictionaryRW nothing is written until save"] = function()
       local path = TMP .. "/user"
       local user = User.new()
       user:load({ path = path })
-      local lib = Library.new({}, user, { immediatelyDictionaryRW = false })
+      local lib = Library.new({}, user, false)
       lib:register_henkan_result("okurinasi", "あ", "亜")
       local before = vim.uv.fs_stat(path) ~= nil
       lib:save()
@@ -225,15 +226,63 @@ T["without immediatelyDictionaryRW nothing is written until save"] = function()
   )
 end
 
-T["load(cfg)"] = MiniTest.new_set()
+T["completionRankFile"] = MiniTest.new_set()
 
-T["load(cfg)"]["builds a Library from the config"] = function()
+T["completionRankFile"]["immediatelyDictionaryRW writes the ranks after register and purge"] = function()
   eq(
     run([[
-      local lib = dictionary.load({
+      local path = TMP .. "/ranks.json"
+      config.set({
+        userDictionary = TMP .. "/user",
+        completionRankFile = path,
+        immediatelyDictionaryRW = true,
+      })
+      local lib = dictionary.load()
+      lib:register_henkan_result("okurinasi", "あ", "亜")
+      local registered = read(path)
+      lib:purge_candidate("okurinasi", "あ", "亜")
+      local purged = read(path)
+      return { registered, purged }
+    ]]),
+    { '["亜"]', "[]" }
+  )
+end
+
+T["completionRankFile"]["save_user_dict writes the ranks on exit"] = function()
+  eq(
+    run([[
+      local store = require("skkeleton.store")
+      local path = TMP .. "/ranks.json"
+      config.set({
+        userDictionary = TMP .. "/user",
+        completionRankFile = path,
+        immediatelyDictionaryRW = false,
+      })
+      local lib = dictionary.load()
+      store.set_library(lib)
+      lib:register_henkan_result("okurinasi", "あ", "亜")
+      lib:register_henkan_result("okurinasi", "い", "伊")
+      local before = vim.uv.fs_stat(path) ~= nil
+      require("skkeleton").save_user_dict()
+      return { before, read(path), read(TMP .. "/user") }
+    ]]),
+    {
+      false,
+      '["亜","伊"]',
+      ";; okuri-ari entries.\n;; okuri-nasi entries.\nあ /亜/\nい /伊/\n",
+    }
+  )
+end
+
+T["load"] = MiniTest.new_set()
+
+T["load"]["builds a Library from the config"] = function()
+  eq(
+    run([[
+      config.set({
         globalDictionaries = {
           { TD .. "/globalJisyo", "euc-jp" },
-          { path = TD .. "/numJisyo", encoding = "euc-jp" },
+          { TD .. "/numJisyo", "euc-jp" },
           TD .. "/globalJisyo2",
           TD .. "/newJisyo.json",
         },
@@ -241,6 +290,7 @@ T["load(cfg)"]["builds a Library from the config"] = function()
         databasePath = TMP .. "/db",
         immediatelyDictionaryRW = false,
       })
+      local lib = dictionary.load()
       lib:register_henkan_result("okurinasi", "てすと", "test")
       local files = {}
       for name in vim.fs.dir(TMP .. "/db") do files[#files + 1] = name:match("%.db$") and "db" or name end
@@ -260,16 +310,17 @@ T["load(cfg)"]["builds a Library from the config"] = function()
   )
 end
 
-T["load(cfg)"]["warns about a dictionary that cannot be loaded and keeps the others"] = function()
+T["load"]["warns about a dictionary that cannot be loaded and keeps the others"] = function()
   eq(
     run([[
       local msgs = {}
       vim.notify = function(m) msgs[#msgs + 1] = m end
-      local lib = dictionary.load({
+      config.set({
         globalDictionaries = { TMP .. "/missing", TD .. "/newJisyo.yaml", { TD .. "/globalJisyo", "euc-jp" } },
         userDictionary = TMP .. "/user",
         databasePath = TMP .. "/db",
       })
+      local lib = dictionary.load()
       return {
         #msgs,
         msgs[1]:find("missing", 1, true) ~= nil,
@@ -281,14 +332,15 @@ T["load(cfg)"]["warns about a dictionary that cannot be loaded and keeps the oth
   )
 end
 
-T["load(cfg)"]["databasePath may be the old file path (its parent is used)"] = function()
+T["load"]["databasePath may be the old file path (its parent is used)"] = function()
   eq(
     run([[
-      local lib = dictionary.load({
+      config.set({
         globalDictionaries = { { TD .. "/globalJisyo", "euc-jp" } },
         userDictionary = TMP .. "/user",
         databasePath = TMP .. "/dbdir/skk.db",
       })
+      local lib = dictionary.load()
       local n = 0
       for name in vim.fs.dir(TMP .. "/dbdir") do n = n + (name:match("%.db$") and 1 or 0) end
       return { n, vim.uv.fs_stat(TMP .. "/dbdir/skk.db") == nil or vim.uv.fs_stat(TMP .. "/dbdir/skk.db").type }
@@ -297,32 +349,34 @@ T["load(cfg)"]["databasePath may be the old file path (its parent is used)"] = f
   )
 end
 
-T["load(cfg)"]["falls back to memory when the DB cannot be written"] = function()
+T["load"]["falls back to memory when the DB cannot be written"] = function()
   eq(
     run([[
       -- databasePath の親がファイルなので、ディレクトリを作れない
       write("blocker", "x")
-      local lib = dictionary.load({
+      config.set({
         globalDictionaries = { { TD .. "/globalJisyo", "euc-jp" } },
         userDictionary = TMP .. "/user",
         databasePath = TMP .. "/blocker/db/x",
       })
+      local lib = dictionary.load()
       return lib:get_henkan_result("okurinasi", "てすと")
     ]]),
     { "テスト", "test" }
   )
 end
 
-T["load(cfg)"]["expands ~ in paths"] = function()
+T["load"]["expands ~ in paths"] = function()
   eq(
     run([[
       vim.env.HOME = TMP
       write("g", ";; coding: utf-8\n;; okuri-nasi entries.\nあ /亜/\n")
-      local lib = dictionary.load({
+      config.set({
         globalDictionaries = { { "~/g", "utf-8" } },
         userDictionary = "~/user",
         databasePath = "~/db",
       })
+      local lib = dictionary.load()
       lib:register_henkan_result("okurinasi", "い", "伊")
       lib:save()
       return { lib:get_henkan_result("okurinasi", "あ"), vim.uv.fs_stat(TMP .. "/user") ~= nil }
@@ -334,7 +388,7 @@ end
 T["prepare"] = function()
   eq(
     run([[
-      local cfg = {
+      config.set({
         globalDictionaries = {
           { TD .. "/globalJisyo", "euc-jp" },
           { TD .. "/numIncludingJisyo", "utf-8" },
@@ -342,9 +396,9 @@ T["prepare"] = function()
         },
         userDictionary = TMP .. "/user",
         databasePath = TMP .. "/db",
-      }
+      })
       local lib
-      dictionary.prepare(cfg, function(l) lib = l end)
+      dictionary.prepare(function(l) lib = l end)
       local sync = lib ~= nil
       vim.wait(5000, function() return lib ~= nil end)
       local n = 0
@@ -359,14 +413,14 @@ end
 T["update_database"] = function()
   eq(
     run([[
-      local cfg = { databasePath = TMP .. "/db" }
+      config.set({ databasePath = TMP .. "/db" })
       local src = write("s", ";; coding: utf-8\n;; okuri-nasi entries.\nあ /亜/\n")
-      dictionary.update_database(cfg, src, "utf-8")
+      dictionary.update_database(src, "utf-8")
       local dst = db.path_for(src, TMP .. "/db", "utf-8")
       local ino1 = vim.uv.fs_stat(dst).ino
-      dictionary.update_database(cfg, src, "utf-8")
+      dictionary.update_database(src, "utf-8")
       local ino2 = vim.uv.fs_stat(dst).ino
-      dictionary.update_database(cfg, src, "utf-8", true)
+      dictionary.update_database(src, "utf-8", true)
       local ino3 = vim.uv.fs_stat(dst).ino
       return { ino1 == ino2, ino1 ~= ino3 }
     ]]),
@@ -382,11 +436,12 @@ T["SKK-JISYO.L through Library"] = function()
   eq(
     run(
       [[
-      local lib = dictionary.load({
+      config.set({
         globalDictionaries = { ... },
         userDictionary = TMP .. "/user",
         databasePath = TMP .. "/db",
       })
+      local lib = dictionary.load()
       return { lib:get_henkan_result("okurinasi", "かんじ")[1], lib:get_henkan_result("okuriari", "わるs")[1] }
     ]],
       path
@@ -531,11 +586,12 @@ T["completion"]["SKK-JISYO.L returns quickly"] = function()
   end
   local r = run(
     [[
-    local lib = dictionary.load({
+    config.set({
       globalDictionaries = { ... },
       userDictionary = TMP .. "/user",
       databasePath = TMP .. "/db",
     })
+    local lib = dictionary.load()
     lib:get_completion_result("かん", "") -- 辞書を開く分の暖機
     local t = vim.uv.hrtime()
     local n = 20

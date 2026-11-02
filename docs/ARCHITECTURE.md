@@ -107,12 +107,12 @@ tbl:node(prefix) -> { count = 前方一致する件数, result = 完全一致の
 ### Library（辞書）
 ```lua
 local dictionary = require("skkeleton.dictionary")
-dictionary.load(cfg) -> Library    -- cfg（globalDictionaries、userDictionary、databasePath など）から生成
-dictionary.Library.new(dicts, user_dict)
+dictionary.load() -> Library    -- config.options（globalDictionaries、userDictionary、databasePath など）から生成
+dictionary.Library.new(dicts, user_dict, immediately_rw)
 lib:get_henkan_result(type, word) -> string[]   -- 変換候補（ユーザー辞書優先、重複排除、数値変換を含む）
 lib:register_henkan_result(type, word, candidate)
 lib:purge_candidate(type, word, candidate)
-lib:load(); lib:save()
+lib:load(); lib:save(); lib:save_ranks()        -- save はユーザー辞書と補完ランク（completionRankFile）を書く
 -- 個々の辞書は :get_henkan_result(type, word) と :get_prefix(type, prefix, limit) を持つ
 ```
 DB の形式 v1（`lua/skkeleton/dictionary/db.lua`）:
