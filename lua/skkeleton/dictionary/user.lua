@@ -105,9 +105,6 @@ function User:purge_candidate(kind, word, candidate)
     end
   end
   self.maps[kind][word] = #rest > 0 and rest or nil
-  if self.ranks then
-    self.ranks[candidate] = nil
-  end
 end
 
 ---@param path string
