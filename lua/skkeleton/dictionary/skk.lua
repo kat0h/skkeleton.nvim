@@ -316,10 +316,8 @@ function M.parse(text, tick)
     elseif cur and line ~= "" and line:sub(1, 2) ~= ";;" then
       local sp = line:find(" ", 1, true)
       if sp and sp > 1 then
-        local key = line:sub(1, sp - 1)
-        if cur[key] == nil then
-          cur[key] = line:sub(sp + 1):gsub("%s+$", "")
-        end
+        -- 同じ見出しが 2 行以上あるときは、あとの行を使う（upstream と同じ。 #48）
+        cur[line:sub(1, sp - 1)] = line:sub(sp + 1):gsub("%s+$", "")
       end
     end
     n = n + 1

@@ -16,7 +16,7 @@ local uv = vim.uv
 local M = {}
 
 M.HEADER_SIZE = 128
-M.VERSION = 1
+M.VERSION = 2
 
 local function noop() end
 
