@@ -56,8 +56,10 @@ end
 -- 値は handle でしか更新しないので、cmdline の pre-edit を片付けたときに残ってしまう
 local function clear_preedit_state()
   local state = vim.g["skkeleton#state"]
-  if type(state) == "table" then
+  -- vim.g の表はコピーなので、書き換えたら入れ直す
+  if type(state) == "table" and state.preedit ~= "" then
     state.preedit = ""
+    vim.g["skkeleton#state"] = state
   end
 end
 

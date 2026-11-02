@@ -86,6 +86,21 @@ T["clears the preedit when leaving cmdline with <C-r>="] = function()
   eq(positions(), vim.NIL)
 
   type("<Esc>")
+  eq(child.g["skkeleton#state"].preedit, "")
+  eq(positions() ~= nil, true)
+end
+
+T["clears the preedit when leaving cmdline with <C-c> from <C-r>="] = function()
+  start()
+  type("<C-r>=")
+  type("Kan")
+  eq(positions(), vim.NIL)
+
+  -- <C-c> は skkeleton が奪わないので、handle を通らずに cmdline を抜ける
+  child.type_keys("<C-c>")
+  helpers.settle(child)
+  eq(child.fn.mode(), "i")
+  eq(child.g["skkeleton#state"].preedit, "")
   eq(positions() ~= nil, true)
 end
 
