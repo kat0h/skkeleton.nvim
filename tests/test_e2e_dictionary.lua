@@ -392,10 +392,24 @@ T["C-f in dictionary input opens cmdline window without cancelling (#54)"] = fun
   enable()
   type("A<Space>")
   eq(child.fn.mode(), "c")
+  print(
+    "DEBUG before C-f: mode="
+      .. child.fn.mode()
+      .. " cmdline="
+      .. child.fn.getcmdline()
+      .. " cedit="
+      .. child.api.nvim_get_option_value("cedit", {})
+  )
   child.type_keys("<C-f>")
-  vim.wait(1000, function()
-    return child.fn.getcmdwintype() == "@"
-  end, 10)
+  helpers.settle(child)
+  print(
+    "DEBUG after C-f: mode="
+      .. child.fn.mode()
+      .. " cmdline="
+      .. child.fn.getcmdline()
+      .. " cmdwintype="
+      .. child.fn.getcmdwintype()
+  )
   eq(child.fn.getcmdwintype(), "@")
   eq(child.fn.mode(), "n")
   type("ikouho<CR>")
