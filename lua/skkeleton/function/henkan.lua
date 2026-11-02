@@ -26,12 +26,18 @@ function M.henkan_first(ctx, key)
     return
   end
 
+  -- 今の打ちかけとそのキーをつないだものがかなテーブルにあれば、変換ではなく入力を進める (#42)
+  if ctx.state.feed ~= "" and ctx.state.table and ctx.state.table:node(ctx.state.feed .. key) then
+    input.kana_input(ctx, key)
+    return
+  end
+
   input.kakutei_feed(ctx)
 
   if ctx.state.mode == "direct" then
     -- Note: ユーザーが key 単体に henkanFirst を振ってると無限ループが起こるので
-    --       繰り返し呼ばれた場合は直接入力にフォールバックする
-    if locked then
+    --       繰り返し呼ばれた場合やかナーブルで key が henkan_first に割り当てられている場合は直接入力にフォールバックする
+    if locked or (ctx.state.table and ctx.state.table:find(key) == M.henkan_first) then
       ctx:kakutei(key)
     else
       locked = true

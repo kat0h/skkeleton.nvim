@@ -113,10 +113,12 @@ function M.decode(data, encoding)
 end
 
 -- 文字列内の (concat "...") 式を展開する。
--- 8進エスケープ（\057 -> /、\073 -> ; など）や \"、\\ をデコードする
+-- 8進エスケープ（\057 -> /、\073 -> ; など）や \"、\\ をデコードする。
+-- preserve_semi が真なら、語の中のセミコロン \073 を注釈の区切りと混ざらないよう "\\073" のまま残す (#49)
 ---@param tok string
+---@param preserve_semi? boolean
 ---@return string
-function M.decode_concat(tok)
+function M.decode_concat(tok, preserve_semi)
   if not tok:find("(concat", 1, true) then
     return tok
   end
@@ -159,7 +161,9 @@ function M.decode_concat(tok)
               local oct = tok:match("^[0-7][0-7]?[0-7]?", p)
               if oct then
                 local code = tonumber(oct, 8)
-                if code and code <= 255 then
+                if preserve_semi and code == 59 then
+                  str_parts[#str_parts + 1] = "\\073"
+                elseif code and code <= 255 then
                   str_parts[#str_parts + 1] = string.char(code)
                 else
                   str_parts[#str_parts + 1] = oct
@@ -206,6 +210,49 @@ function M.decode_concat(tok)
   return table.concat(out)
 end
 
+-- 式 (concat ...) の外側にある最初のセミコロンの位置を返す (#49)
+---@param tok string
+---@return integer?
+local function find_outer_semicolon(tok)
+  local len = #tok
+  local p = 1
+  while p <= len do
+    local b = tok:byte(p)
+    if b == 59 then -- ';'
+      return p
+    elseif b == 40 and tok:sub(p):match("^%(concat%s+") then -- '(concat ...'
+      local in_str = false
+      p = p + 1
+      while p <= len do
+        local c = tok:byte(p)
+        if in_str then
+          if c == 92 then -- '\\'
+            p = p + 2
+          elseif c == 34 then -- '"'
+            in_str = false
+            p = p + 1
+          else
+            p = p + 1
+          end
+        else
+          if c == 34 then
+            in_str = true
+            p = p + 1
+          elseif c == 41 then -- ')'
+            p = p + 1
+            break
+          else
+            p = p + 1
+          end
+        end
+      end
+    else
+      p = p + 1
+    end
+  end
+  return nil
+end
+
 -- "/a/[b/c]/d/" を { "a", "[b/c]", "d" } に分ける（ブロックは中に "/" があっても 1 つにする）。
 -- 最後の "/" のあとの空文字や空白のみのトークンは無視する
 ---@param value string
@@ -230,7 +277,14 @@ function M.split_candidates(value)
       end
       local tok = value:sub(a, b)
       if b < len or not tok:match("^%s*$") then
-        out[#out + 1] = M.decode_concat(tok)
+        local semi = find_outer_semicolon(tok)
+        if semi then
+          local word_part = M.decode_concat(tok:sub(1, semi - 1), true)
+          local annot_part = M.decode_concat(tok:sub(semi + 1), false)
+          out[#out + 1] = word_part .. ";" .. annot_part
+        else
+          out[#out + 1] = M.decode_concat(tok, true)
+        end
       end
       i = b + 1
     end

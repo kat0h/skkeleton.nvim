@@ -245,6 +245,16 @@ T["register"]["moving the cursor or deleting in the registration prompt drops th
   eq(child.fn.mode(), "i")
   eq(helpers.buffer(child), { "" })
   eq(helpers.preedit(child), "▽あ")
+
+  -- <C-k>a:（ダイグラフ）で文字が入ったときも、残った ▽ が取り除かれる (#12)
+  type("<Space>Kan")
+  eq(child.fn.getcmdline(), "▽かn")
+  child.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-k>a:", true, true, true), "nt", false)
+  helpers.settle(child)
+  eq(child.fn.getcmdline(), "ä")
+  type("<CR>")
+  eq(child.fn.mode(), "i")
+  eq(user_dictionary():find("▽", 1, true), nil)
 end
 
 T["register"]["switching windows during input() does not break state or mappings"] = function()
@@ -360,6 +370,83 @@ T["purge"]["host.confirm asks with vim.fn.confirm"] = function()
   ]])
   eq(child.lua_get([[require("skkeleton.host").confirm("hello") ]]), true)
   eq(child.lua_get("_G.asked"), { "hello", "&Yes\n&No\n", 2 })
+end
+
+T["candidate with semicolon in concat expression does not split prematurely (#49)"] = function()
+  child.lua([=[
+    local store = require("skkeleton.store")
+    local u = store.library().user_dict
+    u.maps.okurinasi["てす"] = { "a\\073b;注釈" }
+  ]=])
+  enable()
+  type("Tesu<Space>")
+  eq(helpers.preedit(child), "▼a;b")
+  type("<C-j>")
+  eq(helpers.buffer(child), { "a;b" })
+  child.lua([[require("skkeleton").save_user_dict()]])
+  local content = user_dictionary()
+  eq(content:find('(concat "a\\073b");注釈', 1, true) ~= nil, true)
+end
+
+local can_cmdwin_from_input
+local function supports_cmdwin_from_input()
+  if can_cmdwin_from_input ~= nil then
+    return can_cmdwin_from_input
+  end
+  child.type_keys(":call input('x')<CR>")
+  child.type_keys("<C-f>")
+  helpers.settle(child)
+  can_cmdwin_from_input = child.fn.getcmdwintype() == "@"
+  if can_cmdwin_from_input then
+    child.type_keys("<C-c>")
+    helpers.settle(child)
+  end
+  child.type_keys("<C-c>")
+  helpers.settle(child)
+  return can_cmdwin_from_input
+end
+
+T["C-f in dictionary input opens cmdline window without cancelling (#54)"] = function()
+  if not supports_cmdwin_from_input() then
+    MiniTest.skip("this Neovim cannot open cmdwin from input()")
+  end
+  enable()
+  type("A<Space>")
+  eq(child.fn.mode(), "c")
+  child.type_keys("<C-f>")
+  helpers.settle(child)
+  eq(child.fn.getcmdwintype(), "@")
+  eq(child.fn.mode(), "n")
+  type("ikouho<CR>")
+  helpers.settle(child)
+  eq(helpers.buffer(child), { "kouho" })
+  eq(#child.api.nvim_tabpage_list_wins(0), 1)
+end
+
+T["C-f in dictionary input keeps cmdline mode when cmdwin cannot open (#54)"] = function()
+  if supports_cmdwin_from_input() then
+    MiniTest.skip("this Neovim can open cmdwin from input()")
+  end
+  enable()
+  type("A<Space>")
+  eq(child.fn.mode(), "c")
+  child.type_keys("<C-f>")
+  helpers.settle(child)
+  eq(child.fn.mode(), "c")
+  type("kouho<CR>")
+  helpers.settle(child)
+  eq(helpers.buffer(child), { "こうほ" })
+end
+
+T["registers word when markerHenkan is empty string (#55)"] = function()
+  child.lua([[require("skkeleton.config").set({ markerHenkan = "", markerHenkanSelect = "" })]])
+  enable()
+  type("Ka<Space>")
+  type("ka<CR>")
+  helpers.settle(child)
+  eq(helpers.buffer(child), { "か" })
+  local content = user_dictionary()
+  eq(content:find("か /か/", 1, true) ~= nil, true)
 end
 
 return T

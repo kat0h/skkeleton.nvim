@@ -23,5 +23,7 @@ for _, name in ipairs({ "enable", "disable", "toggle" }) do
   end, { desc = "skkeleton " .. name })
 end
 
+require("skkeleton.paste").init()
+
 -- 'iminsert' の lmap が空だと enable が失敗することがあるため、ダミーを置く
 vim.cmd("lnoremap <Plug>(skkeleton-dummy) :")

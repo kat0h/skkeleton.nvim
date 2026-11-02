@@ -41,16 +41,121 @@ function M.show_candidates(lines, meta)
   require("skkeleton.popup").set(lines, meta)
 end
 
-local in_input_depth = 0
+---@class skkeleton.InputFrame
+---@field context skkeleton.Context 退避した Context
+---@field buf integer 呼び出し時のバッファ
+---@field win integer 呼び出し時のウィンドウ
+---@field cursor integer[] 呼び出し時のカーソル位置
+---@field virtualedit string 呼び出し時の virtualedit
+
+---@type skkeleton.InputFrame[]
+local input_stack = {}
 
 ---@return boolean
 function M.is_in_input()
-  return in_input_depth > 0
+  return #input_stack > 0
 end
 
 ---@return integer
 function M.in_input_depth()
-  return in_input_depth
+  return #input_stack
+end
+
+local input_guard_group = vim.api.nvim_create_augroup("skkeleton-host-input", { clear = true })
+
+---スタックのトップにある文脈（ウィンドウ）を WinEnter で守る。スタックが空なら守りを解除する
+---@param frame skkeleton.InputFrame?
+local function setup_input_guard(frame)
+  vim.api.nvim_clear_autocmds({ group = input_guard_group })
+  if not frame then
+    return
+  end
+  vim.api.nvim_create_autocmd("WinEnter", {
+    group = input_guard_group,
+    callback = function()
+      vim.schedule(function()
+        local top = input_stack[#input_stack]
+        if top ~= frame then
+          return
+        end
+        if vim.fn.getcmdwintype() ~= "" then
+          return
+        end
+        local cur = vim.api.nvim_get_current_win()
+        if vim.api.nvim_win_is_valid(frame.win) and cur ~= frame.win then
+          pcall(vim.api.nvim_set_current_win, frame.win)
+        end
+      end)
+    end,
+  })
+end
+
+---@param win integer
+---@param buf integer
+---@return skkeleton.InputFrame
+local function push_input_frame(win, buf)
+  local store = require("skkeleton.store")
+  local map = require("skkeleton.map")
+
+  local frame = {
+    context = store.context(),
+    buf = buf,
+    win = win,
+    cursor = vim.api.nvim_win_get_cursor(win),
+    virtualedit = vim.o.virtualedit,
+  }
+
+  table.insert(input_stack, frame)
+
+  -- 行末の挿入位置（col == #line）で input() に入ってもカーソルが1文字左へ戻らないよう virtualedit=all にする
+  vim.o.virtualedit = "all"
+
+  -- cmdline のマッピングを退避
+  map.save("c")
+
+  -- このフレームのウィンドウを守る WinEnter を設定
+  setup_input_guard(frame)
+
+  return frame
+end
+
+---@param frame skkeleton.InputFrame
+local function pop_input_frame(frame)
+  local store = require("skkeleton.store")
+  local map = require("skkeleton.map")
+
+  for i = #input_stack, 1, -1 do
+    if input_stack[i] == frame then
+      table.remove(input_stack, i)
+      break
+    end
+  end
+
+  -- 1 つ前のフレーム（あれば）の守りに戻す。スタックが空なら守りを解除する
+  local prev = input_stack[#input_stack]
+  setup_input_guard(prev)
+
+  if vim.api.nvim_win_is_valid(frame.win) and vim.api.nvim_get_current_win() ~= frame.win then
+    pcall(vim.api.nvim_set_current_win, frame.win)
+  end
+  vim.o.virtualedit = frame.virtualedit
+  if vim.api.nvim_win_is_valid(frame.win) then
+    pcall(vim.api.nvim_win_set_cursor, frame.win, frame.cursor)
+  end
+
+  pcall(vim.api.nvim_buf_del_keymap, frame.buf, "c", "<Esc>")
+  pcall(vim.api.nvim_buf_del_keymap, frame.buf, "c", "<C-g>")
+  map.restore_mode(frame.buf, "c")
+
+  doautocmd("skkeleton-enable-pre")
+  -- skkeleton のモードに戻す
+  map.map()
+  vim.g["skkeleton#enabled"] = true
+  vim.cmd("redrawstatus")
+  -- 退避した Context とモードを戻す
+  store.set_context(frame.context)
+  require("skkeleton.mode").mode_change(frame.context, frame.context.mode)
+  doautocmd("skkeleton-enable-post")
 end
 
 -- 辞書登録の入力。取り消しなら nil か ""
@@ -60,34 +165,15 @@ end
 function M.input(prompt)
   local store = require("skkeleton.store")
   local map = require("skkeleton.map")
-  local ctx = store.context()
-  local buf = vim.api.nvim_get_current_buf()
-  local win = vim.api.nvim_get_current_win()
-  local saved_cursor = vim.api.nvim_win_get_cursor(win)
-  local saved_ve = vim.o.virtualedit
 
   -- 辞書登録に入る前に補完メニューや候補ポップアップを閉じる
   require("skkeleton.popup").close()
   require("skkeleton.completion").hide()
 
-  -- 行末の挿入位置（col == #line）で input() に入ってもカーソルが1文字左へ戻らないよう virtualedit=all にする
-  vim.o.virtualedit = "all"
+  local win = vim.api.nvim_get_current_win()
+  local buf = vim.api.nvim_get_current_buf()
+  local frame = push_input_frame(win, buf)
 
-  -- cmdline のマッピングを退避して、<Esc> と <C-g> では取り消す
-  map.save("c")
-
-  -- 入れ子の登録が終わるときに外側の登録の WinEnter も消えないよう、入力ごとに別のグループにする
-  local input_group = vim.api.nvim_create_augroup("skkeleton-host-input-" .. (in_input_depth + 1), { clear = true })
-  vim.api.nvim_create_autocmd("WinEnter", {
-    group = input_group,
-    callback = function()
-      if vim.api.nvim_win_is_valid(win) and vim.api.nvim_get_current_win() ~= win then
-        pcall(vim.api.nvim_set_current_win, win)
-      end
-    end,
-  })
-
-  in_input_depth = in_input_depth + 1
   local ok, res = pcall(function()
     store.init_context()
     vim.api.nvim_create_autocmd("CmdlineEnter", {
@@ -95,7 +181,7 @@ function M.input(prompt)
       callback = function()
         map.map()
         for _, k in ipairs({ "<Esc>", "<C-g>" }) do
-          vim.api.nvim_buf_set_keymap(buf, "c", k, "__skkeleton_return__<CR>", { noremap = true, silent = true })
+          vim.api.nvim_buf_set_keymap(frame.buf, "c", k, "__skkeleton_return__<CR>", { noremap = true, silent = true })
         end
       end,
     })
@@ -109,33 +195,25 @@ function M.input(prompt)
   then
     pcall(vim.fn.histdel, "@", -1)
   end
-  in_input_depth = in_input_depth - 1
-  pcall(vim.api.nvim_del_augroup_by_id, input_group)
 
-  if vim.api.nvim_win_is_valid(win) and vim.api.nvim_get_current_win() ~= win then
-    pcall(vim.api.nvim_set_current_win, win)
-  end
-  vim.o.virtualedit = saved_ve
-  if vim.api.nvim_win_is_valid(win) then
-    pcall(vim.api.nvim_win_set_cursor, win, saved_cursor)
-  end
-
-  pcall(vim.api.nvim_buf_del_keymap, buf, "c", "<Esc>")
-  pcall(vim.api.nvim_buf_del_keymap, buf, "c", "<C-g>")
-  map.restore_mode(buf, "c")
-
-  doautocmd("skkeleton-enable-pre")
-  -- skkeleton のモードに戻す
-  map.map()
-  vim.g["skkeleton#enabled"] = true
-  vim.cmd("redrawstatus")
-  -- 退避した Context とモードを戻す
-  store.set_context(ctx)
-  require("skkeleton.mode").mode_change(ctx, ctx.mode)
-  doautocmd("skkeleton-enable-post")
+  pop_input_frame(frame)
 
   if not ok then
     error(res, 0)
+  end
+  if type(res) == "string" then
+    local options = require("skkeleton.config").options
+    local mh = options.markerHenkan
+    local ms = options.markerHenkanSelect
+    if
+      res:find("▽", 1, true)
+      or res:find("▼", 1, true)
+      or (mh and mh ~= "" and res:find(mh, 1, true))
+      or (ms and ms ~= "" and res:find(ms, 1, true))
+      or res:find("__skkeleton_return__", 1, true)
+    then
+      return ""
+    end
   end
   return res
 end

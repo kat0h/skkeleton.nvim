@@ -454,6 +454,12 @@ setUndoPoint                                   *skkeleton-config-setUndoPoint*
 	(既定値: true)
 	真にすると、変換確定時にアンドゥポイント（|<C-g>u|）を設定します。
 
+setUndoPointOnPaste                     *skkeleton-config-setUndoPointOnPaste*
+	(既定値: true)
+	真にすると、skkeleton が有効な挿入モードでの貼り付け（|vim.paste()| を
+	通る操作）の直前にアンドゥを区切ります。貼り付けた文字だけを一度の
+	アンドゥで取り消せるようになります。
+
 showCandidatesCount                     *skkeleton-config-showCandidatesCount*
 	(既定値: 4)
 	変換候補をポップアップ一覧で表示するまでに、インラインで 1 つずつ表示
@@ -797,6 +803,39 @@ SkkeletonPreedit                                         *hl-SkkeletonPreedit*
 >lua
     vim.api.nvim_set_hl(0, "SkkeletonPreedit", { underline = true })
 <
+SkkeletonMarkerHenkan                               *hl-SkkeletonMarkerHenkan*
+	変換の読みを入力している間の印（|skkeleton-config-markerHenkan|、既定は
+	`▽`）に使用します。既定では `Special` にリンクします。
+SkkeletonMarkerSelect                               *hl-SkkeletonMarkerSelect*
+	候補を選んでいる間の印（|skkeleton-config-markerHenkanSelect|、既定は
+	`▼`）に使用します。既定では `Type` にリンクします。
+SkkeletonOkuri                                             *hl-SkkeletonOkuri*
+	送り仮名の部分（`*` とそのあとの文字）に使用します。既定では
+	`Identifier` にリンクします。
+SkkeletonRomaji                                           *hl-SkkeletonRomaji*
+	まだかなになっていない打ちかけのローマ字に使用します。既定では
+	`Comment` にリンクします。
+SkkeletonAnnotation                                   *hl-SkkeletonAnnotation*
+	候補をその場で選んでいる間（候補のポップアップが出る前）に、候補の後ろ
+	に出す注釈（`;` のあとの部分）に使用します。既定では `Comment` にリン
+	クします。
+
+SkkeletonPopupKey                                       *hl-SkkeletonPopupKey*
+	候補のポップアップで、候補を選ぶキー（`a:` など）に使用します。既定
+	では `Special` にリンクします。
+SkkeletonPopupCandidate                           *hl-SkkeletonPopupCandidate*
+	候補のポップアップで、候補の語に使用します。既定では `NormalFloat` に
+	リンクします。
+SkkeletonPopupAnnotation                         *hl-SkkeletonPopupAnnotation*
+	候補のポップアップで、注釈に使用します。既定では `Comment` にリンクし
+	ます。
+SkkeletonPopupFooter                                 *hl-SkkeletonPopupFooter*
+	候補のポップアップの枠の下に出す、何番目から何番目かと候補の数の表示に
+	使用します。既定では `FloatFooter` にリンクします。
+
+	どれも既定の定義は `default = true` なので、カラースキームや設定で先に
+	定義したものが使われます。
+
 SkkeletonIndicatorEiji                             *hl-SkkeletonIndicatorEiji*
 SkkeletonIndicatorHira                             *hl-SkkeletonIndicatorHira*
 SkkeletonIndicatorKata                             *hl-SkkeletonIndicatorKata*

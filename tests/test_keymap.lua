@@ -1,4 +1,6 @@
--- keymap_test.ts（`skkeleton#handle` を通さず handle_key を直接呼ぶ）
+-- Ported from skkeleton (denops/skkeleton/keymap_test.ts)
+-- Copyright (c) 2021 kuuote, zlib license (see LICENSES/skkeleton.txt)
+-- Modified for skkeleton.nvim: rewritten for mini.test.
 local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 local T, child = helpers.child_set()
@@ -74,6 +76,7 @@ T["register errors"] = function()
   eq(child.lua_get([[select(2, pcall(keymap.register, "input", "a", "nothing"))]]), "unknown function: nothing")
 end
 
+-- upstream: "send multiple keys into handleKey"
 T["send multiple keys into handle_key"] = function()
   init()
   eq(child.lua_get([[shown({ "W", "a", "r", "e" })]]), "▽われ")
@@ -124,6 +127,41 @@ T["handle_key rejects illegal state"] = function()
   init()
   child.lua([[ctx = Context.new(); ctx.state.type = "escape"]])
   eq(child.lua_get([[select(2, pcall(keymap.handle_key, ctx, "a"))]]), "Illegal State: escape")
+end
+
+T["longer kanatable entry takes precedence over keymap function (#42)"] = function()
+  init()
+  child.lua([[
+    local kana = require("skkeleton.kana")
+    kana.register("rom", {
+      z = { "ab", "" },
+      ["z "] = { "　", "" },
+      [" "] = { " ", "" },
+    })
+    keymap.register("input", "<space>", "henkanFirst")
+    out = function(keys)
+      local c = Context.new()
+      press(c, keys)
+      return c.preedit:output("")
+    end
+  ]])
+  eq(child.lua_get([[out({ "z", "<Space>" })]]), "　")
+end
+
+T["kanatable space override allows conversion via keymap (#43)"] = function()
+  init()
+  child.lua([[
+    local kana = require("skkeleton.kana")
+    kana.register("rom", { [" "] = { "　", "" } })
+    ctx = Context.new()
+    press(ctx, { "a", "<Space>" })
+  ]])
+  eq(child.lua_get([[ctx.preedit:output("")]]), "あ　")
+  child.lua([[
+    ctx = Context.new()
+    press(ctx, { "A", "<Space>" })
+  ]])
+  eq(child.lua_get([[ctx:to_string()]]), "▼亜")
 end
 
 return T

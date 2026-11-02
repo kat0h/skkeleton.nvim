@@ -31,6 +31,7 @@ local function get_keymaps()
           ["<nl>"] = f.kakutei,
           ["<c-q>"] = f.hankatakana,
           [">"] = f.prefix,
+          ["<space>"] = f.henkanFirst,
         },
       },
       henkan = {
@@ -61,8 +62,17 @@ function M.handle_key(ctx, key)
   if options.debug then
     vim.notify("handleKey: " .. key, vim.log.levels.DEBUG)
   end
-  local func = keymap.map[key] or keymap.default
-  func(ctx, notation.to_key(key))
+  local char = notation.to_key(key)
+  local func = keymap.map[key]
+  -- 今の打ちかけとそのキーをつないだものがかなテーブルにあれば、キーマップより先にかなテーブルを使う (#42)
+  if func and ctx.state.type == "input" and ctx.state.feed ~= "" then
+    local state = ctx.state ---@type skkeleton.InputState
+    if state.table and state.table:node(state.feed .. char) then
+      func = nil
+    end
+  end
+  func = func or keymap.default
+  func(ctx, char)
 end
 
 -- state ("input"|"henkan") のキーマップに key を登録する。func は関数の登録名か関数。nil/false なら削除

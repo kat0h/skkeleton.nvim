@@ -1,4 +1,6 @@
--- kana_test.ts と、trie のかなテーブル（register / load_file / node）のテスト
+-- Ported from skkeleton (denops/skkeleton/kana_test.ts)
+-- Copyright (c) 2021 kuuote, zlib license (see LICENSES/skkeleton.txt)
+-- Modified for skkeleton.nvim: rewritten for mini.test.
 local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 local T, child = helpers.child_set()
@@ -194,6 +196,18 @@ T["load_file supports 3 columns and comma key"] = function()
   eq(child.lua_get([[kana.get_table():find(",")]]), { "、", "" })
   eq(child.lua_get([[kana.get_table():find("ka")]]), { "か", "" })
   eq(child.lua_get([[H.output("bba")]]), "っば")
+end
+
+T["function entry in kanatable does not duplicate following characters (#41)"] = function()
+  init()
+  child.lua([[
+    kana.register("rom", { z = "henkanFirst" })
+    ctx = require("skkeleton.context").new()
+    local input = require("skkeleton.function.input")
+    input.kana_input(ctx, "z")
+    input.kana_input(ctx, "&")
+  ]])
+  eq(child.lua_get([[ctx.preedit:output("")]]), "z&")
 end
 
 return T

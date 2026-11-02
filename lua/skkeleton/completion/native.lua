@@ -1,39 +1,35 @@
 -- skkeleton.nvim: Neovim 組み込み completefunc による補完
+local completion = require("skkeleton.completion")
+
 local M = {}
 
 ---@param findstart 1|0|string
 ---@param base string
 ---@return integer|table[]
 function M.completefunc(findstart, base)
-  local skkeleton = require("skkeleton")
   if findstart == 1 or findstart == "1" then
-    if not skkeleton.is_enabled() or skkeleton.get_prefix() == "" then
+    if not completion.can_complete() then
       return -3
     end
     local col = vim.api.nvim_win_get_cursor(0)[2]
     return col
   end
 
-  local sort = require("skkeleton.completion.sort")
-  local completions = skkeleton.get_completions()
-  local sorted = sort.sort_completions(completions, skkeleton.get_completion_ranks())
+  local common_items = completion.items()
   local items = {}
-  for _, item in ipairs(sorted) do
-    local cand = item.word
-    local word, annotation = cand:match("^([^;]*);(.*)$")
-    word = word or cand
+  for _, item in ipairs(common_items) do
     items[#items + 1] = {
-      word = word,
-      abbr = word,
+      word = item.word,
+      abbr = item.word,
       menu = item.kana,
-      info = annotation or "",
+      info = item.annotation or "",
       icase = 1,
       dup = 1,
       empty = 1,
       user_data = {
         skkeleton = {
           kana = item.kana,
-          word = cand,
+          word = item.raw,
         },
       },
     }

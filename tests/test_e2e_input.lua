@@ -159,6 +159,7 @@ T["a long line is not broken by textwidth"] = function()
   eq(helpers.buffer(child), { "あいうえおあいうえおあいうえお" })
 end
 
+-- upstream: "new line"
 T["indent is kept by a newline"] = function()
   child.o.autoindent = true
   child.type_keys("i")
@@ -429,6 +430,53 @@ T["折り返してスクロールした後に pre-edit をキャンセルして�
   eq(#marks, 0)
   local cur_winline = child.fn.winline()
   eq(cur_winline >= 1 and cur_winline <= 5, true)
+end
+
+T["kanatable with space mapped to fullwidth space still allows conversion (#43)"] = function()
+  child.lua([[
+    require("skkeleton").register_kanatable("rom", { [" "] = { "　", "" } })
+  ]])
+  start()
+  type("a<Space>")
+  eq(helpers.buffer(child), { "あ　" })
+  type("Kan<Space><C-j>")
+  eq(helpers.buffer(child), { "あ　缶" })
+end
+
+T["longer kanatable entry takes precedence over keymap function (#42)"] = function()
+  child.lua([[
+    require("skkeleton").register_kanatable("rom", {
+      z = { "ab", "" },
+      ["z "] = { "　", "" },
+    })
+    require("skkeleton").register_keymap("input", "<Space>", "henkanFirst")
+  ]])
+  start()
+  type("z<Space>")
+  eq(helpers.buffer(child), { "　" })
+end
+
+T["symbol after henkanFirst in kanatable is not duplicated (#41)"] = function()
+  child.lua([[
+    require("skkeleton").register_kanatable("rom", { z = "henkanFirst" })
+  ]])
+  start()
+  type("z&")
+  eq(helpers.buffer(child), { "z&" })
+end
+
+T["stale preedit: on_bytes detects line modification during pre-edit (#66)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "line1" })
+  start()
+  type("Kan")
+  eq(helpers.preedit(child), "▽かn")
+  -- 外部から現在行が書き換えられた場合
+  child.lua([[vim.api.nvim_buf_set_lines(0, 0, 1, false, { "modified" })]])
+  helpers.settle(child)
+  local marks =
+    child.lua_get([[vim.api.nvim_buf_get_extmarks(0, vim.api.nvim_get_namespaces()["skkeleton-preedit"], 0, -1, {})]])
+  eq(#marks, 0)
+  eq(helpers.preedit(child), "")
 end
 
 return T

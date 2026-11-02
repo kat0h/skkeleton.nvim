@@ -1,5 +1,6 @@
--- function/disable_test.ts と function/dictionary_test.ts のうち、UI が要らない部分
--- （enable/disable を通す部分と、cmdline のマッピングの確認は E2E で扱う）
+-- Ported from skkeleton (denops/skkeleton/function/disable_test.ts, denops/skkeleton/function/dictionary_test.ts)
+-- Copyright (c) 2021 kuuote, zlib license (see LICENSES/skkeleton.txt)
+-- Modified for skkeleton.nvim: rewritten for mini.test.
 local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 local T, child = helpers.child_set()
@@ -130,6 +131,40 @@ T["register_word confirms the input as the only candidate"] = function()
   eq(child.lua_get([[ctx.preedit:output("")]]), "穂毛hoge")
   eq(child.lua_get([[lib:get_henkan_result("okuriari", "ほげr")]]), { "穂毛" })
   eq(child.lua_get([[ctx.state.type]]), "input")
+end
+
+T["disable just after completion"] = function()
+  init()
+  child.lua([[
+    ctx = Context.new()
+    H.dispatch(ctx, ";hoge")
+    disable.disable(ctx)
+  ]])
+  eq(child.lua_get([[#H.called("disable")]]), 1)
+  eq(child.lua_get([[ctx.preedit:output("")]]), "ほげ")
+end
+
+T["Unregistered internal mapping"] = function()
+  child.cmd([[autocmd CmdlineEnter * ++once call feedkeys("\<Esc>", "t")]])
+  local res = child.lua_get([[(function()
+    local Context = require("skkeleton.context")
+    local state = require("skkeleton.state").initialize({})
+    state.type = "henkan"
+    state.mode = "okuriari"
+    state.okuri_feed = "hoge"
+    state.word = ""
+    state.candidates = {}
+    state.candidate_index = -1
+    local ctx = Context.new()
+    ctx.state = state
+    require("skkeleton.store").set_context(ctx)
+    require("skkeleton.function.dictionary").register_word(ctx)
+    local ctrlg = vim.fn.maparg("<C-g>", "c", false, true)
+    local esc = vim.fn.maparg("<Esc>", "c", false, true)
+    return { ctrlg = ctrlg, esc = esc }
+  end)()]])
+  eq(res.ctrlg, {})
+  eq(res.esc, {})
 end
 
 return T

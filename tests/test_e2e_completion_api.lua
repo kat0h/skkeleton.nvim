@@ -102,4 +102,14 @@ T["complete is one undo unit"] = function()
   eq(helpers.buffer(child), { "" })
 end
 
+T["get_completion_result returns numeral converted candidates (#50)"] = function()
+  child.lua([[
+    local store = require("skkeleton.store")
+    store.library():register_henkan_result("okurinasi", "#ばい", "#1倍")
+  ]])
+  enable()
+  type(";1ba")
+  eq(api("return require('skkeleton').get_completion_result()"), { { "1ばい", { "１倍" } } })
+end
+
 return T

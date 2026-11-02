@@ -154,6 +154,7 @@ W["follows the preedit wrapped onto the next screen line"] = function()
   wchild.type_keys("A")
   helpers.type(wchild, "<Plug>(skkeleton-enable)")
   helpers.type(wchild, "Kan")
+  helpers.settle(wchild)
   local r = rect(wchild)
   -- pre-edit ▽かn（6 桁）は 37 桁目から折り返して 2 行目に入る
   eq(r.cursor[1], 1)
@@ -290,6 +291,34 @@ T["follows cursor when moving inside tab under virtualedit (#39)"] = function()
   expect_follows()
   type("<Right>")
   eq(child.fn.screencol(), 4)
+  expect_follows()
+end
+
+T["follows cursor when returning from visual to insert (#47)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "line 1", "line 2", "line 3" })
+  start()
+  helpers.settle(child)
+
+  -- visual モードに入る（選択）
+  child.type_keys("<Esc>", "v")
+  helpers.settle(child)
+  eq(child.fn.mode(), "v")
+  eq(positions(), vim.NIL)
+
+  -- visual から c で insert に戻る際、ModeChanged 直後にカーソルが動いても
+  -- schedule された move() によって正しい位置に追従する (#47)
+  child.lua([[
+    vim.api.nvim_create_autocmd("ModeChanged", {
+      pattern = "v:i",
+      once = true,
+      callback = function()
+        vim.api.nvim_win_set_cursor(0, { 3, 4 })
+      end,
+    })
+  ]])
+  child.type_keys("c")
+  helpers.settle(child)
+  eq(child.fn.mode(), "i")
   expect_follows()
 end
 

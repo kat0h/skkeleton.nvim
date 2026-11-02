@@ -40,6 +40,7 @@ T["registers the most recent candidate first and removes duplicates"] = function
   )
 end
 
+-- upstream: "don't register empty candidate"
 T["does not register an empty candidate"] = function()
   eq(
     run([[
@@ -386,6 +387,31 @@ T["escapes candidates with slashes using (concat ...) on save and restores them 
       { "km/h;時速" },
       { "1/2;1/2の注釈" },
       { "GPL;http://www.gnu.org/licenses/gpl.ja.html" },
+    }
+  )
+end
+
+T["escapes candidates starting with (concat ...) on save and restores them on load (#53)"] = function()
+  eq(
+    run([[
+      local path = TMP .. "/user_concat_start"
+      local u = User.new()
+      u:load({ path = path })
+      u:register_henkan_result("okurinasi", "かんじ", '(concat "a")')
+      u:register_henkan_result("okurinasi", "てすと", '(concat "b");(concat "c")')
+      u:save()
+
+      local v = User.new()
+      v:load({ path = path })
+
+      return {
+        v:get_henkan_result("okurinasi", "かんじ"),
+        v:get_henkan_result("okurinasi", "てすと"),
+      }
+    ]]),
+    {
+      { '(concat "a")' },
+      { '(concat "b");(concat "c")' },
     }
   )
 end

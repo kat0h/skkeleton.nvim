@@ -1,4 +1,6 @@
--- function/henkan_test.ts と、候補の popup（showCandidates）
+-- Ported from skkeleton (denops/skkeleton/function/henkan_test.ts)
+-- Copyright (c) 2021 kuuote, zlib license (see LICENSES/skkeleton.txt)
+-- Modified for skkeleton.nvim: rewritten for mini.test.
 local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 local T, child = helpers.child_set()
@@ -45,6 +47,7 @@ T["henkan cancel"] = function()
   eq(shown(";henkan x"), "▽へんかん")
 end
 
+-- upstream: "fallback to kanaInput in henkanFirst"
 T["fallback to kana_input in henkan_first"] = function()
   init()
   local KanaTable = [[require("skkeleton.kana").KanaTable]]

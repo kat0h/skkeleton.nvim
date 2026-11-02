@@ -247,18 +247,16 @@ function User:load(opts)
 end
 
 local function escape_candidate_part(s)
-  local escaped = s:gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("/", "\\057"):gsub(";", "\\073")
+  local clean = s:gsub("\\073", ";")
+  local escaped = clean:gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("/", "\\057"):gsub(";", "\\073")
   return ('(concat "%s")'):format(escaped)
 end
 
--- 候補に "/" が含まれている場合、SKK 辞書のフォーマットが壊れないよう (concat "...") 形式にエンコードする
+-- 候補に "/" や語の中の ";" が含まれている場合、SKK 辞書のフォーマットが壊れないよう (concat "...") 形式にエンコードする (#49)
 ---@param cand string
 ---@return string
 local function encode_candidate(cand)
   if cand:sub(1, 1) == "[" and cand:sub(-1) == "]" then
-    return cand
-  end
-  if not cand:find("/", 1, true) then
     return cand
   end
   local word, note = cand:match("^([^;]*)(;.*)$")
@@ -267,14 +265,28 @@ local function encode_candidate(cand)
     note = nil
   end
 
+  local needs_escape = word:find("/", 1, true)
+    or word:find(";", 1, true)
+    or word:find("\\073", 1, true)
+    or vim.startswith(word, "(concat")
+    or (note and (note:find("/", 1, true) or vim.startswith(note:sub(2), "(concat")))
+  if not needs_escape then
+    return cand
+  end
+
   local new_word = word
-  if word:find("/", 1, true) then
+  if
+    word:find("/", 1, true)
+    or word:find(";", 1, true)
+    or word:find("\\073", 1, true)
+    or vim.startswith(word, "(concat")
+  then
     new_word = escape_candidate_part(word)
   end
 
   local new_note = ""
   if note then
-    if note:find("/", 1, true) then
+    if note:find("/", 1, true) or vim.startswith(note:sub(2), "(concat") then
       new_note = ";" .. escape_candidate_part(note:sub(2))
     else
       new_note = note

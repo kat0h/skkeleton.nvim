@@ -28,6 +28,7 @@ local function defaults()
     registerConvertResult = false,
     selectCandidateKeys = "asdfjkl",
     setUndoPoint = true,
+    setUndoPointOnPaste = true,
     showCandidatesCount = 4,
     skkServerHost = "127.0.0.1",
     skkServerPort = 1178,
@@ -138,6 +139,7 @@ local validators = {
     return keys
   end,
   setUndoPoint = of_type("boolean"),
+  setUndoPointOnPaste = of_type("boolean"),
   showCandidatesCount = of_type("number"),
   -- skkServer* と completionRankFile は v1 では使わない。upstream の設定を流用できるように受け付けるだけ
   skkServerHost = of_type("string"),

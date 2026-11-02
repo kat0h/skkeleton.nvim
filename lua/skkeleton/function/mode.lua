@@ -86,7 +86,7 @@ function M.katakana(ctx)
     end
     return
   end
-  convert_and_kakutei(ctx, hira_to_kata, st.converter == hira_to_kata)
+  convert_and_kakutei(ctx, hira_to_kata, st.converter ~= nil)
 end
 
 ---@param ctx skkeleton.Context

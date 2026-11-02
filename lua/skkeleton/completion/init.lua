@@ -133,6 +133,49 @@ function M.is_pending()
   return st.type == "input" and st.mode == "okurinasi" and st.henkan_feed ~= ""
 end
 
+--- 補完を出してよい状態か（skkeleton が有効で、insert モード、▽ の入力中で読みが空でない）
+---@return boolean
+function M.can_complete()
+  if not require("skkeleton").is_enabled() then
+    return false
+  end
+  return M.is_pending()
+end
+
+---@class skkeleton.CompletionItem
+---@field kana string 読み
+---@field word string 注釈を除いた単語
+---@field raw string 辞書の元の候補文字列
+---@field annotation? string 注釈
+
+--- ソート・注釈分離済みの共通補完項目一覧を返す
+---@return skkeleton.CompletionItem[]
+function M.items()
+  if not M.can_complete() then
+    return {}
+  end
+  local skkeleton = require("skkeleton")
+  local sort = require("skkeleton.completion.sort")
+  local candidate_mod = require("skkeleton.candidate")
+
+  local completions = skkeleton.get_completions()
+  local sorted = sort.sort_completions(completions, skkeleton.get_completion_ranks())
+
+  local items = {}
+  for _, entry in ipairs(sorted) do
+    local kana = entry.kana
+    local cand = entry.word
+    local word, annotation = candidate_mod.pair(cand)
+    items[#items + 1] = {
+      kana = kana,
+      word = word,
+      raw = cand,
+      annotation = (annotation and annotation ~= "") and annotation or nil,
+    }
+  end
+  return items
+end
+
 -- 利用者が providers に書いた skkeleton の source の id。書いていなければ nil
 ---@return string?
 local function provider_id()

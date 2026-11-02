@@ -1,4 +1,6 @@
--- config の既定値と検証（config.ts）
+-- Ported from skkeleton (denops/skkeleton/config_test.ts)
+-- Copyright (c) 2021 kuuote, zlib license (see LICENSES/skkeleton.txt)
+-- Modified for skkeleton.nvim: rewritten for mini.test.
 local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 local T, child = helpers.child_set()
@@ -26,6 +28,7 @@ T["defaults"] = function()
     registerConvertResult = false,
     selectCandidateKeys = "asdfjkl",
     setUndoPoint = true,
+    setUndoPointOnPaste = true,
     showCandidatesCount = 4,
     skkServerHost = "127.0.0.1",
     skkServerPort = 1178,

@@ -72,6 +72,7 @@ T["Fire autocmd for mode changed"] = function()
   eq(child.g.mode_actual, "hankata")
 end
 
+-- upstream: "mode change  at enable"
 T["mode change at enable"] = function()
   child.cmd([[autocmd User skkeleton-mode-changed let g:mode_actual = skkeleton#mode()]])
   enable()
@@ -473,6 +474,17 @@ I["transitioning directly to visual mode during pre-edit resets state and closes
   eq(ichild.g["skkeleton#enabled"], false)
   eq(helpers.preedit(ichild), "")
   eq(helpers.indicator(ichild), vim.NIL)
+end
+
+T["q in hankata pre-edit confirms as hiragana (#51)"] = function()
+  enable()
+  type("<C-q>")
+  eq(helpers.mode(child), "hankata")
+  type("Te")
+  eq(helpers.preedit(child), "▽ﾃ")
+  type("q")
+  eq(helpers.buffer(child), { "て" })
+  eq(helpers.preedit(child), "")
 end
 
 return T
