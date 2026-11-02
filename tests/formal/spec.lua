@@ -1366,4 +1366,13 @@ function M.is_known(name, keys, msg)
   end
 end
 
+-- ▽ の途中で <Insert> を押して置換モードに入ると、読みが確定されずに消える（#111。#56 の確定から <Insert> が外れている）
+M.known[#M.known + 1] = {
+  property = "unmapped: 未マップの特殊キーのあと、打った読みが黙って消えない",
+  match = function(keys)
+    return vim.tbl_contains(keys, "<Insert>")
+  end,
+  reason = "#111: ▽ の途中の <Insert> で置換モードに入ると、読みが確定されずに消える",
+}
+
 return M
