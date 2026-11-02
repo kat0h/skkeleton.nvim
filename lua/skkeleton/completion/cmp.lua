@@ -10,7 +10,7 @@ function source.new(opts)
 end
 
 function source:is_available()
-  return completion.options.enabled and completion.is_pending()
+  return completion.options.enabled and completion.can_complete()
 end
 
 function source:get_PositionEncodingKind()
@@ -32,34 +32,21 @@ function source:complete(params, callback)
     callback({ items = {}, isIncomplete = true })
     return
   end
-  local ok, result = pcall(function()
-    return require("skkeleton").get_completion_result()
-  end)
-  if not ok or not result then
-    callback({ items = {}, isIncomplete = true })
-    return
-  end
-  local skkeleton = require("skkeleton")
-  local sort = require("skkeleton.completion.sort")
-  local sorted = sort.sort_completions(result, skkeleton.get_completion_ranks())
-  local candidate_mod = require("skkeleton.candidate")
+  local common_items = completion.items()
   local items = {}
-  for idx, entry in ipairs(sorted) do
-    local kana = entry.kana
-    local cand = entry.word
-    local word, annotation = candidate_mod.pair(cand)
+  for idx, entry in ipairs(common_items) do
     local item = {
-      label = word,
-      detail = kana,
-      filterText = word,
+      label = entry.word,
+      detail = entry.kana,
+      filterText = entry.word,
       sortText = string.format("%06d", idx),
       dup = 1,
-      data = { skkeleton = true, kana = kana, word = cand },
+      data = { skkeleton = true, kana = entry.kana, word = entry.raw },
     }
-    if annotation and annotation ~= "" then
+    if entry.annotation then
       item.documentation = {
         kind = "plaintext",
-        value = annotation,
+        value = entry.annotation,
       }
     end
     items[#items + 1] = item

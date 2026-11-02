@@ -805,4 +805,40 @@ T["converter"]["complete applies converter when present on state"] = function()
   eq(helpers.preedit(child), "")
 end
 
+-- =========================================================================
+-- 9. Unified completion core: can_complete() and items() (#58, #64)
+-- =========================================================================
+T["core"] = MiniTest.new_set()
+
+T["core"]["can_complete returns true only in active insert with non-empty okurinasi pre-edit"] = function()
+  local initial = child.lua_get([[require("skkeleton.completion").can_complete()]])
+  eq(initial, false)
+
+  enable()
+  eq(child.lua_get([[require("skkeleton.completion").can_complete()]]), false)
+
+  type("Kanj")
+  eq(child.lua_get([[require("skkeleton.completion").can_complete()]]), true)
+end
+
+T["core"]["items returns structured items sharing candidates and annotations"] = function()
+  enable()
+  type("Kanj")
+
+  local items = child.lua_get([[require("skkeleton.completion").items()]])
+  eq(#items >= 3, true)
+  eq(items[1].kana, "かんじ")
+  eq(items[1].word, "漢字")
+  eq(items[1].raw, "漢字;kanji annotation")
+  eq(items[1].annotation, "kanji annotation")
+  eq(items[2].kana, "かんじ")
+  eq(items[2].word, "幹事")
+  eq(items[2].raw, "幹事;kanji secretary")
+  eq(items[2].annotation, "kanji secretary")
+  eq(items[3].kana, "かんじ")
+  eq(items[3].word, "感じ")
+  eq(items[3].raw, "感じ")
+  eq(items[3].annotation, nil)
+end
+
 return T

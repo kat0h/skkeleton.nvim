@@ -18,42 +18,33 @@ end
 
 -- ▽ の入力中だけ候補を返す
 function source:enabled()
-  return completion.options.enabled and completion.is_pending()
+  return completion.options.enabled and completion.can_complete()
 end
 
 ---@param ctx blink.cmp.Context
 ---@param callback fun(response: blink.cmp.CompletionResponse)
 function source:get_completions(ctx, callback)
-  local ok, result = pcall(function()
-    return require("skkeleton").get_completion_result()
-  end)
   local items = {}
-  if ok and completion.is_pending() then
+  if completion.can_complete() then
     -- pre-edit はバッファに無いので、blink のキーワードはカーソルの前の文字（ふつうは空）。
     -- 候補の filterText をそれに揃えて、絞り込みで落とされないようにする
     local keyword = ctx.get_keyword()
     local row, col = ctx.cursor[1] - 1, ctx.cursor[2]
     -- 何も挿入しない編集にして、auto_insert の試し挿入でバッファが変わらないようにする。確定は execute が行う
     local range = { start = { line = row, character = col }, ["end"] = { line = row, character = col } }
-    local skkeleton = require("skkeleton")
-    local sort = require("skkeleton.completion.sort")
-    local sorted = sort.sort_completions(result, skkeleton.get_completion_ranks())
-    local candidate_mod = require("skkeleton.candidate")
-    for idx, entry in ipairs(sorted) do
-      local kana = entry.kana
-      local cand = entry.word
-      local word, annotation = candidate_mod.pair(cand)
+    local common_items = completion.items()
+    for idx, entry in ipairs(common_items) do
       local item = {
-        label = word,
-        labelDetails = { description = kana },
+        label = entry.word,
+        labelDetails = { description = entry.kana },
         kind = TEXT_KIND,
         filterText = keyword,
         sortText = ("%06d"):format(idx),
         textEdit = { newText = "", range = range },
-        data = { skkeleton = true, kana = kana, word = cand },
+        data = { skkeleton = true, kana = entry.kana, word = entry.raw },
       }
-      if annotation and annotation ~= "" then
-        item.documentation = { kind = "plaintext", value = annotation }
+      if entry.annotation then
+        item.documentation = { kind = "plaintext", value = entry.annotation }
       end
       items[#items + 1] = item
     end
