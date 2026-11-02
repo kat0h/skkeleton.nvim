@@ -27,6 +27,16 @@ local function strip_marker(lines)
   return ret
 end
 
+-- 共通の前置きのあとだけを conv したときに la になるか
+local function conv_tail(la, lb, conv)
+  local ca, cb = vim.fn.split(la, "\\zs"), vim.fn.split(lb, "\\zs")
+  local i = 1
+  while ca[i] ~= nil and cb[i] ~= nil and ca[i] == cb[i] do
+    i = i + 1
+  end
+  return table.concat(ca, "", 1, i - 1) .. conv(table.concat(cb, "", i)) == la
+end
+
 return {
   {
     -- 空の行に <Space> だけを入れた直後に、モードを替えるキー（q、L、<C-q>、<C-j> など）を打つと、
@@ -90,6 +100,80 @@ return {
       end
       local na, nb = r.a.steps[index + 1], r.b.steps[index + 1]
       return (na ~= nil and vim.deep_equal(na.popup, b.popup)) or (nb ~= nil and vim.deep_equal(nb.popup, a.popup))
+    end,
+  },
+  {
+    -- 送り仮名の入力中（▽く*て など）に、打ちかけの n を残したまま <Space> を打つ。
+    -- denops 版は <Space> がかなテーブルのエントリなので、n を「ん」にした時点で送り仮名が揃って変換が走り、
+    -- そのあと <Space> 自身がもう一度変換を呼んで、辞書登録の欄が 2 回続けて開く（取り消しを 2 回押す）。
+    -- Lua 版は <Space> をキーマップで受けるので（#67）、1 回しか開かない。登録の欄が 1 つで済む Lua 版のほうが自然
+    id = "okuri-pending-n-space-registers-once",
+    -- 差が出るのは、1 回目の取り消しのキーの段階（denops 版は 2 つめの欄に入ったまま）
+    applies = function(_, index, a, b, r)
+      local cancel, space, pa = r.a.steps[index], r.a.steps[index - 1], r.a.steps[index - 2]
+      if not (cancel and cancel.key == "<Esc>(cancel)" and space and space.key == "<Space>" and pa and pa.lines) then
+        return false
+      end
+      local line = pa.lines[pa.cursor[1]] or ""
+      return pa.vim == "i"
+        and line:find("*", 1, true) ~= nil
+        and line:sub(pa.cursor[2], pa.cursor[2]) == "n"
+        and a.vim == "i"
+        and (b.vim or ""):sub(1, 1) == "c"
+    end,
+  },
+  {
+    -- 打ちかけの子音（k、c、x など、かなに届いていないもの）を残したまま <Space> を打つ。
+    -- denops 版は <Space> がかなテーブルのエントリなので、揃わない打ちかけを捨てる（▽k が ▽ に戻る）。
+    -- Lua 版は <Space> をキーマップで受けるので（#67）、打ちかけをそのまま残す。打った文字が消えない Lua 版のほうが自然
+    id = "pending-consonant-kept-on-space",
+    applies = function(_, _, a, b)
+      if not (a.lines and b.lines and a.cursor and b.cursor and a.mode == b.mode and a.vim == b.vim) then
+        return false
+      end
+      local col = a.cursor[2]
+      local line = a.lines[a.cursor[1]] or ""
+      local ch = line:sub(col, col)
+      if not ch:match("^[a-z]$") or a.cursor[1] ~= b.cursor[1] or a.cursor[2] ~= b.cursor[2] + 1 then
+        return false
+      end
+      local lines = vim.deepcopy(a.lines)
+      lines[a.cursor[1]] = line:sub(1, col - 1) .. line:sub(col + 1)
+      return vim.deep_equal(lines, b.lines)
+    end,
+  },
+  {
+    -- 打ちかけの n のあとの L（全角モード）。denops 版は L を送り仮名の印（henkanPoint）として扱い、
+    -- 続く l でモードが外れる（enabled が false になる）。Lua 版は L をキーマップで受けるので（#67）、
+    -- n を「ん」にしてから全角モードに入る
+    id = "mode-key-after-pending-n",
+    applies = function(_, index, a, b, r)
+      local step = r.a.steps[index]
+      return step ~= nil and step.key == "L" and a.mode == "zenkaku" and vim.deep_equal(a.lines, b.lines)
+    end,
+  },
+  {
+    -- カタカナ、半角カタカナモードで ▽ の入力中に <C-g> で取り消したあとの入力。
+    -- denops 版は converter を落として、モードはカタカナのままひらがなが出る（q もカタカナに切り替わらない）。
+    -- Lua 版は #87 で直したので、カタカナが出て q でひらがなに戻る
+    id = "cancel-keeps-converter",
+    applies = function(_, index, a, b, r)
+      if b.mode ~= "kata" and b.mode ~= "hankata" then
+        return false
+      end
+      local cancelled = false
+      for i = math.max(index - 3, 1), index - 1 do
+        cancelled = cancelled or r.a.steps[i].key == "<C-g>"
+      end
+      if not cancelled or a.vim ~= b.vim or not (a.lines and b.lines) then
+        return false
+      end
+      if a.mode ~= b.mode then
+        return a.mode == "hira" and vim.deep_equal(a.lines, b.lines)
+      end
+      local conv = b.mode == "kata" and require("skkeleton.kana.hira_kata").hira_to_kata
+        or require("skkeleton.kana.hira_hankata").hira_to_hankata
+      return conv_tail(a.lines[1], b.lines[1], conv)
     end,
   },
 }
