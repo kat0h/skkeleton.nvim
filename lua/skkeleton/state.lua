@@ -83,49 +83,82 @@ function M.initialize(st, ignore)
   return st
 end
 
----@param st skkeleton.InputState
-local function input_state_to_string(st)
-  local ret = ""
-  if st.mode ~= "direct" then
-    ret = options.markerHenkan .. st.henkan_feed
+---@alias skkeleton.SegmentRole "marker"|"body"|"romaji"|"okuri"
+
+---@class skkeleton.Segment
+---@field text string
+---@field hl skkeleton.SegmentRole
+
+---@param segments skkeleton.Segment[]
+---@param text string
+---@param hl skkeleton.SegmentRole
+local function push_segment(segments, text, hl)
+  if text ~= "" then
+    segments[#segments + 1] = { text = text, hl = hl }
   end
-  if st.mode == "okuriari" then
-    if st.previous_feed then
-      if st.converter then
-        ret = st.converter(ret)
-      end
-      return ret .. st.feed .. "*"
-    end
-    ret = ret .. "*" .. st.okuri_feed
-  end
-  if st.converter then
-    ret = st.converter(ret)
-  end
-  return ret .. st.feed
 end
 
----@param st skkeleton.HenkanState
----@return string
-function M.henkan_state_to_string(st)
-  local cand = candidate.modify(st.candidates[st.candidate_index + 1], st.affix) or "error"
-  local okuri = st.okuri_feed
-  if st.converter then
-    okuri = st.converter(okuri)
+-- input の pre-edit を色の役割つきの断片に分ける。converter はここだけでかける
+---@param st skkeleton.InputState
+---@return skkeleton.Segment[]
+local function input_segments(st)
+  local segments = {}
+  if st.mode == "direct" then
+    push_segment(segments, st.feed, "romaji")
+    return segments
   end
-  return options.markerHenkanSelect .. cand .. okuri
+  local function convert(s)
+    return st.converter and st.converter(s) or s
+  end
+  push_segment(segments, convert(options.markerHenkan), "marker")
+  push_segment(segments, convert(st.henkan_feed), "body")
+  if st.mode == "okuriari" then
+    if st.previous_feed then
+      push_segment(segments, st.feed, "romaji")
+      push_segment(segments, "*", "okuri")
+    else
+      push_segment(segments, convert("*" .. st.okuri_feed), "okuri")
+      push_segment(segments, st.feed, "romaji")
+    end
+  else
+    push_segment(segments, st.feed, "romaji")
+  end
+  return segments
+end
+
+-- henkan の pre-edit を色の役割つきの断片に分ける。注釈は render が足す
+---@param st skkeleton.HenkanState
+---@return skkeleton.Segment[]
+local function henkan_segments(st)
+  local segments = {}
+  local cand = candidate.modify(st.candidates and st.candidates[st.candidate_index + 1], st.affix) or "error"
+  push_segment(segments, options.markerHenkanSelect, "marker")
+  push_segment(segments, cand, "body")
+  push_segment(segments, st.converter and st.converter(st.okuri_feed) or st.okuri_feed, "okuri")
+  return segments
+end
+
+---@param st skkeleton.State
+---@return skkeleton.Segment[]
+function M.segments(st)
+  if st.type == "input" then
+    return input_segments(st)
+  elseif st.type == "henkan" then
+    return henkan_segments(st)
+  elseif st.type == "escape" then
+    return { { text = "\27", hl = "body" } }
+  end
+  return {}
 end
 
 ---@param st skkeleton.State
 ---@return string
 function M.to_string(st)
-  if st.type == "input" then
-    return input_state_to_string(st)
-  elseif st.type == "henkan" then
-    return M.henkan_state_to_string(st)
-  elseif st.type == "escape" then
-    return "\27"
+  local parts = {}
+  for i, segment in ipairs(M.segments(st)) do
+    parts[i] = segment.text
   end
-  return ""
+  return table.concat(parts)
 end
 
 return M

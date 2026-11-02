@@ -45,6 +45,25 @@ local function get_blink()
   return blink
 end
 
+-- 最後に開いた (読み, feed)。同じなら開き直さない
+local last_key ---@type string?
+-- skkeleton が blink のメニューを開いているか
+local shown = false
+
+local function hide(force)
+  last_key = nil
+  if not shown and not force then
+    return
+  end
+  shown = false
+  local blink = get_blink()
+  if blink then
+    pcall(blink.hide)
+  end
+end
+
+M.hide = hide
+
 -- 設定する。未知のキーや型が違う値があれば、何も反映せずにエラーにする
 ---@param opts? table
 function M.setup(opts)
@@ -73,13 +92,9 @@ function M.setup(opts)
   vim.api.nvim_create_autocmd("User", {
     group = group,
     pattern = { "skkeleton-enable-post", "skkeleton-disable-post" },
+    -- skkeleton が開いたものではないメニューも閉じるので、shown に関係なく hide を呼ぶ
     callback = function()
-      local blink = get_blink()
-      if blink then
-        pcall(blink.hide)
-      end
-      shown = false
-      last_key = nil
+      hide(true)
     end,
   })
 end
@@ -167,25 +182,6 @@ local function provider_id()
   end
   return nil
 end
-
--- 最後に開いた (読み, feed)。同じなら開き直さない
-local last_key ---@type string?
--- skkeleton が blink のメニューを開いているか
-local shown = false
-
-local function hide()
-  last_key = nil
-  if not shown then
-    return
-  end
-  shown = false
-  local blink = get_blink()
-  if blink then
-    pcall(blink.hide)
-  end
-end
-
-M.hide = hide
 
 -- User skkeleton-handled のたびに呼ばれる。メニューを開く、開き直す、閉じる
 function M.refresh()

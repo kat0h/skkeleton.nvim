@@ -239,6 +239,53 @@ T["no mappings are left after disabling"] = function()
   eq(child.lua_get([[#vim.api.nvim_buf_get_keymap(0, "i")]]), before)
 end
 
+-- #99: 退避の表を 2 つのバッファに持ったまま片方が消えても、残るバッファを戻して表を空にする
+T["restoring after a buffer is wiped leaves the other buffer restored (#99)"] = function()
+  -- 退避の表は map.lua の局所変数なので、upvalue から数を取る
+  local counts = function()
+    return child.lua_get([[(function()
+      local map = require("skkeleton.map")
+      local found = {}
+      for _, fn in ipairs({ map.restore, map.restore_mode }) do
+        local i = 1
+        while true do
+          local name, value = debug.getupvalue(fn, i)
+          if not name then
+            break
+          end
+          if name == "vault" or name == "funcs" then
+            found[name] = value
+          end
+          i = i + 1
+        end
+      end
+      return { vault = vim.tbl_count(found.vault or {}), funcs = vim.tbl_count(found.funcs or {}) }
+    end)()]])
+  end
+
+  child.lua([[
+    _G.a = vim.api.nvim_get_current_buf()
+    vim.cmd("inoremap <buffer> <F5> special_f5")
+    _G.b = vim.api.nvim_create_buf(true, false)
+    vim.api.nvim_buf_set_lines(_G.b, 0, -1, false, { "b" })
+    -- バッファを切り替えると無効になるので、buf_call でそれぞれ有効にする
+    for _, buf in ipairs({ _G.a, _G.b }) do
+      vim.api.nvim_buf_call(buf, function()
+        require("skkeleton.main").handle("enable", {})
+      end)
+    end
+    vim.api.nvim_buf_delete(_G.b, { force = true })
+  ]])
+  eq(counts(), { vault = 2, funcs = 2 })
+
+  child.lua([[require("skkeleton").disable()]])
+  eq(counts(), { vault = 0, funcs = 0 })
+  local map = child.lua_get([[vim.fn.maparg("<F5>", "i", false, true)]])
+  eq(map.buffer, 1)
+  eq(map.rhs, "special_f5")
+  eq(child.lua_get([[#vim.api.nvim_buf_get_keymap(_G.a, "i")]]), 1)
+end
+
 T["g:skkeleton#mapped_keys adds keys"] = function()
   child.g["skkeleton#mapped_keys"] = { "<F3>" }
   enable()

@@ -365,6 +365,20 @@ T["auto_trigger"]["calls hide when leaving okurinasi input via Space"] = functio
   eq(last, { "hide" })
 end
 
+T["auto_trigger"]["reopens the menu for the same reading after enable/disable events (#92)"] = function()
+  setup_blink_mock()
+  enable()
+  type("Kanj")
+
+  child.lua([[vim.api.nvim_exec_autocmds("User", { pattern = "skkeleton-disable-post" })]])
+  child.lua([[vim.api.nvim_exec_autocmds("User", { pattern = "skkeleton-enable-post" })]])
+  child.lua("_G.blink_calls = {}")
+
+  -- 同じ読みのまま描き直しても、last_key が消えていれば開き直す
+  child.lua([[vim.api.nvim_exec_autocmds("User", { pattern = "skkeleton-handled" })]])
+  eq(child.lua_get("_G.blink_calls[#_G.blink_calls]"), { "show", { providers = { "skkeleton" } } })
+end
+
 T["auto_trigger"]["calls hide when cancelling via C-g"] = function()
   setup_blink_mock()
   enable()
