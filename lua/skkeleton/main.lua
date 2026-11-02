@@ -8,6 +8,7 @@ local kana = require("skkeleton.kana")
 local keymap = require("skkeleton.keymap")
 local map = require("skkeleton.map")
 local candidate = require("skkeleton.candidate")
+local marker = require("skkeleton.marker")
 local mode_mod = require("skkeleton.mode")
 local notation = require("skkeleton.notation")
 local popup = require("skkeleton.popup")
@@ -87,25 +88,13 @@ local function commit_preedit()
   end
 end
 
-local function should_delete_hist(item)
-  if type(item) ~= "string" or item == "" then
-    return false
-  end
-  return item:find("▽", 1, true) ~= nil
-    or item:find("▼", 1, true) ~= nil
-    or item:find("__skkeleton_return__", 1, true) ~= nil
-end
-
 local function clean_history(hist_type)
   local types = { ":", "/", "@" }
   if hist_type and hist_type ~= "" then
     table.insert(types, 1, hist_type)
   end
   for _, ht in ipairs(types) do
-    local ok, item = pcall(vim.fn.histget, ht, -1)
-    if ok and should_delete_hist(item) then
-      pcall(vim.fn.histdel, ht, -1)
-    end
+    marker.drop_marker_history(ht)
   end
 end
 
