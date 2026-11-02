@@ -3,13 +3,14 @@
 -- Modified for skkeleton.nvim: rewritten in Lua. The kana table is a trie.
 local M = {}
 
--- かなテーブルの結果は { かな, 次の feed } か、function/ の関数
----@alias skkeleton.KanaResult string[]|fun(ctx: table, char: string)
+-- かなテーブルの結果は { かな, 次の feed }。変換などの関数はここには置かず、キーマップに置く (#67)
+---@alias skkeleton.KanaResult string[]
 
 -- 前方一致の件数と完全一致の結果を、キーの長さに比例する時間で引ける trie
 ---@class skkeleton.KanaTable
 ---@field root table
 ---@field map table<string, skkeleton.KanaResult>
+---@field kana_functions boolean? 既定の関数のキー（l q ; / L）をキーマップから効かせるテーブルか
 local KanaTable = {}
 KanaTable.__index = KanaTable
 M.KanaTable = KanaTable
@@ -68,19 +69,6 @@ function KanaTable:find(from)
   return self.map[from]
 end
 
--- pred(from, result) が真のものだけの新しいテーブル
----@param pred fun(from: string, result: skkeleton.KanaResult): boolean
----@return skkeleton.KanaTable
-function KanaTable:filter(pred)
-  local entries = {}
-  for from, result in pairs(self.map) do
-    if pred(from, result) then
-      entries[#entries + 1] = { from, result }
-    end
-  end
-  return KanaTable.new(entries)
-end
-
 -- 全エントリ（順不同）
 ---@return fun(): string?, skkeleton.KanaResult?
 function KanaTable:entries()
@@ -121,18 +109,10 @@ function M.get_table(name)
   return t
 end
 
--- 文字列は関数の登録名、配列は { かな, feed }、false/nil は削除（nil を返す）
+-- 配列は { かな, feed }、false/nil は削除（nil を返す）
 local function as_kana_result(result)
   local t = type(result)
-  if t == "string" then
-    local fn = require("skkeleton.function").functions[result]
-    if not fn then
-      error("function not found: " .. result, 0)
-    end
-    return fn
-  elseif t == "function" then
-    return result
-  elseif t == "table" and #result >= 1 then
+  if t == "table" and #result >= 1 then
     for _, v in ipairs(result) do
       if type(v) ~= "string" then
         error("Illegal result: " .. vim.inspect(result), 0)
@@ -164,6 +144,7 @@ local function inject(name, entries, create)
     end
   end
   if old then
+    merged.kana_functions = old.kana_functions
     for from, result in old:entries() do
       if not seen[from] then
         merged:insert(from, result)
@@ -173,7 +154,7 @@ local function inject(name, entries, create)
   t[name] = merged
 end
 
--- 大文字のキーは <s-x> に、文字列の結果は関数の登録名として解決する
+-- 大文字のキーは <s-x> にする
 ---@param name string
 ---@param raw table<string, any>
 ---@param create? boolean
