@@ -274,6 +274,7 @@ function M.init(force)
     end,
   })
   render.on_stale = check_stale
+  require("skkeleton.guard").attach()
   doautocmd("skkeleton-initialize-post")
 end
 
@@ -400,6 +401,24 @@ function handle_inner(func, opts)
   local pre = ctx:to_string()
   update_state_variable(pre)
   render.update(ctx, pre)
+end
+
+-- 未マップの特殊キーが来たときに、pre-edit を <Esc> と同じ形で確定する (#56)
+function M.commit_preedit()
+  handling_depth = handling_depth + 1
+  local ok, err = pcall(function()
+    M.init()
+    local ctx = store.context()
+    ctx.vim_mode = vim.api.nvim_get_mode().mode:sub(1, 1)
+    common_func.kakutei(ctx)
+    local pre = ctx:to_string()
+    update_state_variable(pre)
+    render.update(ctx, pre)
+  end)
+  handling_depth = handling_depth - 1
+  if not ok then
+    error(err, 0)
+  end
 end
 
 -- 補完で選んだ語をユーザー辞書に登録して、直前の候補にする
