@@ -435,7 +435,7 @@ T["C-f in dictionary input keeps cmdline mode when cmdwin cannot open (#54)"] = 
   eq(child.fn.mode(), "c")
   type("kouho<CR>")
   helpers.settle(child)
-  eq(helpers.buffer(child), { "kouho" })
+  eq(helpers.buffer(child), { "こうほ" })
 end
 
 T["registers word when markerHenkan is empty string (#55)"] = function()
