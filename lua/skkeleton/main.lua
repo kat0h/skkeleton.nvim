@@ -8,6 +8,7 @@ local kana = require("skkeleton.kana")
 local keymap = require("skkeleton.keymap")
 local map = require("skkeleton.map")
 local candidate = require("skkeleton.candidate")
+local marker = require("skkeleton.marker")
 local mode_mod = require("skkeleton.mode")
 local notation = require("skkeleton.notation")
 local popup = require("skkeleton.popup")
@@ -87,25 +88,13 @@ local function commit_preedit()
   end
 end
 
-local function should_delete_hist(item)
-  if type(item) ~= "string" or item == "" then
-    return false
-  end
-  return item:find("▽", 1, true) ~= nil
-    or item:find("▼", 1, true) ~= nil
-    or item:find("__skkeleton_return__", 1, true) ~= nil
-end
-
 local function clean_history(hist_type)
   local types = { ":", "/", "@" }
   if hist_type and hist_type ~= "" then
     table.insert(types, 1, hist_type)
   end
   for _, ht in ipairs(types) do
-    local ok, item = pcall(vim.fn.histget, ht, -1)
-    if ok and should_delete_hist(item) then
-      pcall(vim.fn.histdel, ht, -1)
-    end
+    marker.drop_marker_history(ht)
   end
 end
 
@@ -123,7 +112,10 @@ local function reset_if_stale(vm)
   if not render.is_stale(ctx, vm) then
     return false
   end
-  render.clean_stale(vm)
+  render.clear()
+  if vm == "c" then
+    cmdline.clean()
+  end
   mode_mod.initialize_state_with_abbrev(ctx, { "converter" })
   ctx.preedit:output("")
   popup.close()
@@ -282,6 +274,7 @@ function M.init(force)
     end,
   })
   render.on_stale = check_stale
+  require("skkeleton.guard").attach()
   doautocmd("skkeleton-initialize-post")
 end
 
@@ -298,7 +291,6 @@ end
 -- キーを state に流す。補完の確定など、先に流すキーがあれば返す
 ---@param opts table
 ---@param vim_mode string
----@return string?
 local function handle_keys(opts, vim_mode)
   local ctx = store.context()
   ctx.vim_mode = vim_mode:sub(1, 1)
@@ -321,7 +313,6 @@ end
 
 ---@param opts table
 ---@param vim_mode string
----@return string?
 local function enable(opts, vim_mode)
   local old = store.context()
   if vim_mode:sub(1, 1) == "R" then
@@ -329,7 +320,8 @@ local function enable(opts, vim_mode)
     return
   end
   if (old.state.type ~= "input" or old.state.mode ~= "direct") and opts.key then
-    return handle_keys(opts, vim_mode)
+    handle_keys(opts, vim_mode)
+    return
   end
   -- Context を作り直す前に設定する
   kana.set_current(options.kanaTable)
@@ -349,13 +341,13 @@ end
 
 ---@param opts table
 ---@param vim_mode string
----@return string?
 local function disable(opts, vim_mode)
   local ctx = store.context()
   local st = ctx.state
   -- <Plug>(skkeleton-disable) は key を持たないので、ここでは素通しにしない
   if (st.type ~= "input" or st.mode ~= "direct") and opts.key then
-    return handle_keys(opts, vim_mode)
+    handle_keys(opts, vim_mode)
+    return
   end
   ctx.vim_mode = vim_mode:sub(1, 1)
   disable_func.disable(ctx)
@@ -364,16 +356,18 @@ end
 -- func: "handleKey" | "enable" | "disable" | "toggle" | "setState"
 ---@param func string
 ---@param opts? table
+local handle_inner
+
 function M.handle(func, opts)
   handling_depth = handling_depth + 1
-  local ok, err = pcall(M.handle_inner, func, opts)
+  local ok, err = pcall(handle_inner, func, opts)
   handling_depth = handling_depth - 1
   if not ok then
     error(err, 0)
   end
 end
 
-function M.handle_inner(func, opts)
+function handle_inner(func, opts)
   M.init()
   opts = opts or {}
   local vim_mode = vim.api.nvim_get_mode().mode
@@ -386,19 +380,18 @@ function M.handle_inner(func, opts)
   -- 補完の後など pre-edit とバッファが合わなくなったときはリセットする
   reset_if_stale(short)
 
-  local prefix
   if func == "handleKey" then
-    prefix = handle_keys(opts, vim_mode)
+    handle_keys(opts, vim_mode)
   elseif func == "enable" or func == "setState" then
-    prefix = enable(opts, vim_mode)
+    enable(opts, vim_mode)
   elseif func == "disable" then
-    prefix = disable(opts, vim_mode)
+    disable(opts, vim_mode)
   elseif func == "toggle" then
     local disabled = vim.g["skkeleton#mode"] == "" or not vim.g["skkeleton#enabled"]
     if disabled then
-      prefix = enable(opts, vim_mode)
+      enable(opts, vim_mode)
     else
-      prefix = disable(opts, vim_mode)
+      disable(opts, vim_mode)
     end
   else
     error("Unsupported function: " .. tostring(func), 0)
@@ -407,7 +400,25 @@ function M.handle_inner(func, opts)
   ctx.vim_mode = ctx.vim_mode ~= "" and ctx.vim_mode or short
   local pre = ctx:to_string()
   update_state_variable(pre)
-  render.update(ctx, prefix, pre)
+  render.update(ctx, pre)
+end
+
+-- 未マップの特殊キーが来たときに、pre-edit を <Esc> と同じ形で確定する (#56)
+function M.commit_preedit()
+  handling_depth = handling_depth + 1
+  local ok, err = pcall(function()
+    M.init()
+    local ctx = store.context()
+    ctx.vim_mode = vim.api.nvim_get_mode().mode:sub(1, 1)
+    common_func.kakutei(ctx)
+    local pre = ctx:to_string()
+    update_state_variable(pre)
+    render.update(ctx, pre)
+  end)
+  handling_depth = handling_depth - 1
+  if not ok then
+    error(err, 0)
+  end
 end
 
 -- 補完で選んだ語をユーザー辞書に登録して、直前の候補にする
@@ -444,7 +455,7 @@ function M.complete(kana, word, kind)
     ctx:kakutei_with_undo_point(text)
     local pre = ctx:to_string()
     update_state_variable(pre)
-    render.update(ctx, nil, pre)
+    render.update(ctx, pre)
   end)
   handling_depth = handling_depth - 1
   if not ok then

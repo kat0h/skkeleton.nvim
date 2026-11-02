@@ -102,8 +102,6 @@ function M.get_preedit()
   return require("skkeleton.store").context():to_string()
 end
 
-M.get_pre_edit = M.get_preedit
-
 -- 今の読みと feed に合う補完の候補。{ { 読み, 候補の配列 }, ... }
 ---@return { [1]: string, [2]: string[] }[]
 function M.get_completion_result()
@@ -114,16 +112,9 @@ function M.get_completion_result()
   return require("skkeleton.store").library():get_completion_result(st.henkan_feed, st.feed)
 end
 
-M.get_completions = M.get_completion_result
-
 ---@return table<string, integer>
 function M.get_completion_ranks()
-  local store = require("skkeleton.store")
-  local lib = store.library()
-  if lib and lib.get_ranks then
-    return lib:get_ranks()
-  end
-  return {}
+  return require("skkeleton.store").library():get_ranks()
 end
 
 -- ユーザー辞書と補完ランクを保存する

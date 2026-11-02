@@ -3,21 +3,11 @@ local eq = MiniTest.expect.equality
 local T, child = helpers.child_set()
 
 -- 子の nvim でコードを動かす。共通の準備を前に付け、`...` に args が入る。return した値を返す
-local PRE = ([[
+local PRE = helpers.dict_pre(([[
 local skk = require("skkeleton.dictionary.skk")
 local db = require("skkeleton.dictionary.db")
 local TD = %q
-_G.TMP = _G.TMP or vim.fn.tempname()
-vim.fn.mkdir(_G.TMP, "p")
-local TMP = _G.TMP
-local function write(name, s)
-  local path = TMP .. "/" .. name
-  local f = assert(io.open(path, "wb"))
-  f:write(s)
-  f:close()
-  return path
-end
-]]):format(helpers.testdata)
+]]):format(helpers.testdata))
 
 local function run(code, ...)
   return child.lua(PRE .. code, { ... })

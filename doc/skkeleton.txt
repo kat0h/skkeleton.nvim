@@ -140,16 +140,12 @@ get_prefix()
 	現在の読み（▽ のあとのかな文字列）を返します。入力中でなければ空
 	文字列（`""`）を返します。
 
-                                                   *skkeleton.get_pre_edit()*
-                                                     *skkeleton.get_preedit()*
-get_pre_edit()
+                                                   *skkeleton.get_preedit()*
 get_preedit()
 	現在の pre-edit 文字列（例: `"▽かんj"`）を返します。未入力時は空文字
 	列（`""`）を返します。
 
-                                                *skkeleton.get_completions()*
                                           *skkeleton.get_completion_result()*
-get_completions()
 get_completion_result()
 	現在の読みと未変換入力に合致する補完候補の一覧を返します。返り値は
 	`{ { 読み, 候補の配列 }, ... }` 形式の配列です。

@@ -93,8 +93,8 @@ require("skkeleton").setup({
 外部の補完プラグインやスクリプトから利用できる API を提供しています。
 
 - `require("skkeleton").get_prefix()`: 現在の読み（かな）を取得
-- `require("skkeleton").get_pre_edit()` (`get_preedit()`): 現在の pre-edit 文字列を取得
-- `require("skkeleton").get_completions()` (`get_completion_result()`): 補完候補一覧を取得
+- `require("skkeleton").get_preedit()`: 現在の pre-edit 文字列を取得
+- `require("skkeleton").get_completion_result()`: 補完候補一覧を取得
 - `require("skkeleton").get_completion_ranks()`: 候補のランクテーブルを取得
 - `require("skkeleton").complete(kana, word)`: 候補を確定してバッファに挿入し、辞書とランクに登録
 

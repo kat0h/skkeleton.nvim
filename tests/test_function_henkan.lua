@@ -7,22 +7,15 @@ local T, child = helpers.child_set()
 
 local function init()
   child.lua([[
-    H = require("core_helpers")
-    lib = H.setup_library()
+    require("core_helpers").init_core({ spy_host = true })
     lib:register_henkan_result("okurinasi", "へんかん", "返還")
     lib:register_henkan_result("okurinasi", "へんかん", "変換")
     lib:register_henkan_result("okuriari", "おくr", "送")
     lib:register_henkan_result("okuriari", "えらn", "選")
     lib:register_henkan_result("okuriari", "うたがt", "疑")
     lib:register_henkan_result("okuriari", "うたがc", "疑")
-    Context = require("skkeleton.context")
     henkan = require("skkeleton.function.henkan")
-    H.spy_host()
   ]])
-end
-
-local function shown(keys)
-  return child.lua_get("H.shown(...)", { keys })
 end
 
 T["okurinasi henkan"] = function()
@@ -36,15 +29,15 @@ end
 
 T["okuriari henkan"] = function()
   init()
-  eq(shown(";oku;ri"), "▼送り")
-  eq(shown(";era;nde"), "▼選んで")
-  eq(shown(";utaga;tte"), "▼疑って")
-  eq(shown(";utaga;ccha"), "▼疑っちゃ")
+  eq(helpers.core_output(child, ";oku;ri", { shown = true }), "▼送り")
+  eq(helpers.core_output(child, ";era;nde", { shown = true }), "▼選んで")
+  eq(helpers.core_output(child, ";utaga;tte", { shown = true }), "▼疑って")
+  eq(helpers.core_output(child, ";utaga;ccha", { shown = true }), "▼疑っちゃ")
 end
 
 T["henkan cancel"] = function()
   init()
-  eq(shown(";henkan x"), "▽へんかん")
+  eq(helpers.core_output(child, ";henkan x", { shown = true }), "▽へんかん")
 end
 
 -- upstream: "fallback to kanaInput in henkanFirst"
@@ -62,18 +55,18 @@ end
 T["no candidates: input state returns when nothing is registered"] = function()
   init()
   -- 辞書登録を取り消すと、変換前の状態に戻る
-  eq(shown(";hoge "), "▽ほげ")
+  eq(helpers.core_output(child, ";hoge ", { shown = true }), "▽ほげ")
   eq(child.lua_get([[#H.called("input")]]), 1)
 end
 
 T["register word prompt"] = function()
   init()
   child.lua([[H.ret.input = "穂毛"]])
-  eq(shown(";hoge "), "")
+  eq(helpers.core_output(child, ";hoge ", { shown = true }), "")
   eq(child.lua_get([[H.called("input")[1][2] ]]), "[辞書登録] ほげ: ")
   -- 登録した候補が確定して、辞書に入る
   eq(child.lua_get([[lib:get_henkan_result("okurinasi", "ほげ")]]), { "穂毛" })
-  eq(shown(";hoge "), "▼穂毛")
+  eq(helpers.core_output(child, ";hoge ", { shown = true }), "▼穂毛")
   -- 送り仮名ありでは * と送り仮名がプロンプトに入る
   child.lua([[H.calls = {}; H.output(";ho;ge")]])
   eq(child.lua_get([[H.called("input")[1][2] ]]), "[辞書登録] ほ*げ: ")
