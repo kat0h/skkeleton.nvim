@@ -488,4 +488,30 @@ T["q in hankata pre-edit confirms as hiragana (#51)"] = function()
   eq(helpers.preedit(child), "")
 end
 
+T["<C-g> in kata mode keeps the converter (#87)"] = function()
+  enable()
+  type("q")
+  eq(helpers.mode(child), "kata")
+  type("<C-g>")
+  eq(helpers.mode(child), "kata")
+  type("A")
+  eq(helpers.preedit(child), "▽ア")
+  type("q")
+  eq(helpers.buffer(child), { "あ" })
+  eq(helpers.preedit(child), "")
+end
+
+T["<C-g> in hankata mode keeps the converter (#87)"] = function()
+  enable()
+  type("<C-q>")
+  eq(helpers.mode(child), "hankata")
+  type("<C-g>")
+  eq(helpers.mode(child), "hankata")
+  type("A")
+  eq(helpers.preedit(child), "▽ｱ")
+  type("q")
+  eq(helpers.buffer(child), { "あ" })
+  eq(helpers.preedit(child), "")
+end
+
 return T

@@ -236,10 +236,6 @@ local function global_dictionaries(cfg)
   return out
 end
 
-local function source_names(cfg)
-  return cfg.sources or { "skk_dictionary" }
-end
-
 local function warn(msg)
   vim.notify("skkeleton: " .. msg, vim.log.levels.WARN)
 end
@@ -288,20 +284,10 @@ function M.load(cfg)
   end
 
   local dicts = {}
-  local globals_done = false
-  for _, name in ipairs(source_names(cfg)) do
-    if name == "skk_dictionary" then
-      if not globals_done then
-        globals_done = true
-        for _, entry in ipairs(global_dictionaries(cfg)) do
-          local dict = open_global(entry, cfg)
-          if dict then
-            dicts[#dicts + 1] = dict
-          end
-        end
-      end
-    else
-      warn(("Invalid source name: %s"):format(tostring(name)))
+  for _, entry in ipairs(global_dictionaries(cfg)) do
+    local dict = open_global(entry, cfg)
+    if dict then
+      dicts[#dicts + 1] = dict
     end
   end
   return Library.new(dicts, user, cfg)
@@ -314,11 +300,9 @@ end
 function M.prepare(cfg, on_done)
   cfg = cfg or {}
   local entries = {}
-  if vim.tbl_contains(source_names(cfg), "skk_dictionary") then
-    for _, e in ipairs(global_dictionaries(cfg)) do
-      if not is_json(e.path) and pcall(skk.check_supported, e.path) then
-        entries[#entries + 1] = e
-      end
+  for _, e in ipairs(global_dictionaries(cfg)) do
+    if not is_json(e.path) and pcall(skk.check_supported, e.path) then
+      entries[#entries + 1] = e
     end
   end
   local dir = db.cache_dir(cfg.databasePath)

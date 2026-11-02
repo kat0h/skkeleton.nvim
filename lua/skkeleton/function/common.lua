@@ -73,12 +73,13 @@ function M.cancel(ctx)
   if st.type == "input" and st.mode == "direct" and ctx.vim_mode == "c" then
     ctx:kakutei("\x03")
   end
+  -- モードはそのままで状態だけを戻すので、カタカナなどの変換は残す (#87)
   if options.immediatelyCancel then
-    mode.initialize_state_with_abbrev(ctx)
+    mode.initialize_state_with_abbrev(ctx, { "converter" })
     return
   end
   if st.type == "input" then
-    mode.initialize_state_with_abbrev(ctx)
+    mode.initialize_state_with_abbrev(ctx, { "converter" })
   elseif st.type == "henkan" then
     ctx.state.type = "input"
   end

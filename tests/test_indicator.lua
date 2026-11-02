@@ -277,13 +277,15 @@ end
 
 T["hooks"]["setup を何度呼んでも 1 つしか出ない。設定は最後のものになる"] = function()
   setup({ eijiText = "A" })
+  local autocmds = #child.api.nvim_get_autocmds({ group = "skkeleton-indicator" })
+  eq(autocmds > 0, true)
   setup({ eijiText = "B" })
   setup({})
   child.type_keys("i")
   local f = floats()
   eq(#f, 1)
   eq(f[1].text, "Aa")
-  eq(#child.api.nvim_get_autocmds({ group = "skkeleton-indicator" }), 17)
+  eq(#child.api.nvim_get_autocmds({ group = "skkeleton-indicator" }), autocmds)
 end
 
 T["hooks"]["style = minimal / pill と border = rounded、winblend が反映される"] = function()

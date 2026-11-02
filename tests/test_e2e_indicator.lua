@@ -68,12 +68,38 @@ T["closes when the cursor moves from where it was shown"] = function()
   eq(positions(), vim.NIL)
 end
 
+T["closes when the window changes in insert (#85)"] = function()
+  child.cmd("vsplit")
+  child.cmd("wincmd p")
+  child.type_keys("i")
+  helpers.settle(child)
+  eq(positions() ~= nil, true)
+
+  -- insert のまま別のウィンドウへ移る。relative = "cursor" のままだと移った先へ動く
+  child.type_keys("<Cmd>wincmd w<CR>")
+  helpers.settle(child)
+  eq(positions(), vim.NIL)
+end
+
 T["closes when the preedit starts"] = function()
   start()
   eq(positions() ~= nil, true)
 
   type("K")
   eq(helpers.preedit(child) ~= "", true)
+  eq(positions(), vim.NIL)
+end
+
+T["keeps the insert preedit after <C-o>: <Esc> and does not show the indicator (#86)"] = function()
+  start()
+  type("K")
+  eq(helpers.preedit(child), "▽k")
+
+  -- <C-o> で cmdline に入って戻る。insert の pre-edit は残っている
+  type("<C-o>:<Esc>")
+  eq(child.fn.mode(), "i")
+  eq(helpers.preedit(child), "▽k")
+  eq(child.g["skkeleton#state"].preedit, "▽k")
   eq(positions(), vim.NIL)
 end
 
