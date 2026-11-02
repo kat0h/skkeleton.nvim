@@ -123,7 +123,9 @@ DB の形式 v1（`lua/skkeleton/dictionary/db.lua`）:
 ```lua
 require("skkeleton.indicator").setup(opts)  -- opts は skkeleton_indicator と同じキー（camelCase）。false で無効化
 ```
-インジケータは本体から切り離す。本体が公開する状態（`g:skkeleton#mode`、`g:skkeleton#enabled`、`g:skkeleton#state`）と User イベント（`skkeleton-mode-changed`、`skkeleton-enable-post`、`skkeleton-disable-post`、`skkeleton-handled`）だけを読み、`skkeleton.render` などを `require` しない。本体からインジケータを呼ぶのは `init.lua` の `setup` だけにする。今は本体から `move()` を呼んでいるところと、インジケータが `skkeleton.render` を読んでいるところが残っていて、#63 で消す。
+インジケータは本体から切り離す。本体が公開する状態（`g:skkeleton#mode`、`g:skkeleton#enabled`、`g:skkeleton#state`）と User イベント（`skkeleton-mode-changed`、`skkeleton-enable-post`、`skkeleton-disable-post`、`skkeleton-handled`）だけを読み、`skkeleton.render` などを `require` しない。本体からインジケータを呼ぶのは `init.lua` の `setup` だけにする。
+
+インジケータは出す位置を追いかけない。挿入・コマンドラインに入ったときと skkeleton のモードが変わったときに、そのときのカーソルの右下（`row`・`col`）に出す。入力が始まった（`g:skkeleton#state.preedit` が空でない）、出したときの位置からカーソルが動いた、`fadeOutMs` がたった、コマンドラインでは出したあとに `CmdlineChanged` が来た、のどれかで消す。モードが変わったとき pre-edit が残っていれば出さない。
 
 ### 公開インターフェース（UI、upstream と互換）
 - 変数: `g:skkeleton#enabled`、`g:skkeleton#mode`
@@ -131,7 +133,7 @@ require("skkeleton.indicator").setup(opts)  -- opts は skkeleton_indicator と�
 - `<Plug>(skkeleton-enable)`、`<Plug>(skkeleton-disable)`、`<Plug>(skkeleton-toggle)`（`i` / `c` / `t` モード）
 - Lua API: `require("skkeleton").setup(opts)`、`.enable()`、`.disable()`、`.toggle()`、`.mode()`、`.is_enabled()`、`.register_keymap(state, key, func)`、`.register_kanatable(name, tbl, create)`、`.register_kanatable_file(...)`、`.get_config()`、`.initialize()`、`.update_database(path, encoding, force)`
 - pre-edit 用 extmark の namespace は `skkeleton-preedit`、ハイライトグループは `SkkeletonPreedit`（既定では属性未設定）
-- `g:skkeleton#state`（`{ phase, henkanFeed }`）はキー処理（handle）のたびに更新する
+- `g:skkeleton#state`（`{ phase, henkanFeed, preedit }`）はキー処理（handle）のたびに更新する
 - `autoload/skkeleton.vim` にはステータスライン連携用の `skkeleton#mode()` と `skkeleton#is_enabled()` のみを配置する
 
 ### 描画フロー（render）

@@ -249,8 +249,7 @@ local function draw(text, chunks, annot)
   attach_buf(buf)
 end
 
--- いま出している pre-edit（注釈を含む）の文字列（カーソルがまだ指している行・列のときだけ。なければ ""）。
--- inline の virtual text は relative = "cursor" や screenpos() の位置に入らないので、インジケータが足す
+-- いま出している pre-edit（注釈を含む）の文字列（カーソルがまだ指している行・列のときだけ。なければ ""）
 ---@return string
 function M.preedit_text()
   if not mark or current_text == "" or not vim.api.nvim_buf_is_valid(mark.buf) then
@@ -264,12 +263,6 @@ function M.preedit_text()
     return ""
   end
   return current_text .. (current_annot or "")
-end
-
--- 上の文字列の表示幅
----@return integer
-function M.preedit_width()
-  return vim.fn.strdisplaywidth(M.preedit_text())
 end
 
 -- pre-edit が残っているのにバッファや cmdline がそれと合わなくなっているか
@@ -426,8 +419,6 @@ function M.finish()
     draw(current_text, current_chunks, current_annot)
     adjust_scroll()
     popup.open()
-    -- pre-edit の幅が変わったので、インジケータを画面上のカーソルに寄せ直す
-    require("skkeleton.indicator").move()
   elseif vm == "c" then
     M.clear()
     if current_cmd_text ~= "" then

@@ -661,6 +661,7 @@ g:skkeleton#state
 	- `phase`: 入力段階。`"input"`（直接入力）、`"input:okurinasi"`、
 	  `"input:okuriari"`、`"henkan"`、`"escape"` のいずれか。
 	- `henkanFeed`: 変換開始位置から入力された読みの文字列。
+	- `preedit`: 画面に出ている pre-edit の文字列。出ていなければ `""`。
 
                                                            *g:skkeleton#debug*
 g:skkeleton#debug
@@ -738,8 +739,7 @@ row ~
 col ~
 	既定値: 1
 	型: integer
-	カーソル位置（pre-edit 表示中はその末尾）を基準とした横方向のオフセッ
-	ト（列数）です。
+	カーソル位置を基準とした横方向のオフセット（列数）です。
 
 zindex ~
 	既定値: nil
@@ -750,9 +750,9 @@ zindex ~
 alwaysShown ~
 	既定値: true
 	型: boolean
-	真の場合は、挿入モード中に常にインジケータを表示します。偽の場合は、
-	SKK が有効なときのみ表示します（直接入力時の「英字」表示が出なくなりま
-	す）。
+	真の場合は、SKK が無効なときも挿入モードでインジケータを表示します。
+	偽の場合は、SKK が有効なときのみ表示します（直接入力時の「英字」表示
+	が出なくなります）。
 
 fadeOutMs ~
 	既定値: 3000

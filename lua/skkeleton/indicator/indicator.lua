@@ -14,6 +14,7 @@ local NAME = "skkeleton-indicator"
 ---@field timer uv.uv_timer_t
 ---@field winid integer[]
 ---@field group integer
+---@field opened_at? { buf: integer, row: integer, col: integer } 出したときのカーソル位置
 local Indicator = {}
 Indicator.__index = Indicator
 
@@ -27,19 +28,20 @@ function Indicator.new()
   }, Indicator)
   self.group = vim.api.nvim_create_augroup(NAME, {})
   local defs = {
-    { "InsertEnter", "*", self:method("open") },
+    { "InsertEnter", "*", self:method("sync") },
     { "InsertLeave", "*", self:method("close") },
-    { "CursorMovedI", "*", self:method("move") },
+    -- 出したときの位置から動いたら消す。文字が入ったときもここで気づく
+    { "CursorMovedI", "*", self:method("on_cursor_moved") },
     { "CmdlineEnter", "*", self:method("on_cmdline_enter") },
     { "CmdlineLeave", "*", self:method("on_cmdline_leave") },
-    { "TextChangedP", "*", self:method("move") },
-    { "CompleteChanged", "*", self:method("move") },
-    { "WinScrolled", "*", self:method("move") },
-    { "WinResized", "*", self:method("move") },
+    -- 出したあとの最初の変化で消す
+    { "CmdlineChanged", "*", self:method("on_cmdline_changed") },
     { "ModeChanged", "*", self:method("on_mode_changed") },
-    { "User", "skkeleton-mode-changed", self:method("update") },
-    { "User", "skkeleton-disable-post", self:method("update") },
-    { "User", "skkeleton-enable-post", self:method("update") },
+    { "User", "skkeleton-mode-changed", self:method("on_skkeleton_changed") },
+    { "User", "skkeleton-disable-post", self:method("on_skkeleton_changed") },
+    { "User", "skkeleton-enable-post", self:method("on_skkeleton_changed") },
+    -- 入力が始まったら消す
+    { "User", "skkeleton-handled", self:method("on_handled") },
     { "OptionSet", "background", self:method("refresh") },
     { "ColorScheme", "*", self:method("refresh") },
   }
@@ -149,9 +151,8 @@ function Indicator:border_highlight(winid, mode)
 end
 
 ---@param mode skkeleton.IndicatorMode
----@param for_open? boolean
 ---@return vim.api.keyset.win_config
-function Indicator:win_pos_config(mode, for_open)
+function Indicator:win_pos_config(mode)
   local border = self:border(mode)
   if Modes.is_cmdline() then
     local screen_col = vim.fn.getcmdscreenpos()
@@ -171,167 +172,15 @@ function Indicator:win_pos_config(mode, for_open)
       border = border,
     }
   end
-  local rect = self:insert_rect(mode, border)
-  if not rect then
-    -- 画面上の位置が分からないとき（ウィンドウが見えていないなど）
-    return {
-      relative = "cursor",
-      row = config.row,
-      col = config.col,
-      width = mode.width,
-      height = 1,
-      border = border,
-    }
-  end
+  -- pre-edit が無いときだけ出すので、カーソルの右下に置くだけでよい
   return {
-    relative = "editor",
-    row = rect[1],
-    col = rect[2],
+    relative = "cursor",
+    row = config.row,
+    col = config.col,
     width = mode.width,
     height = 1,
     border = border,
   }
-end
-
--- 2 つの矩形 { 行, 列, 高さ, 幅 } が重なるか
----@param a integer[]
----@param b integer[]
----@return boolean
-local function overlaps(a, b)
-  return a[1] < b[1] + b[3] and b[1] < a[1] + a[3] and a[2] < b[2] + b[4] and b[2] < a[2] + a[4]
-end
-
--- insert モードで、インジケータ（枠を含む）の左上の画面上の位置 { 行, 列 }（0 起点）を決める。
--- pre-edit の終わりの画面上の位置から row / col だけずらして置く。そこが画面に収まらないとき、
--- またはカーソルや pre-edit を隠すときは、隠さない側（下、上、左）へ移す。
--- relative = "cursor" は、カーソルがタブの上にあると最後のセルを基準にし、画面の端で押し戻され、
--- pre-edit の折り返しも知らないので、screenpos() から自分で数える
----@param mode skkeleton.IndicatorMode
----@param border skkeleton.IndicatorBorder?
----@return integer[]?
-function Indicator:insert_rect(mode, border)
-  local win = vim.api.nvim_get_current_win()
-  local cur = vim.api.nvim_win_get_cursor(win)
-  local line = vim.api.nvim_buf_get_lines(0, cur[1] - 1, cur[1], false)[1] or ""
-  local sp = vim.fn.screenpos(win, cur[1], math.min(cur[2], #line) + 1)
-  if sp.row == 0 then
-    return nil
-  end
-  local info = vim.fn.getwininfo(win)[1]
-  local text_left = info.wincol - 1 + info.textoff -- テキスト領域の左端（0 起点の画面の桁）
-  local text_w = info.width - info.textoff
-  local width = vim.fn.strdisplaywidth(require("skkeleton.render").preedit_text())
-  local row, rel = sp.row - 1, sp.col - 1 - text_left
-  -- Neovim 0.13+ では screenpos() が inline virtual text を含んだ後の位置を返す (#21, #47)
-  local sp_includes_preedit = false
-  if width > 0 then
-    if cur[2] > 0 then
-      local prev_byte = math.min(cur[2], #line)
-      local prev_sp = vim.fn.screenpos(win, cur[1], prev_byte)
-      if prev_sp.row > 0 then
-        local prev_char = vim.fn.strcharpart(line:sub(1, prev_byte), vim.fn.strchars(line:sub(1, prev_byte)) - 1, 1)
-        local prev_w = vim.fn.strdisplaywidth(prev_char)
-        if sp.row > prev_sp.row or (sp.row == prev_sp.row and sp.col > prev_sp.col + prev_w) then
-          sp_includes_preedit = true
-        end
-      end
-    elseif #line > 0 then
-      local first_sp = vim.fn.screenpos(win, cur[1], 1)
-      if first_sp.row > sp.row or first_sp.col > 1 then
-        sp_includes_preedit = true
-      end
-    elseif sp.row > 1 or sp.col > 1 then
-      sp_includes_preedit = true
-    end
-  end
-
-  -- pre-edit のセルの範囲 { 行, 列, 高さ, 幅 }。inline の virtual text は、全角文字も含めて
-  -- 1 桁ずつ次の画面の行へ折り返す（バッファの文字のように行末で詰めない）。
-  -- 行がちょうど右端まで埋まったとき、カーソルは次の画面の行の左端に出る
-  local occupied = {}
-  local wrap = vim.wo[win].wrap
-  local ccol, cursor_row
-  if sp_includes_preedit then
-    ccol = text_left + rel
-    cursor_row = row
-    -- 占有領域としてカーソルの手前を記録
-    occupied[#occupied + 1] = { cursor_row, math.max(text_left, ccol - width), 1, width }
-  else
-    local left = width
-    while left > 0 do
-      local n = wrap and math.min(left, text_w - rel) or left
-      occupied[#occupied + 1] = { row, text_left + rel, 1, n }
-      left = left - n
-      rel = rel + n
-      if wrap and rel >= text_w then
-        row, rel = row + 1, 0
-      end
-    end
-    -- カーソルのセル（pre-edit の直後）
-    ccol = text_left + rel
-    cursor_row = row
-  end
-  -- virtualedit でタブの途中や行末以降にカーソルが進んだ場合、
-  -- バッファ上の列は変わらないが getcurpos()[4] (coladd) に仮想列オフセットが入る (#39)。
-  -- ※ イベントハンドラ内では Neovim の再描画前のため screencol() は古い値を返す場合があるため、
-  --   sp.col + coladd から画面上の端末カーソル位置を求める。
-  local curpos = vim.fn.getcurpos(win)
-  local coladd = curpos[4] or 0
-  if width == 0 then
-    if coladd > 0 then
-      ccol = sp.col - 1 + coladd
-      cursor_row = sp.row - 1
-    end
-  else
-    -- virtualedit 設定時にカーソル直後がタブの場合、
-    -- Neovim は端末カーソルを pre-edit の後ろではなく先頭セル (sp.col) に描画する (#35)
-    local ve = vim.wo[win].virtualedit ~= "" and vim.wo[win].virtualedit or vim.o.virtualedit
-    local is_tab = cur[2] < #line and line:sub(cur[2] + 1, cur[2] + 1) == "\t"
-    local ve_active = ve:find("all") ~= nil or ve:find("insert") ~= nil
-    if is_tab and ve_active then
-      ccol = sp.col - 1
-      cursor_row = sp.row - 1
-    end
-  end
-  local cursor_cell = { cursor_row, ccol, 1, 1 }
-  local first_row = occupied[1] and occupied[1][1] or row
-
-  local b = (border ~= nil and border ~= "none" and border ~= "shadow") and 1 or 0
-  local h, w = 1 + 2 * b, mode.width + 2 * b
-  local bottom = vim.o.lines - math.max(1, vim.o.cmdheight)
-  local want = { cursor_row + config.row, ccol + config.col }
-  local function ok(r, c)
-    if r < 0 or c < 0 or r + h > bottom or c + w > vim.o.columns then
-      return false
-    end
-    local rect = { r, c, h, w }
-    if overlaps(rect, cursor_cell) then
-      return false
-    end
-    for _, o in ipairs(occupied) do
-      if overlaps(rect, o) then
-        return false
-      end
-    end
-    return true
-  end
-  local max_col = vim.o.columns - w
-  -- 先に下と上（右端なら画面に収まるところまで左へ寄せる）を試し、打った文字を隠す左側は最後にする
-  local rows = { want[1], cursor_row + 1, first_row - h, cursor_row - h }
-  for _, r in ipairs(rows) do
-    for _, c in ipairs({ want[2], math.min(want[2], max_col) }) do
-      if ok(r, c) then
-        return { r, c }
-      end
-    end
-  end
-  for _, r in ipairs({ cursor_row, cursor_row + 1, first_row - h }) do
-    if ok(r, ccol - w) then
-      return { r, ccol - w }
-    end
-  end
-  -- どこも空いていないときは、画面に収まるところへ寄せる
-  return { math.max(0, math.min(want[1], bottom - h)), math.max(0, math.min(want[2], max_col)) }
 end
 
 local function redraw_if_cmdline(winid)
@@ -359,7 +208,7 @@ function Indicator:open()
   local buf = vim.api.nvim_create_buf(false, true)
   vim.bo[buf].bufhidden = "wipe"
   self:set_text(buf, mode)
-  local win_cfg = vim.tbl_extend("force", self:win_pos_config(mode, true), {
+  local win_cfg = vim.tbl_extend("force", self:win_pos_config(mode), {
     style = "minimal",
     focusable = false,
     noautocmd = true,
@@ -368,100 +217,112 @@ function Indicator:open()
   local winid = vim.api.nvim_open_win(buf, false, win_cfg)
   self:border_highlight(winid, mode)
   table.insert(self.winid, 1, winid)
+  local cur = vim.api.nvim_win_get_cursor(0)
+  self.opened_at = { buf = vim.api.nvim_get_current_buf(), row = cur[1], col = cur[2] }
   redraw_if_cmdline(winid)
 end
 
+-- 出し直す。モードの文言・ハイライト・位置を今の値にする
+function Indicator:update()
+  local winid = self.winid[1]
+  local mode = self.modes:detect()
+  self:set_text(vim.api.nvim_win_get_buf(winid), mode)
+  pcall(vim.api.nvim_win_set_config, winid, self:win_pos_config(mode))
+  self:border_highlight(winid, mode)
+  redraw_if_cmdline(winid)
+end
+
+-- pre-edit が出ているか（が出たか）。本体が公開する状態だけを見る
+---@return boolean
+local function has_preedit()
+  local state = vim.g["skkeleton#state"]
+  return type(state) == "table" and type(state.preedit) == "string" and state.preedit ~= ""
+end
+
+-- 出す・出し直す・消すを 1 か所で決める
+function Indicator:sync()
+  if not Modes.is_active() or self:is_disabled() or has_preedit() then
+    if self:is_opened() then
+      self:close()
+    end
+    return
+  end
+  self:open()
+end
+
+-- 出したときの位置からカーソルが動いたら消す。文字が入ったときもここで気づく。
+-- insert に入った直後に CursorMovedI が来ることがあるので、位置が同じなら消さない
+function Indicator:on_cursor_moved()
+  if not self:is_opened() or not self.opened_at then
+    return
+  end
+  local cur = vim.api.nvim_win_get_cursor(0)
+  if
+    self.opened_at.buf ~= vim.api.nvim_get_current_buf()
+    or self.opened_at.row ~= cur[1]
+    or self.opened_at.col ~= cur[2]
+  then
+    self:close()
+  end
+end
+
+-- pre-edit が出たら消す（入力が始まった）
+function Indicator:on_handled()
+  if has_preedit() then
+    self:close()
+  end
+end
+
 function Indicator:on_cmdline_enter()
-  if Modes.is_cmdline() and not self:is_disabled() then
-    self:open()
+  if Modes.is_cmdline() then
+    self:sync()
   end
 end
 
 function Indicator:on_cmdline_leave()
   self:close()
   vim.schedule(function()
-    if Modes.is_insert() and not self:is_disabled() then
-      self:open()
+    if Modes.is_insert() then
+      self:sync()
     end
   end)
+end
+
+-- コマンドラインは 1 文字ごとに追従しない。出したあとの最初の変化で消す
+function Indicator:on_cmdline_changed()
+  if self:is_opened() then
+    self:close()
+  end
 end
 
 -- <C-c> で insert を抜けたときなど InsertLeave が来ない場合も閉じる。
 -- また、<Insert> で置換モードを経由して insert に戻ったときなど InsertEnter が
 -- 来ない場合にも開き直す (#38)。
--- マウス操作で visual から insert に戻ったときは、ModeChanged のあとにカーソルが
--- 移動するため、開き直したあとに vim.schedule で move() を呼んでカーソル位置に追従させる (#47)。
 function Indicator:on_mode_changed()
   if not Modes.is_active() then
     if self:is_opened() then
       self:close()
     end
-  else
-    if not self:is_opened() and not self:is_disabled() then
-      self:open()
-      vim.schedule(function()
-        if Modes.is_active() and not self:is_disabled() and self:is_opened() then
-          self:move()
-        end
-      end)
-    end
-  end
-end
-
--- skkeleton の User イベントで呼ばれる。InsertLeave のときも mode-changed が来るので、
--- 現在のモードを確かめてから更新する（コマンドラインモード中は即座に反映して redraw する）
-function Indicator:update()
-  local function do_update()
-    if not Modes.is_active() then
-      -- <C-c> で insert を抜けたときは InsertLeave が来ないので、ここで閉じる
-      if self:is_opened() then
-        self:close()
-      end
-      return
-    end
-    if self:is_disabled() then
-      self:close()
-      return
-    end
-    if self:is_opened() then
-      local winid = self.winid[1]
-      local mode = self.modes:detect()
-      self:set_text(vim.api.nvim_win_get_buf(winid), mode)
-      pcall(vim.api.nvim_win_set_config, winid, self:win_pos_config(mode, false))
-      self:border_highlight(winid, mode)
-      redraw_if_cmdline(winid)
-    else
-      self:open()
-    end
-  end
-  if Modes.is_cmdline() then
-    do_update()
-  else
-    vim.schedule(do_update)
-  end
-end
-
--- カーソルに追従させる。
--- relative = "cursor" は画面上のカーソル位置を設定した時点で読むため、inline の pre-edit が
--- 描かれる前後で値が変わる。バッファ位置の画面上の位置に pre-edit の表示幅を足して決める
-function Indicator:move()
-  if Modes.is_cmdline() then
-    -- コマンドライン中は文字入力ごとのカーソル追従（win_set_config + redraw）を
-    -- 行わず、モード切り替え時のみ表示・更新することでカーソルのちらつきを防止する
     return
   end
-  if self:is_opened() then
-    local mode = self.modes:detect()
-    -- ウィンドウがすでに消えていると失敗することがある
-    local ok = pcall(vim.api.nvim_win_set_config, self.winid[1], self:win_pos_config(mode, false))
-    if not ok then
-      table.remove(self.winid, 1)
+  self:sync()
+end
+
+-- skkeleton の User イベントで呼ばれる。g:skkeleton#state はキーを処理し終えてから
+-- 更新されるので、schedule して今の状態で決める
+function Indicator:on_skkeleton_changed()
+  vim.schedule(function()
+    if Modes.is_active() then
+      self:sync()
+    elseif self:is_opened() then
+      self:close()
     end
-  end
+  end)
 end
 
 function Indicator:close()
   self.timer:stop()
+  self.opened_at = nil
   for _, winid in ipairs(self.winid) do
     if vim.api.nvim_win_is_valid(winid) then
       local buf = vim.api.nvim_win_get_buf(winid)
@@ -482,11 +343,7 @@ end
 -- 色や文言の設定が変わったときに作り直す
 function Indicator:refresh()
   self.modes = Modes.new()
-  if self:is_opened() then
-    self:update()
-  elseif Modes.is_active() then
-    self:open()
-  end
+  self:sync()
 end
 
 -- autocmd、ウィンドウ、タイマーをすべて片付ける

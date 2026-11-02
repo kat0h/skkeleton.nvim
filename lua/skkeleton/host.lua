@@ -179,7 +179,7 @@ function M.input(prompt)
   local ok, res = pcall(function()
     store.init_context()
     -- 新しい Context に合わせて参照用の変数も更新する（#54 の残り）
-    vim.g["skkeleton#state"] = { phase = "input", henkanFeed = "" }
+    vim.g["skkeleton#state"] = { phase = "input", henkanFeed = "", preedit = "" }
     vim.api.nvim_create_autocmd("CmdlineEnter", {
       once = true,
       callback = function()
