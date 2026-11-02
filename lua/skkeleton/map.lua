@@ -63,23 +63,23 @@ local function set_saved(buf, m)
   pcall(vim.api.nvim_buf_set_keymap, buf, m.mode, m.lhs, m.rhs or "", opts)
 end
 
+-- tbl[buf][mode] を消し、buf の表が空になったら外側の表も消す
+local function drop(tbl, buf, mode)
+  if tbl[buf] then
+    tbl[buf][mode] = nil
+    if vim.tbl_isempty(tbl[buf]) then
+      tbl[buf] = nil
+    end
+  end
+end
+
 -- 単一モードのマッピングを戻す（cmdline 終了時など）
 ---@param buf integer
 ---@param mode string
 function M.restore_mode(buf, mode)
   if not vim.api.nvim_buf_is_valid(buf) then
-    if vault[buf] then
-      vault[buf][mode] = nil
-      if vim.tbl_isempty(vault[buf]) then
-        vault[buf] = nil
-      end
-    end
-    if funcs[buf] then
-      funcs[buf][mode] = nil
-      if vim.tbl_isempty(funcs[buf]) then
-        funcs[buf] = nil
-      end
-    end
+    drop(vault, buf, mode)
+    drop(funcs, buf, mode)
     return
   end
   for lhs in pairs((funcs[buf] and funcs[buf][mode]) or {}) do
@@ -91,36 +91,22 @@ function M.restore_mode(buf, mode)
       set_saved(buf, m)
     end
   end
-  if vault[buf] then
-    vault[buf][mode] = nil
-    if vim.tbl_isempty(vault[buf]) then
-      vault[buf] = nil
-    end
-  end
-  if funcs[buf] then
-    funcs[buf][mode] = nil
-    if vim.tbl_isempty(funcs[buf]) then
-      funcs[buf] = nil
-    end
-  end
+  drop(vault, buf, mode)
+  drop(funcs, buf, mode)
 end
 
 -- 退避したマッピングを戻す。skkeleton が置いたキーのみ削除し、元のマッピングを復元する
 function M.restore()
-  for b, modes in pairs(vault) do
-    if vim.api.nvim_buf_is_valid(b) then
-      for mode, maps in pairs(modes) do
-        for lhs in pairs((funcs[b] and funcs[b][mode]) or {}) do
-          pcall(vim.api.nvim_buf_del_keymap, b, mode, lhs)
-        end
-        for _, m in ipairs(maps) do
-          set_saved(b, m)
-        end
-      end
+  -- restore_mode が反復中の表を書き換えるので、先に (バッファ, モード) を集める
+  local targets = {}
+  for buf, modes in pairs(vault) do
+    for mode in pairs(modes) do
+      targets[#targets + 1] = { buf, mode }
     end
   end
-  vault = {}
-  funcs = {}
+  for _, target in ipairs(targets) do
+    M.restore_mode(target[1], target[2])
+  end
 end
 
 -- 今のバッファの今のモードに、キーを奪うマッピングを置く
