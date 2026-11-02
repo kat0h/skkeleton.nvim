@@ -62,50 +62,42 @@ local function convert_and_kakutei(ctx, converter, already)
   state.initialize(st, { "converter" })
 end
 
+-- ダイレクト入力なら converter を切り替え、変換中ならその converter で確定する
+-- カタカナは半角カタカナなど別の converter が効いていても、変換し直さずそのまま確定する (#51)
 ---@param ctx skkeleton.Context
-function M.katakana(ctx)
+---@param converter fun(s: string): string
+---@param name string 切り替えるモード名
+local function to_converter_mode(ctx, converter, name)
   if ctx.state.type ~= "input" or ctx.mode == "abbrev" then
     return
   end
   local st = ctx.state
-  if st.mode == "direct" then
-    if kana.current_name == "zen" then
-      kana.set_current(options.kanaTable)
-      st.table = kana.get_table()
-    end
-    if st.converter then
-      st.converter = nil
-      mode.mode_change(ctx, "hira")
-    else
-      st.converter = hira_to_kata
-      mode.mode_change(ctx, "kata")
-    end
+  local active = st.converter ~= nil and (name == "kata" or st.converter == converter)
+  if st.mode ~= "direct" then
+    convert_and_kakutei(ctx, converter, active)
     return
   end
-  convert_and_kakutei(ctx, hira_to_kata, st.converter ~= nil)
+  if kana.current_name == "zen" then
+    kana.set_current(options.kanaTable)
+    st.table = kana.get_table()
+  end
+  if active then
+    st.converter = nil
+    mode.mode_change(ctx, "hira")
+  else
+    st.converter = converter
+    mode.mode_change(ctx, name)
+  end
+end
+
+---@param ctx skkeleton.Context
+function M.katakana(ctx)
+  to_converter_mode(ctx, hira_to_kata, "kata")
 end
 
 ---@param ctx skkeleton.Context
 function M.hankatakana(ctx)
-  if ctx.state.type ~= "input" or ctx.mode == "abbrev" then
-    return
-  end
-  local st = ctx.state
-  if st.mode == "direct" then
-    if kana.current_name == "zen" then
-      kana.set_current(options.kanaTable)
-      st.table = kana.get_table()
-    end
-    if st.converter == hira_to_hankata then
-      st.converter = nil
-      mode.mode_change(ctx, "hira")
-    else
-      st.converter = hira_to_hankata
-      mode.mode_change(ctx, "hankata")
-    end
-    return
-  end
-  convert_and_kakutei(ctx, hira_to_hankata, st.converter == hira_to_hankata)
+  to_converter_mode(ctx, hira_to_hankata, "hankata")
 end
 
 ---@param ctx skkeleton.Context

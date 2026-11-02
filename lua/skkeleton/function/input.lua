@@ -46,15 +46,14 @@ function M.kakutei_kana(state, preedit, kana, feed)
 end
 
 ---@param ctx skkeleton.Context
----@param kana string
----@param feed string
-local function do_kakutei(ctx, kana, feed)
+---@param result skkeleton.KanaResult
+function M.accept_result(ctx, result)
   local state = ctx.state
   if state.type ~= "input" then
     return
   end
-  M.kakutei_kana(state, ctx.preedit, kana, feed)
-  if state.mode == "okuriari" and feed == "" then
+  M.kakutei_kana(state, ctx.preedit, result[1], result[2])
+  if state.mode == "okuriari" and result[2] == "" then
     if util.last_char(state.okuri_feed) == "っ" then
       -- immediatelyOkuriConvert が有効になっていない場合
       -- 直接入力などで「使った」のように打つ時「つかっ」の段階では変換をしない
@@ -65,12 +64,6 @@ local function do_kakutei(ctx, kana, feed)
       henkan.henkan_first(ctx, "")
     end
   end
-end
-
----@param ctx skkeleton.Context
----@param result skkeleton.KanaResult
-function M.accept_result(ctx, result)
-  do_kakutei(ctx, result[1], result[2])
 end
 
 -- 打ちかけの feed を確定する（kana_input で、キーがテーブルに続かないときの処理）
@@ -90,6 +83,7 @@ end
 ---@param ctx skkeleton.Context
 ---@param char string
 function M.kana_input(ctx, char)
+  -- 確定処理 (accept_result) は input 状態でないと何もしないので、変換の途中から呼ばれても入力に戻す
   ctx.state.type = "input"
   local state = ctx.state
 
