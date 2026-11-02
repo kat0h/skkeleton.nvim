@@ -135,6 +135,31 @@ T["terminal"] = function()
   eq(found, true)
 end
 
+T["terminal-normal に移っても状態を捨てず、戻ると続きから打てる (#74)"] = function()
+  child.cmd("terminal cat")
+  child.type_keys("i")
+  type("<Plug>(skkeleton-enable)")
+  type("K")
+  child.type_keys([[<C-\><C-n>]])
+  helpers.settle(child)
+  eq(child.api.nvim_get_mode().mode, "nt")
+  eq(child.g["skkeleton#enabled"], true)
+  child.type_keys("i")
+  type("a")
+  -- 端末の行は、残っていた ▽k の続きとして ▽か に書き直される（BS で消して書き直す）
+  local line = child.lua_get([[(function()
+    local function last()
+      local ls = vim.tbl_filter(function(l) return l ~= "" end, vim.api.nvim_buf_get_lines(0, 0, -1, false))
+      return ls[#ls] or ""
+    end
+    vim.wait(2000, function() return last():find("▽か", 1, true) ~= nil end, 20)
+    return last()
+  end)()]])
+  -- cat は BS を ^H と表示するので、行の終わりと状態で確かめる
+  eq(vim.endswith(line, "▽か"), true)
+  eq(child.g["skkeleton#state"].henkanFeed, "か")
+end
+
 T["visual から入った cmdline で有効にして抜けると無効になる (#28)"] = function()
   child.api.nvim_buf_set_lines(0, 0, -1, false, { "ab cd" })
   child.type_keys("v/")

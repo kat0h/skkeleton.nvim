@@ -188,9 +188,17 @@ function M.init(force)
           group = group,
           once = true,
           callback = function()
-            local m = vim.fn.mode()
+            -- vim.fn.mode() は terminal-normal（nt）を n と返すので、nvim_get_mode() で見る (#74)
+            local m = vim.api.nvim_get_mode().mode
             local s = m:sub(1, 1)
-            if s ~= "i" and s ~= "c" and s ~= "t" and not vim.startswith(m, "ni") and not host.is_in_input() then
+            if
+              s ~= "i"
+              and s ~= "c"
+              and s ~= "t"
+              and not vim.startswith(m, "ni")
+              and not vim.startswith(m, "nt")
+              and not host.is_in_input()
+            then
               if commit then
                 commit_preedit()
               end
