@@ -15,6 +15,7 @@ T["defaults"] = function()
     eggLikeNewline = false,
     globalDictionaries = {},
     globalKanaTableFiles = {},
+    guardUnmappedKeys = false,
     immediatelyCancel = true,
     immediatelyDictionaryRW = true,
     immediatelyOkuriConvert = true,

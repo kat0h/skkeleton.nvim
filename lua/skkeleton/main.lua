@@ -280,6 +280,7 @@ function M.init(force)
     end,
   })
   render.on_stale = check_stale
+  require("skkeleton.guard").attach()
   doautocmd("skkeleton-initialize-post")
 end
 
