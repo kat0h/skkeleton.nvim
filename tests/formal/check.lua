@@ -205,6 +205,16 @@ local SETUP = [[
   }, extra))
   vim.keymap.set({ "i", "c" }, "<C-j>", "<Plug>(skkeleton-toggle)")
   -- User イベントの回数（イベントの性質で使う）
+  -- skkeleton がキーを処理して描き終えた回数（render.finish の終わりで数える。前は render.count）
+  _G.formal_handled = 0
+  do
+    local render = require("skkeleton.render")
+    local finish = render.finish
+    render.finish = function(...)
+      finish(...)
+      _G.formal_handled = _G.formal_handled + 1
+    end
+  end
   _G.formal_events = {}
   for _, name in ipairs({ "skkeleton-enable-post", "skkeleton-disable-post", "skkeleton-mode-changed" }) do
     _G.formal_events[name] = 0
