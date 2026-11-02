@@ -1,10 +1,8 @@
--- pre-edit を出している間、skkeleton がマップしていない特殊キーを捨てる (#56)。
--- 考え方は skkelua.nvim の guard.lua を参考にした（コードは写していない）。
+-- pre-edit を出している間に、skkeleton が奪っていない物理の特殊キーが来たら、
+-- 打った読みを <Esc> と同じ形で確定してから、そのキーの本来の動きをさせる (#56)。
 -- 特殊キーを全部マップして潰すのは修飾キーの組み合わせの分だけ増えるので、
 -- vim.on_key で「マップに消費されずに素通りしてきた物理の特殊キー」だけを見る。
 local M = {}
-
-local options = require("skkeleton.config").options
 
 local ns = vim.api.nvim_create_namespace("skkeleton-guard")
 
@@ -39,7 +37,7 @@ local function extra_physical_keys()
 end
 
 -- Lua コールバックマッピングの擬似キー (KE_LUA)。skkeleton が奪ったキーは
--- この形で届くので、捨てずにマッピングへ渡す
+-- この形で届くので、確定せずにマッピングへ渡す
 ---@param key string
 ---@return boolean
 local function is_mapped_key(key)
@@ -66,9 +64,9 @@ function M._is_physical_special(key)
     return true
   end
   -- KS_MODIFIER: <C-x> は修飾バイトのあとに base の文字が続く。
-  -- 文字の Ctrl 組み合わせ (<C-r> や <C-n> など) は、スケルトンが使う
+  -- 文字の Ctrl 組み合わせ (<C-r> や <C-n> など) は、skkeleton が使う
   -- 編集キーなので通す。Alt / Meta / Cmd 付きと、文字でない base
-  -- (<C-.>、<C-Left>、<S-CR> など) は捨てる。
+  -- (<C-.>、<C-Left>、<S-CR> など) は確定の対象にする。
   local mod = key:byte(3) or 0
   if bit.band(mod, 0x04) == 0 or bit.band(mod, 0x08 + 0x10 + 0x20) ~= 0 then
     return true
@@ -91,9 +89,6 @@ end
 ---@param typed string マッピング適用前の打鍵。feedkeys などでは空
 ---@return string?
 function M._on_key(key, typed)
-  if not options.guardUnmappedKeys then
-    return
-  end
   if is_mapped_key(key) then
     return
   end
@@ -120,6 +115,11 @@ function M._on_key(key, typed)
   if mode ~= "i" and mode ~= "c" and mode ~= "t" then
     return
   end
+
+  -- 打った読みを <Esc> と同じ形で確定してから、キーをそのまま流し直す。
+  -- いまのキーは捨てるので、確定した文字が先に入り、そのあとキーが動く。
+  require("skkeleton.main").commit_preedit()
+  vim.api.nvim_feedkeys(key, "n", false)
   return ""
 end
 

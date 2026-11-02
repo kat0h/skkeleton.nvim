@@ -1,8 +1,8 @@
--- 未マップの特殊キーから pre-edit を守るゲート (#56)
+-- 未マップの特殊キーが来たら、pre-edit を <Esc> と同じ形で確定してからキーを動かす (#56)
 local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 
-local T, child = helpers.e2e_set({ config = { guardUnmappedKeys = true } })
+local T, child = helpers.e2e_set()
 local type = function(...)
   helpers.type(child, ...)
 end
@@ -11,26 +11,64 @@ local function start()
   type("i<Plug>(skkeleton-enable)")
 end
 
-T["unmapped special keys keep the pre-edit (#56)"] = function()
+T["unmapped special keys commit the pre-edit before acting (#56)"] = function()
   start()
   type("Kan")
   eq(helpers.preedit(child), "▽かn")
 
-  for _, key in ipairs({ "<C-.>", "<S-CR>", "<Left>", "<F5>", "<C-Left>" }) do
-    type(key)
-    eq(helpers.preedit(child), "▽かn")
-    eq(helpers.buffer(child), { "" })
-  end
-
-  -- 捨てたキーのあとも、打った読みの続きから入力できる
-  type("ka")
-  eq(helpers.preedit(child), "▽かんか")
+  -- <Left> で読みが確定し、そのあとカーソルが 1 文字左へ動く
+  type("<Left>")
+  eq(helpers.buffer(child), { "かん" })
+  eq(helpers.preedit(child), "")
+  eq(helpers.cursor(child), { 1, 3 })
 end
 
-T["mapped keys still work with the guard (#56)"] = function()
+T["<C-.> commits the pre-edit and then inserts the key (#56)"] = function()
   start()
   type("Kan")
-  type("<Space>")
+  type("<C-.>")
+  eq(helpers.buffer(child), { "かん." })
+  eq(helpers.preedit(child), "")
+end
+
+T["<F5> commits the pre-edit and then inserts the key (#56)"] = function()
+  start()
+  type("Kan")
+  type("<F5>")
+  eq(helpers.buffer(child), { "かん<F5>" })
+  eq(helpers.preedit(child), "")
+end
+
+T["<C-Left> commits the pre-edit and then moves the cursor (#56)"] = function()
+  start()
+  type("Kan")
+  type("<C-Left>")
+  eq(helpers.buffer(child), { "かん" })
+  eq(helpers.cursor(child), { 1, 0 })
+end
+
+T["a candidate is committed before the key acts (#56)"] = function()
+  start()
+  type("Kan<Space>")
+  eq(helpers.preedit(child), "▼缶")
+
+  type("<Left>")
+  eq(helpers.buffer(child), { "缶" })
+  eq(helpers.preedit(child), "")
+  eq(helpers.cursor(child), { 1, 0 })
+end
+
+T["one undo removes the committed text (#56)"] = function()
+  start()
+  type("Kan<Left>")
+  eq(helpers.buffer(child), { "かん" })
+  type("<Esc>u")
+  eq(helpers.buffer(child), { "" })
+end
+
+T["mapped keys still work (#56)"] = function()
+  start()
+  type("Kan<Space>")
   eq(helpers.preedit(child), "▼缶")
 
   type("<C-g>")
@@ -41,7 +79,7 @@ T["mapped keys still work with the guard (#56)"] = function()
   eq(helpers.preedit(child), "▽か")
 end
 
-T["<Insert> still enters replace mode with the guard (#29)"] = function()
+T["<Insert> still enters replace mode (#29)"] = function()
   start()
   type("Kan")
   eq(helpers.preedit(child), "▽かn")
@@ -50,17 +88,15 @@ T["<Insert> still enters replace mode with the guard (#29)"] = function()
   eq(child.fn.mode(), "R")
 end
 
-T["unmapped special keys in cmdline keep the pre-edit (#56)"] = function()
+T["unmapped special keys in cmdline commit the pre-edit first (#56)"] = function()
   child.type_keys(":")
   type("<Plug>(skkeleton-enable)")
   type("Kan")
   eq(child.fn.getcmdline(), "▽かn")
 
   type("<Left>")
-  eq(child.fn.getcmdline(), "▽かn")
-
-  type("ka")
-  eq(child.fn.getcmdline(), "▽かんか")
+  eq(child.fn.getcmdline(), "かん")
+  eq(child.fn.getcmdpos(), 4)
 end
 
 return T
