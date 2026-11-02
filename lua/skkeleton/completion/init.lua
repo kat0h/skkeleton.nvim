@@ -145,6 +145,9 @@ end
 ---@param word string
 ---@param kind? skkeleton.HenkanType
 function M.confirm(kana, word, kind)
+  if not M.can_complete() then
+    return
+  end
   require("skkeleton.main").complete(kana, word, kind)
 end
 
@@ -190,7 +193,7 @@ function M.refresh()
   if not opts.enabled then
     return hide()
   end
-  if not M.can_complete() then
+  if not is_pending() then
     return hide()
   end
   local st = require("skkeleton.store").context().state
@@ -218,7 +221,7 @@ end
 -- 回したら true。upstream の handleCompleteKey に当たる
 ---@return boolean
 function M.accept_selected()
-  if not M.options.enabled or not M.can_complete() then
+  if not M.options.enabled or not is_pending() then
     return false
   end
   local blink = package.loaded["blink.cmp"]

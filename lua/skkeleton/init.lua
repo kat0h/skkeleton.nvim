@@ -144,7 +144,7 @@ end
 ---@param word string
 ---@param kind? "okuriari"|"okurinasi"
 function M.complete(kana, word, kind)
-  require("skkeleton.main").complete(kana, word, kind)
+  require("skkeleton.completion").confirm(kana, word, kind)
 end
 
 -- 辞書の DB を作り直す（force が偽なら、古いときだけ）
