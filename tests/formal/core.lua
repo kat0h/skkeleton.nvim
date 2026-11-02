@@ -36,7 +36,7 @@ do
     elseif k == "--metamorphic" then
       opts.metamorphic, i = tonumber(v), i + 1
     elseif k == "--kanatable" then
-      -- かなテーブルへの登録（rom に足す。例: '{ z = "henkanFirst" }'）
+      -- かなテーブルへの登録（rom に足す。文字だけ。例: '{ ["z,"] = { "‥" } }'。関数はキーマップに置く #67）
       opts.kanatable, i = assert(loadstring("return " .. v))(), i + 1
     elseif k == "--keymap" then
       -- キーマップの登録（例: '{ { "input", ";", "henkanPoint" } }'）

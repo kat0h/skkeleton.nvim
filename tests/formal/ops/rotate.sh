@@ -14,6 +14,6 @@ PY
 done
 cd "$W"
 timeout -k 10 200 nvim --headless -u NONE -i NONE -l tests/formal/core.lua --random 50000 --length 30 --seed "$(date +%s)" 2>&1 | grep -E '^(✓|✗|△)'; [ ${PIPESTATUS[0]} -eq 0 ] || echo "core/dict の検査が timeout か失敗"
-timeout -k 10 200 nvim --headless -u NONE -i NONE -l tests/formal/core.lua --kanatable '{ z = "henkanFirst", ["z,"] = { "‥" } }' --keymap '{ { "input", ";", "henkanPoint" } }' --random 30000 --length 30 --seed "$(date +%s)" 2>&1 | grep -E '^(✓|✗|△)'; [ ${PIPESTATUS[0]} -eq 0 ] || echo "core/dict の検査が timeout か失敗"
+timeout -k 10 200 nvim --headless -u NONE -i NONE -l tests/formal/core.lua --kanatable '{ ["z,"] = { "‥" } }' --keymap '{ { "input", "z", "henkanFirst" }, { "input", ";", "henkanPoint" } }' --random 30000 --length 30 --seed "$(date +%s)" 2>&1 | grep -E '^(✓|✗|△)'; [ ${PIPESTATUS[0]} -eq 0 ] || echo "core/dict の検査が timeout か失敗"
 timeout -k 10 200 nvim --headless -u NONE -i NONE -l tests/formal/dict.lua --random 5000 --length 20 --seed "$(date +%s)" 2>&1 | grep -E '^(✓|✗|△)'; [ ${PIPESTATUS[0]} -eq 0 ] || echo "core/dict の検査が timeout か失敗"
 timeout -k 10 200 nvim --headless -u NONE -i NONE -l tests/formal/jisyo.lua --random 2000 --seed "$(date +%s)" 2>&1 | grep -E '^(✓|✗|△)'; [ ${PIPESTATUS[0]} -eq 0 ] || echo "jisyo の検査が timeout か失敗"
