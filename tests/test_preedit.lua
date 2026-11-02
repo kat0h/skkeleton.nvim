@@ -1,4 +1,6 @@
--- preedit_test.ts
+-- Ported from skkeleton (denops/skkeleton/preedit_test.ts)
+-- Copyright (c) 2021 kuuote, zlib license (see LICENSES/skkeleton.txt)
+-- Modified for skkeleton.nvim: rewritten for mini.test.
 local eq = MiniTest.expect.equality
 local PreEdit = require("skkeleton.preedit")
 local T = MiniTest.new_set()

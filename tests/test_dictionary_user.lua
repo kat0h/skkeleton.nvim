@@ -40,6 +40,7 @@ T["registers the most recent candidate first and removes duplicates"] = function
   )
 end
 
+-- upstream: "don't register empty candidate"
 T["does not register an empty candidate"] = function()
   eq(
     run([[

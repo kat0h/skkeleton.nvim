@@ -159,6 +159,7 @@ T["a long line is not broken by textwidth"] = function()
   eq(helpers.buffer(child), { "あいうえおあいうえおあいうえお" })
 end
 
+-- upstream: "new line"
 T["indent is kept by a newline"] = function()
   child.o.autoindent = true
   child.type_keys("i")

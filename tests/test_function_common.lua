@@ -1,4 +1,6 @@
--- function/common_test.ts と config_test.ts（eggLikeNewline、acceptIllegalResult、immediatelyOkuriConvert）
+-- Ported from skkeleton (denops/skkeleton/function/common_test.ts, denops/skkeleton/config_test.ts)
+-- Copyright (c) 2021 kuuote, zlib license (see LICENSES/skkeleton.txt)
+-- Modified for skkeleton.nvim: rewritten for mini.test.
 local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 local T, child = helpers.child_set()

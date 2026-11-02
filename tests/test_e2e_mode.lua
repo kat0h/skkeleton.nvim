@@ -72,6 +72,7 @@ T["Fire autocmd for mode changed"] = function()
   eq(child.g.mode_actual, "hankata")
 end
 
+-- upstream: "mode change  at enable"
 T["mode change at enable"] = function()
   child.cmd([[autocmd User skkeleton-mode-changed let g:mode_actual = skkeleton#mode()]])
   enable()

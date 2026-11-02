@@ -1,4 +1,6 @@
--- function/mode_test.ts（enable/disable を通す部分は E2E で扱う）
+-- Ported from skkeleton (denops/skkeleton/function/mode_test.ts)
+-- Copyright (c) 2021 kuuote, zlib license (see LICENSES/skkeleton.txt)
+-- Modified for skkeleton.nvim: rewritten for mini.test.
 local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 local T, child = helpers.child_set()

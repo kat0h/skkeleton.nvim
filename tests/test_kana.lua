@@ -1,4 +1,6 @@
--- kana_test.ts と、trie のかなテーブル（register / load_file / node）のテスト
+-- Ported from skkeleton (denops/skkeleton/kana_test.ts)
+-- Copyright (c) 2021 kuuote, zlib license (see LICENSES/skkeleton.txt)
+-- Modified for skkeleton.nvim: rewritten for mini.test.
 local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 local T, child = helpers.child_set()
