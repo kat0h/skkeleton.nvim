@@ -449,6 +449,34 @@ T["db"]["uses the later line for duplicate headwords (#48)"] = function()
   )
 end
 
+T["db"]["removes old .tmp files for the same DB after rebuilding (#138)"] = function()
+  eq(
+    run([[
+      local src = write("s", ";; coding: utf-8\n;; okuri-nasi entries.\nあ /亜/\n")
+      local opts = { dir = TMP .. "/db" }
+      local dst = db.ensure(src, opts)
+      local old = dst .. ".111.1.tmp"
+      local new = dst .. ".222.1.tmp"
+      local other = opts.dir .. "/other.db.333.1.tmp"
+      for _, p in ipairs({ old, new, other }) do
+        local f = assert(io.open(p, "wb"))
+        f:write("x")
+        f:close()
+      end
+      local now = os.time()
+      vim.uv.fs_utime(old, now - 7200, now - 7200)
+      vim.uv.fs_utime(other, now - 7200, now - 7200)
+      db.ensure(src, vim.tbl_extend("force", opts, { force = true }))
+      return {
+        vim.uv.fs_stat(old) == nil,
+        vim.uv.fs_stat(new) ~= nil,
+        vim.uv.fs_stat(other) ~= nil,
+      }
+    ]]),
+    { true, true, true }
+  )
+end
+
 T["db"]["uses separate DBs for different encodings of the same file"] = function()
   eq(
     run([[

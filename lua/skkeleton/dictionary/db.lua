@@ -111,6 +111,34 @@ end
 
 local tmp_counter = 0
 
+-- rename に成功したあと、同じ DB の古い作りかけ .tmp（更新から 1 時間以上）を消す。
+-- 別の Neovim が今書いている .tmp を消さないように、時間で分ける。失敗しても無視する (#138)
+---@param dst string
+local function cleanup_stale_tmp(dst)
+  pcall(function()
+    local dir = vim.fs.dirname(dst)
+    local base = vim.fs.basename(dst)
+    local scan = uv.fs_scandir(dir)
+    if not scan then
+      return
+    end
+    local now = os.time()
+    while true do
+      local name = uv.fs_scandir_next(scan)
+      if not name then
+        break
+      end
+      if vim.startswith(name, base .. ".") and name:sub(-4) == ".tmp" then
+        local path = dir .. "/" .. name
+        local st = uv.fs_stat(path)
+        if st and now - st.mtime.sec >= 3600 then
+          pcall(uv.fs_unlink, path)
+        end
+      end
+    end
+  end)
+end
+
 -- DB を作る。tick は一定の間隔で呼ぶ（コルーチンで譲るため。無ければ一気に作る）。
 -- `.tmp`（プロセスと回ごとに別の名前）に書いてから rename するので、複数の Neovim が同時に作っても壊れない
 ---@param src string
@@ -181,6 +209,7 @@ function M.build(src, dst, encoding, tick)
     uv.fs_unlink(tmp)
     error(("cannot rename %s (%s)"):format(tmp, rerr), 0)
   end
+  cleanup_stale_tmp(dst)
 end
 
 -- fn(tick) をコルーチンで少しずつ進める。fn は途中で tick() を呼ぶと譲る。終わったら cb(ok, 結果かエラー)
