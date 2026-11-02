@@ -5,7 +5,7 @@ for _ in $(seq 1 "${1:-1}"); do
   p=$(python3 - "$LOG/rotate.json" <<'PY'
 import json, os, sys, time
 st = json.load(open(sys.argv[1])) if os.path.exists(sys.argv[1]) else {}
-names = ["default","modes","config","cmdline","misc","blink","okuri","steal","terminal","options","macro","undo","block","register","regcmd","unmapped","paste"]  # インジケータだけのプロファイルは外した（利用者の判断）
+names = ["default","modes","config","cmdline","misc","blink","okuri","steal","terminal","options","macro","undo","block","register","regcmd","unmapped","paste","annot"]  # インジケータだけのプロファイルは外した（利用者の判断）
 p = min(names, key=lambda n: st.get(n, 0)); st[p] = time.time(); json.dump(st, open(sys.argv[1], "w")); print(p)
 PY
 )

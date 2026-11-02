@@ -726,6 +726,32 @@ M.paste = {
   dict = dict,
 }
 
+-- 注釈つきの候補（; のあと）。インラインの ▼ の注釈、候補一覧の注釈の列そろえ、選択キーでの確定
+M.annot = {
+  doc = "注釈つきの候補を、インラインの ▼・候補一覧・選択キーで選んで確定する（insert と cmdline）",
+  config = { showCandidatesCount = 1 },
+  alphabet = {
+    "<C-j>",
+    "Kaku",
+    "<Space>",
+    "x",
+    "a",
+    "s",
+    "d",
+    "<CR>",
+    "<C-g>",
+    "<Esc>",
+    "i",
+    ":",
+  },
+  inits = line_inits,
+  dict = dict
+    .. table.concat({
+      "かく /書;かく/角;かど/各/核;かく/格;ひとしい/閣/確;たしか/画数の多い候補;注釈も長い/",
+      "",
+    }, "\n"),
+}
+
 M.register = {
   doc = "辞書登録のプロンプト: かな入力・入れ子の変換と登録・確定と取り消し・<C-r>・<C-f>・:stopinsert やウィンドウの移動",
   config = {},
@@ -937,6 +963,7 @@ M.names = {
   "regcmd",
   "unmapped",
   "paste",
+  "annot",
 }
 
 return M
