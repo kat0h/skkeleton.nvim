@@ -34,8 +34,33 @@ function M.init()
   end
   original_paste = vim.paste
   vim.paste = function(lines, phase)
-    if config.options.setUndoPointOnPaste and is_active_insert() then
-      if phase == -1 or phase == 1 or phase == nil then
+    local first = phase == -1 or phase == 1 or phase == nil
+    if first then
+      -- pre-edit があれば、貼る前に <Esc> と同じ形で確定する (#125)
+      local enabled = vim.g["skkeleton#enabled"]
+      local state = vim.g["skkeleton#state"]
+      if (enabled == true or enabled == 1) and type(state) == "table" and (state.preedit or "") ~= "" then
+        local render = require("skkeleton.render")
+        local cleanup = require("skkeleton.cleanup")
+        if render.preedit_position() then
+          -- insert は extmark の位置に同期して書く（貼り付けより先に確定する）
+          local text, _, row, col = cleanup.commit_preedit_now()
+          if text and text ~= "" then
+            local lines = vim.split(text, "\n", { plain = true })
+            local win = vim.api.nvim_get_current_win()
+            if #lines == 1 then
+              vim.api.nvim_win_set_cursor(win, { row + 1, col + #text })
+            else
+              vim.api.nvim_win_set_cursor(win, { row + #lines, #lines[#lines] })
+            end
+          end
+          render.clear()
+          cleanup.update_state_variable()
+        else
+          require("skkeleton.main").commit_preedit()
+        end
+      end
+      if config.options.setUndoPointOnPaste and is_active_insert() then
         break_undo()
       end
     end

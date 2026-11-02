@@ -75,7 +75,11 @@ local function commit_preedit()
   if text ~= "" then
     vim.api.nvim_buf_set_text(buf, row, col, row, col, { text })
   end
+  return text, buf, row, col
 end
+
+-- 貼り付けの直前に同期的に確定する (#125)。extmark と g:state は呼び出し側で片付ける
+M.commit_preedit_now = commit_preedit
 
 local function clean_history(hist_type)
   local types = { ":", "/", "@" }
