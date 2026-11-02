@@ -258,7 +258,7 @@ function M.is_stale(ctx, vim_mode)
 end
 
 -- pre-edit は出たままだが、カーソルだけが動いているか（insert）。
--- このときは捨てたあとに visual / 置換へ移るなら確定できるよう、呼び出し側で控える (#111)。
+-- このときは捨てずに、元の位置に確定してから片付ける（main.lua の reset_if_stale。#111）。
 ---@param ctx skkeleton.Context
 ---@param vim_mode string
 ---@return boolean
