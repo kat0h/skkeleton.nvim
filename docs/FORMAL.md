@@ -85,6 +85,18 @@ nvim --headless -u NONE -i NONE -l tests/formal/upstream.lua 'A<Space>A<Left><CR
 
 `--keys` の先頭の `#mid` などは初期状態の名前です。`make test` には入れていません。
 
+### 行カバレッジ（`--coverage`）
+
+`check.lua`・`core.lua`・`dict.lua`・`jisyo.lua` に `--coverage <名前>` を付けると、`lua/skkeleton/` の通った行を `.tests/formal-cov/<名前>/` に書きます（同じ名前なら足し合わせます。キャッシュは使わず流し直します）。`coverage.lua` で集計し、ファイルごとの割合（低い順）と通っていない行のまとまりを出します。分母は LuaJIT のバイトコードから取った実行できる行です。
+
+```sh
+make verify ARGS="--profile cmdline --depth 4 --coverage all"
+nvim --headless -u NONE -i NONE -l tests/formal/core.lua --random 50000 --coverage all
+nvim --headless -u NONE -i NONE -l tests/formal/coverage.lua all [--json] [--top N]
+```
+
+行のフックを張るので、core.lua などの同じプロセスで動く検査は十数倍遅くなります。子の nvim を使う検査は 1.5 倍ほどです。
+
 ### 回帰の見張り（`--regress`）
 
 これまで issue にした反例を `tests/formal/regressions.lua` に書き、`make verify ARGS="--regress"` で流し直します。issue が開いていて `M.known` にある反例は `△ #N 未修正`、直っていれば `✓`、直ったのに戻ると `✗` です。

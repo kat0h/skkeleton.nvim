@@ -29,6 +29,9 @@ do
       opts.length, i = tonumber(v), i + 1
     elseif k == "--seed" then
       opts.seed, i = tonumber(v), i + 1
+    elseif k == "--coverage" then
+      -- lua/skkeleton/ の通った行を .tests/formal-cov/<名前>/ に書く（coverage.lua で集計）
+      opts.coverage, i = v, i + 1
     elseif k == "--max-states" then
       opts.max_states, i = tonumber(v), i + 1
     elseif k == "--differential" then
@@ -48,6 +51,12 @@ do
     end
     i = i + 1
   end
+end
+
+if opts.coverage then
+  local cov = dofile(here .. "/cov.lua")
+  cov.install(root)
+  cov.write_at_exit(root, opts.coverage, cov.new())
 end
 
 local config = require("skkeleton.config")

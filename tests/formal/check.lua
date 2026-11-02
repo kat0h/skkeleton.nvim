@@ -101,6 +101,9 @@ do
       opts.regress_sub = true
     elseif k == "--no-cache" then
       opts.no_cache = true
+    elseif k == "--coverage" then
+      -- lua/skkeleton/ の通った行を .tests/formal-cov/<名前>/ に書く（coverage.lua で集計）
+      opts.coverage, i = v, i + 1
     elseif k == "--fuzz" then
       opts.fuzz, i = tonumber(v), i + 1
     elseif k == "--seed-depth" then
@@ -133,6 +136,21 @@ do
     end
     i = i + 1
   end
+end
+
+-- 行カバレッジ中は、キャッシュで流さずに済ませると通った行が取れないので使わない
+local cov = dofile(here .. "/cov.lua")
+local cov_acc, cov_children = cov.new(), {}
+if opts.coverage then
+  opts.no_cache = true
+  vim.api.nvim_create_autocmd("VimLeavePre", {
+    callback = function()
+      for _, c in ipairs(cov_children) do
+        cov.harvest(c, cov_acc)
+      end
+      cov.write(root, opts.coverage, cov_acc)
+    end,
+  })
 end
 
 local profile = assert(profiles[opts.profile], "unknown profile: " .. opts.profile)
@@ -237,17 +255,26 @@ local SETUP = [[
 ]]
 
 local function new_child()
-  return MiniTest.new_child_neovim()
+  local c = MiniTest.new_child_neovim()
+  cov_children[#cov_children + 1] = c
+  return c
 end
 
 -- 初期状態（TLA+ の Init に当たる）は profiles.lua にある。キー列の先頭の "#mid" などで選ぶ
 
 local function start(child, mutation, init, config)
+  if opts.coverage then
+    -- 起こし直すと記録が消えるので、先に取り出す
+    cov.harvest(child, cov_acc)
+  end
   child.restart({ "-u", root .. "/tests/minimal_init.lua" })
   -- 手元のクリップボード（中クリックの * レジスタなど）を子に読ませない。検査の結果に利用者の手元の文字が混ざるのを防ぐ
   child.lua(
     'vim.g.clipboard = { name = "formal-fake", copy = { ["+"] = function() end, ["*"] = function() end }, paste = { ["+"] = function() return { "PASTED" } end, ["*"] = function() return { "PASTED" } end } }'
   )
+  if opts.coverage then
+    child.lua(cov.hook_code, { root })
+  end
   local dir = vim.fn.tempname()
   vim.fn.mkdir(dir, "p")
   local dict = dir .. "/dict"
@@ -458,6 +485,7 @@ local function run_parallel(items)
         "--worker",
         input,
         output,
+        unpack(opts.coverage and { "--coverage", opts.coverage } or {}),
       }, { env = { MINI_PATH = mini } }),
     }
   end
@@ -573,7 +601,7 @@ if opts.regress and not opts.regress_sub then
         .system(
           vim.list_extend(
             { vim.v.progpath, "--headless", "-u", "NONE", "-i", "NONE", "-l", here .. "/" .. e.checker .. ".lua" },
-            e.args
+            vim.list_extend(vim.deepcopy(e.args), opts.coverage and { "--coverage", opts.coverage } or {})
           ),
           { env = { MINI_PATH = mini }, text = true }
         )
@@ -608,6 +636,7 @@ if opts.regress and not opts.regress_sub then
         p,
         "--regress",
         "--regress-sub",
+        unpack(opts.coverage and { "--coverage", opts.coverage } or {}),
       }, { env = { MINI_PATH = mini }, text = true })
       :wait()
     io.stdout:write(r.stdout or "")
