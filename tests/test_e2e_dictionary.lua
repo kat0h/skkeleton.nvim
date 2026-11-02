@@ -388,7 +388,28 @@ T["candidate with semicolon in concat expression does not split prematurely (#49
   eq(content:find('(concat "a\\073b");注釈', 1, true) ~= nil, true)
 end
 
+local can_cmdwin_from_input
+local function supports_cmdwin_from_input()
+  if can_cmdwin_from_input ~= nil then
+    return can_cmdwin_from_input
+  end
+  child.type_keys(":call input('x')<CR>")
+  child.type_keys("<C-f>")
+  helpers.settle(child)
+  can_cmdwin_from_input = child.fn.getcmdwintype() == "@"
+  if can_cmdwin_from_input then
+    child.type_keys("<C-c>")
+    helpers.settle(child)
+  end
+  child.type_keys("<C-c>")
+  helpers.settle(child)
+  return can_cmdwin_from_input
+end
+
 T["C-f in dictionary input opens cmdline window without cancelling (#54)"] = function()
+  if not supports_cmdwin_from_input() then
+    MiniTest.skip("this Neovim cannot open cmdwin from input()")
+  end
   enable()
   type("A<Space>")
   eq(child.fn.mode(), "c")
@@ -400,6 +421,21 @@ T["C-f in dictionary input opens cmdline window without cancelling (#54)"] = fun
   helpers.settle(child)
   eq(helpers.buffer(child), { "kouho" })
   eq(#child.api.nvim_tabpage_list_wins(0), 1)
+end
+
+T["C-f in dictionary input keeps cmdline mode when cmdwin cannot open (#54)"] = function()
+  if supports_cmdwin_from_input() then
+    MiniTest.skip("this Neovim can open cmdwin from input()")
+  end
+  enable()
+  type("A<Space>")
+  eq(child.fn.mode(), "c")
+  child.type_keys("<C-f>")
+  helpers.settle(child)
+  eq(child.fn.mode(), "c")
+  type("kouho<CR>")
+  helpers.settle(child)
+  eq(helpers.buffer(child), { "こうほ" })
 end
 
 T["registers word when markerHenkan is empty string (#55)"] = function()
