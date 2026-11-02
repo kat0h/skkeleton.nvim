@@ -328,6 +328,113 @@ T["db"]["rebuilds a truncated DB"] = function()
   )
 end
 
+T["db"]["rebuilds a DB with a broken header"] = function()
+  eq(
+    run([[
+      local src = write("s", ";; coding: utf-8\n;; okuri-nasi entries.\nあ /亜/\nい /伊/\n")
+      local opts = { dir = TMP .. "/db" }
+      local dst = db.ensure(src, opts)
+      local f = assert(io.open(dst, "r+b"))
+      f:write("X")
+      f:close()
+      local stale = not db.is_fresh(vim.fs.normalize(src), dst)
+      local d = db.open_dictionary(src, opts)
+      local res = d:get_henkan_result("okurinasi", "い")
+      d:close()
+      return { stale, res }
+    ]]),
+    { true, { "伊" } }
+  )
+end
+
+T["db"]["rebuilds a DB whose index is cut off"] = function()
+  eq(
+    run([[
+      local src = write("s", ";; coding: utf-8\n;; okuri-nasi entries.\nあ /亜/\nい /伊/\n")
+      local opts = { dir = TMP .. "/db" }
+      local dst = db.ensure(src, opts)
+      local f = assert(io.open(dst, "rb"))
+      local all = f:read("*a")
+      f:close()
+      f = assert(io.open(dst, "wb"))
+      f:write(all:sub(1, db.HEADER_SIZE + 4))
+      f:close()
+      local stale = not db.is_fresh(vim.fs.normalize(src), dst)
+      local d = db.open_dictionary(src, opts)
+      local res = d:get_henkan_result("okurinasi", "い")
+      d:close()
+      return { stale, res }
+    ]]),
+    { true, { "伊" } }
+  )
+end
+
+T["db"]["rebuilds a DB with an old header version"] = function()
+  eq(
+    run([[
+      local src = write("s", ";; coding: utf-8\n;; okuri-nasi entries.\nあ /亜/\nい /伊/\n")
+      local opts = { dir = TMP .. "/db" }
+      local dst = db.ensure(src, opts)
+      local f = assert(io.open(dst, "rb"))
+      local all = f:read("*a")
+      f:close()
+      local old = all:gsub("^SKKDB %d+", "SKKDB 0", 1)
+      assert(#old == #all)
+      f = assert(io.open(dst, "wb"))
+      f:write(old)
+      f:close()
+      local stale = not db.is_fresh(vim.fs.normalize(src), dst)
+      local d = db.open_dictionary(src, opts)
+      local res = d:get_henkan_result("okurinasi", "い")
+      d:close()
+      return { stale, res }
+    ]]),
+    { true, { "伊" } }
+  )
+end
+
+T["db"]["leaves a stale .tmp file alone and still builds the DB"] = function()
+  eq(
+    run([[
+      local src = write("s", ";; coding: utf-8\n;; okuri-nasi entries.\nあ /亜/\n")
+      local opts = { dir = TMP .. "/db" }
+      vim.fn.mkdir(opts.dir, "p")
+      local f = assert(io.open(opts.dir .. "/stale.tmp", "wb"))
+      f:write("stale")
+      f:close()
+      local d = db.open_dictionary(src, opts)
+      local res = d:get_henkan_result("okurinasi", "あ")
+      d:close()
+      return { res, vim.uv.fs_stat(opts.dir .. "/stale.tmp") ~= nil }
+    ]]),
+    { { "亜" }, true }
+  )
+end
+
+T["db"]["falls back to the memory dictionary when the DB cannot be written"] = function()
+  eq(
+    run([[
+      local config = require("skkeleton.config")
+      local dictionary = require("skkeleton.dictionary")
+      local src = write("s", ";; coding: utf-8\n;; okuri-nasi entries.\nあ /亜/\n")
+      -- databasePath の場所にファイルを置き、ディレクトリを作れなくする
+      local notdir = TMP .. "/notdir"
+      local f = assert(io.open(notdir, "wb"))
+      f:write("x")
+      f:close()
+      config.set({
+        globalDictionaries = { { src, "utf-8" } },
+        userDictionary = TMP .. "/user",
+        databasePath = notdir,
+        completionRankFile = "",
+      })
+      local lib = dictionary.load()
+      return lib:get_henkan_result("okurinasi", "あ")
+    ]]),
+    { "亜" }
+  )
+end
+
 T["db"]["uses separate DBs for different encodings of the same file"] = function()
   eq(
     run([[
