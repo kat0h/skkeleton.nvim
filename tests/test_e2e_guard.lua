@@ -99,4 +99,26 @@ T["unmapped special keys in cmdline commit the pre-edit first (#56)"] = function
   eq(child.fn.getcmdpos(), 4)
 end
 
+T["Ctrl + letter in terminal commits the pre-edit before the shell gets it (#121)"] = function()
+  child.cmd("terminal cat")
+  child.type_keys("i")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+  child.lua_get([[(function()
+    vim.wait(2000, function()
+      local ls = vim.tbl_filter(function(l)
+        return l ~= ""
+      end, vim.api.nvim_buf_get_lines(0, 0, -1, false))
+      return (ls[#ls] or ""):find("▽かn", 1, true) ~= nil
+    end, 20)
+    return true
+  end)()]])
+  eq(child.g["skkeleton#state"].preedit, "▽かn")
+
+  child.type_keys("<C-a>")
+  helpers.settle(child)
+  eq(child.g["skkeleton#state"].preedit, "")
+  eq(child.lua_get([[require("skkeleton.store").context():to_string()]]), "")
+end
+
 return T
