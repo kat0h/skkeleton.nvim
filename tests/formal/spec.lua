@@ -1371,29 +1371,6 @@ function M.is_known(name, keys, msg)
   end
 end
 
--- cmdline の ▼ で候補の一覧が出ているときの未マップの特殊キーで、確定したあとも一覧が残る（#115）
-M.known[#M.known + 1] = {
-  property = "unmapped: 未マップの特殊キーのあと、pre-edit は元のままか、きれいにリセットされる",
-  match = function(_, msg)
-    return msg ~= nil and msg:find("popup が残っている", 1, true) ~= nil
-  end,
-  reason = "#115: cmdline の ▼ で一覧が出ているときに <Right> などを押すと、確定したあとも一覧が残る",
-}
-
--- 辞書登録の欄で <C-w> のあと <C-g> で取り消すと、取り消しの印が崩れて語として登録される（#116）
-for _, name in ipairs({
-  "register: ユーザー辞書は空でない確定のときだけ増える",
-  "register: 取り消すと登録の前に戻る",
-}) do
-  M.known[#M.known + 1] = {
-    property = name,
-    match = function(keys)
-      return vim.tbl_contains(keys, "<C-w>") and vim.tbl_contains(keys, "<C-g>")
-    end,
-    reason = "#116: 辞書登録の欄で <C-w> のあと <C-g> で取り消すと、取り消しの印が崩れて語として登録される",
-  }
-end
-
 -- ▽ の途中の <C-o>l で、pre-edit が残る（#117）
 M.known[#M.known + 1] = {
   property = "frame: skkeleton の外でバッファやカーソルが動いたら pre-edit を捨てる",
