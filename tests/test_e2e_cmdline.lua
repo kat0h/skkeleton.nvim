@@ -183,6 +183,38 @@ T["<C-c> does not leave markers in command line history (#44)"] = function()
   eq(hist:find("▼", 1, true), nil)
 end
 
+T["pasting in front of the pre-edit keeps the pasted text and drops the marker (#12)"] = function()
+  enable_in_cmdline()
+  type("Kan")
+  eq(child.fn.getcmdline(), "▽かn")
+  -- 中クリックの貼り付けを模す（▽ の直後に文字が入り、読みはそのあとに残る）
+  child.lua([[vim.fn.setcmdline("▽PASTEDかn", 14)]])
+  helpers.settle(child)
+  eq(child.fn.getcmdline(), "PASTED")
+  -- 状態も初期化されている
+  type("ka")
+  eq(child.fn.getcmdline(), "PASTEDか")
+end
+
+T["pasting in front of a candidate keeps the pasted text and drops the marker (#12)"] = function()
+  enable_in_cmdline()
+  type("Kan<Space>")
+  eq(child.fn.getcmdline(), "▼缶")
+  child.lua([[vim.fn.setcmdline("▼PASTED缶", 13)]])
+  helpers.settle(child)
+  eq(child.fn.getcmdline(), "PASTED")
+end
+
+T["pasting inside the pre-edit keeps the text in front of it (#12)"] = function()
+  child.type_keys(":", "abc")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+  eq(child.fn.getcmdline(), "abc▽かn")
+  child.lua([[vim.fn.setcmdline("abc▽PASTEDかn", 17)]])
+  helpers.settle(child)
+  eq(child.fn.getcmdline(), "abcPASTED")
+end
+
 T["switching window during cmdline removes pre-edit from cmdline (#46)"] = function()
   child.cmd("botright new")
   child.cmd("wincmd p")

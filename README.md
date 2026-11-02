@@ -118,10 +118,8 @@ skkeleton.nvim は skkeleton を置き換えるプラグインです。同じ Ne
 主な違いは以下のとおりです。
 
 - `databasePath` にはファイルではなくディレクトリを指定します。指定したディレクトリ内に、辞書ごとの `<ハッシュ>.db` ファイルが生成されます（skkeleton が作成した DB ファイルは使用せず、新しく作成します）。既存のファイルパスや `skk.db` のような拡張子付きのパスが指定された場合は、その親ディレクトリを使用します。省略時（`""`）の保存先は `stdpath("cache")/skkeleton` です。
-- `sources` の `"deno_kv"` は `"skk_dictionary"` と同じものとして扱われます。どちらを指定しても辞書は DB 化して検索されるため、DB を使うために `databasePath` を設定する必要はありません。
-- `skkServer*` は互換性のために型の検証のみ行い、実際の処理では使用しません。
 - 以下の機能には対応していません。
-  - `sources` の `"skk_server"` および `"google_japanese_input"`
+  - skkserv および Google 日本語入力
   - ddc.vim の補完ソース（blink.cmp に対応しています）
   - YAML 形式・MessagePack 形式の辞書（JSON 形式の辞書には対応しています）
   - `skkeleton#handle()`、`skkeleton#dangerously_clear_buffer_local_mappings()`
@@ -133,7 +131,6 @@ skkeleton.nvim は skkeleton を置き換えるプラグインです。同じ Ne
 vim.fn["skkeleton#config"]({
   globalDictionaries = { "~/.config/skk/SKK-JISYO.L" },
   eggLikeNewline = true,
-  sources = { "deno_kv" },
   databasePath = vim.fn.expand("~/.cache/skk.db"),
 })
 vim.fn["skkeleton#register_kanatable"]("rom", { [","] = { "，", "" }, ["."] = { "．", "" } })
@@ -147,7 +144,7 @@ local skkeleton = require("skkeleton")
 skkeleton.setup({
   globalDictionaries = { "~/.config/skk/SKK-JISYO.L" },
   eggLikeNewline = true,
-  -- sources と databasePath は省略しても同じように動作します
+  -- databasePath は省略しても同じように動作します
 })
 skkeleton.register_kanatable("rom", { [","] = { "，", "" }, ["."] = { "．", "" } })
 vim.keymap.set({ "i", "c" }, "<C-j>", "<Plug>(skkeleton-toggle)")

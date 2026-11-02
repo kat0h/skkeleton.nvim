@@ -146,7 +146,11 @@ local function check_stale()
   then
     return
   end
-  reset_if_stale(vm)
+  local did_reset = reset_if_stale(vm)
+  -- 前の CmdlineChanged で片付けきれなかった cmdline の pre-edit を、もう一度試す (#12)
+  if vm == "c" and not did_reset and render.has_stale_cmdline() then
+    render.clean_stale_cmdline()
+  end
 end
 
 -- 最初に使うときに一度だけ呼ぶ。autocmd を作り、skkeleton-initialize-pre/post を発火する
@@ -237,6 +241,7 @@ function M.init(force)
     group = group,
     callback = function()
       render.clean_stale_cmdline()
+      render.reset_cmdline()
       clear_preedit_state()
       local cmdtype = vim.v.event.cmdtype
       clean_history(cmdtype)
@@ -255,6 +260,7 @@ function M.init(force)
       end
       if vim.fn.mode():sub(1, 1) == "c" then
         render.clean_stale_cmdline()
+        render.reset_cmdline()
         clear_preedit_state()
       end
       reset()

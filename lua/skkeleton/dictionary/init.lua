@@ -240,10 +240,6 @@ local function source_names(cfg)
   return cfg.sources or { "skk_dictionary" }
 end
 
-local function is_db_source(name)
-  return name == "skk_dictionary" or name == "deno_kv"
-end
-
 local function warn(msg)
   vim.notify("skkeleton: " .. msg, vim.log.levels.WARN)
 end
@@ -294,7 +290,7 @@ function M.load(cfg)
   local dicts = {}
   local globals_done = false
   for _, name in ipairs(source_names(cfg)) do
-    if is_db_source(name) then
+    if name == "skk_dictionary" then
       if not globals_done then
         globals_done = true
         for _, entry in ipairs(global_dictionaries(cfg)) do
@@ -318,7 +314,7 @@ end
 function M.prepare(cfg, on_done)
   cfg = cfg or {}
   local entries = {}
-  if vim.tbl_contains(source_names(cfg), "skk_dictionary") or vim.tbl_contains(source_names(cfg), "deno_kv") then
+  if vim.tbl_contains(source_names(cfg), "skk_dictionary") then
     for _, e in ipairs(global_dictionaries(cfg)) do
       if not is_json(e.path) and pcall(skk.check_supported, e.path) then
         entries[#entries + 1] = e
