@@ -228,7 +228,7 @@ end
 
 T["completionRankFile"] = MiniTest.new_set()
 
-T["completionRankFile"]["immediatelyDictionaryRW writes the ranks after register and purge"] = function()
+T["completionRankFile"]["immediatelyDictionaryRW keeps the rank after purge (#129)"] = function()
   eq(
     run([[
       local path = TMP .. "/ranks.json"
@@ -244,7 +244,8 @@ T["completionRankFile"]["immediatelyDictionaryRW writes the ranks after register
       local purged = read(path)
       return { registered, purged }
     ]]),
-    { '["亜"]', "[]" }
+    -- upstream と同じく、候補を消してもランクは残す (#129)
+    { '["亜"]', '["亜"]' }
   )
 end
 
