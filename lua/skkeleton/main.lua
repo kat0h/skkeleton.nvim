@@ -242,16 +242,6 @@ local function handle_keys(opts, vim_mode)
   ctx.vim_mode = vim_mode:sub(1, 1)
   local keys = normalize_keys(opts.key)
 
-  -- 補完の pum が出ているときの <CR>。native の pum だけ対応する
-  if vim.fn.pumvisible() == 1 and table.concat(keys) == "<cr>" and options.eggLikeNewline then
-    local ok, info = pcall(vim.fn.complete_info, { "selected" })
-    if ok and info.selected >= 0 then
-      mode_mod.initialize_state_with_abbrev(ctx, { "converter" })
-      ctx.preedit:output("")
-      return "\25"
-    end
-  end
-
   -- blink.cmp のメニューで項目を選んでいるときの <CR>。選んだ項目で確定する（確定は completion の execute が行う）
   if table.concat(keys) == "<cr>" and options.eggLikeNewline and require("skkeleton.completion").accept_selected() then
     return
