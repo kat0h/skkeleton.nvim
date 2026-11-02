@@ -169,6 +169,8 @@ function M.input(prompt)
   -- 辞書登録に入る前に補完メニューや候補ポップアップを閉じる
   require("skkeleton.popup").close()
   require("skkeleton.completion").hide()
+  -- 外側の pre-edit は登録の読みに変わるので、extmark を残さない
+  require("skkeleton.render").clear()
 
   local win = vim.api.nvim_get_current_win()
   local buf = vim.api.nvim_get_current_buf()
@@ -176,6 +178,8 @@ function M.input(prompt)
 
   local ok, res = pcall(function()
     store.init_context()
+    -- 新しい Context に合わせて参照用の変数も更新する（#54 の残り）
+    vim.g["skkeleton#state"] = { phase = "input", henkanFeed = "", preedit = "" }
     vim.api.nvim_create_autocmd("CmdlineEnter", {
       once = true,
       callback = function()

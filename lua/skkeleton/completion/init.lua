@@ -26,8 +26,6 @@ local validators = {
 
 -- blink.cmp が入っていないことを一度確かめたら、setup() まで require を繰り返さない
 local blink_missing = false
-local cmp_missing = false
-local cmp_registered = false
 
 -- blink.cmp。入っていなければ nil
 ---@return table?
@@ -47,35 +45,6 @@ local function get_blink()
   return blink
 end
 
--- nvim-cmp。入っていなければ nil
----@return table?
-local function get_cmp()
-  local loaded = package.loaded["cmp"]
-  if loaded then
-    return loaded
-  end
-  if cmp_missing then
-    return nil
-  end
-  local ok, cmp = pcall(require, "cmp")
-  if not ok or not cmp then
-    cmp_missing = true
-    return nil
-  end
-  return cmp
-end
-
-local function ensure_cmp_registered()
-  if cmp_registered then
-    return
-  end
-  local cmp = get_cmp()
-  if cmp and cmp.register_source then
-    pcall(cmp.register_source, "skkeleton", require("skkeleton.completion.cmp").new())
-    cmp_registered = true
-  end
-end
-
 -- 設定する。未知のキーや型が違う値があれば、何も反映せずにエラーにする
 ---@param opts? table
 function M.setup(opts)
@@ -92,9 +61,6 @@ function M.setup(opts)
   end
   M.options = vim.tbl_extend("force", defaults(), opts)
   blink_missing = false
-  cmp_missing = false
-  ensure_cmp_registered()
-  require("skkeleton.completion.native").setup()
 
   local group = vim.api.nvim_create_augroup("skkeleton-completion", { clear = true })
   vim.api.nvim_create_autocmd("User", {
@@ -112,25 +78,77 @@ function M.setup(opts)
       if blink then
         pcall(blink.hide)
       end
-      local cmp = get_cmp()
-      if cmp then
-        pcall(cmp.close)
-      end
       shown = false
       last_key = nil
     end,
   })
 end
 
--- ▽ の入力中（送りなしで、読みが空でない）か。補完の候補を返してよい状態
+-- ▽ の入力中（送りなしで、読みが空でない）か
 ---@return boolean
-function M.is_pending()
+local function is_pending()
   if vim.api.nvim_get_mode().mode:sub(1, 1) ~= "i" then
     return false
   end
   local store = require("skkeleton.store")
   local st = store.context().state
   return st.type == "input" and st.mode == "okurinasi" and st.henkan_feed ~= ""
+end
+
+--- 補完を出してよい状態か（skkeleton が有効で、insert モード、▽ の入力中で読みが空でない）
+---@return boolean
+function M.can_complete()
+  if not require("skkeleton").is_enabled() then
+    return false
+  end
+  return is_pending()
+end
+
+---@class skkeleton.CompletionItem
+---@field kana string 読み
+---@field word string 注釈を除いた単語
+---@field raw string 辞書の元の候補文字列
+---@field annotation? string 注釈
+
+--- ソート・注釈分離済みの共通補完項目一覧を返す
+---@return skkeleton.CompletionItem[]
+function M.items()
+  if not M.can_complete() then
+    return {}
+  end
+  local skkeleton = require("skkeleton")
+  local sort = require("skkeleton.completion.sort")
+  local candidate_mod = require("skkeleton.candidate")
+
+  local completions = skkeleton.get_completions()
+  local sorted = sort.sort_completions(completions, skkeleton.get_completion_ranks())
+
+  local items = {}
+  for _, entry in ipairs(sorted) do
+    local kana = entry.kana
+    local cand = entry.word
+    local word, annotation = candidate_mod.pair(cand)
+    items[#items + 1] = {
+      kana = kana,
+      word = word,
+      raw = cand,
+      annotation = (annotation and annotation ~= "") and annotation or nil,
+    }
+  end
+  return items
+end
+
+-- 補完で選んだ語を確定する。補完の入口（いまは blink.cmp だけ）は、候補の形を詰め替えてからここを通す。
+-- 状態の片付け、ユーザー辞書への登録、確定文字列の出力、undo point は main.complete が一括して行う。
+-- kana は読み、word は辞書の候補（注釈つきでもよい）、kind は変換の種類（既定は "okurinasi"）
+---@param kana string
+---@param word string
+---@param kind? skkeleton.HenkanType
+function M.confirm(kana, word, kind)
+  if not M.can_complete() then
+    return
+  end
+  require("skkeleton.main").complete(kana, word, kind)
 end
 
 -- 利用者が providers に書いた skkeleton の source の id。書いていなければ nil
@@ -157,10 +175,6 @@ local shown = false
 
 local function hide()
   last_key = nil
-  local cmp = get_cmp()
-  if cmp then
-    pcall(cmp.close)
-  end
   if not shown then
     return
   end
@@ -179,18 +193,12 @@ function M.refresh()
   if not opts.enabled then
     return hide()
   end
-  if not M.is_pending() then
+  if not is_pending() then
     return hide()
   end
   local st = require("skkeleton.store").context().state
   if #require("skkeleton.util").chars(st.henkan_feed) < opts.minLength then
     return hide()
-  end
-
-  local cmp = get_cmp()
-  if cmp then
-    ensure_cmp_registered()
-    pcall(cmp.complete)
   end
 
   local key = st.henkan_feed .. "\0" .. st.feed
@@ -210,10 +218,10 @@ function M.refresh()
 end
 
 -- blink のメニューが出ていて、項目を選んでいれば、その項目で確定する（blink の accept に回す）。
--- 回したら true。upstream の handleCompleteKey の cmp に当たる
+-- 回したら true。upstream の handleCompleteKey に当たる
 ---@return boolean
 function M.accept_selected()
-  if not M.options.enabled or not M.is_pending() then
+  if not M.options.enabled or not is_pending() then
     return false
   end
   local blink = package.loaded["blink.cmp"]
@@ -246,13 +254,6 @@ function M.accept_selected()
   end
   local res = blink.accept and blink.accept()
   return res ~= false
-end
-
----@param findstart 1|0|string
----@param base string
----@return integer|table[]
-function M.completefunc(findstart, base)
-  return require("skkeleton.completion.native").completefunc(findstart, base)
 end
 
 return M

@@ -1,4 +1,6 @@
--- keymap_test.ts（`skkeleton#handle` を通さず handle_key を直接呼ぶ）
+-- Ported from skkeleton (denops/skkeleton/keymap_test.ts)
+-- Copyright (c) 2021 kuuote, zlib license (see LICENSES/skkeleton.txt)
+-- Modified for skkeleton.nvim: rewritten for mini.test.
 local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 local T, child = helpers.child_set()
@@ -74,6 +76,7 @@ T["register errors"] = function()
   eq(child.lua_get([[select(2, pcall(keymap.register, "input", "a", "nothing"))]]), "unknown function: nothing")
 end
 
+-- upstream: "send multiple keys into handleKey"
 T["send multiple keys into handle_key"] = function()
   init()
   eq(child.lua_get([[shown({ "W", "a", "r", "e" })]]), "▽われ")

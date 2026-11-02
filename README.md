@@ -54,7 +54,7 @@ require("skkeleton").setup({ indicator = false })
 
 ## 補完
 
-送りなし入力中に以下の補完プラグインまたは Neovim 組み込み機能を利用できます。
+送りなし入力中にblink.cmp を利用できます。
 
 補完候補は、**読みの長さ（短い順）** → **選択履歴ランク（頻度順）** → **辞書の出現順** の 3 段階でソートされます。
 
@@ -78,28 +78,6 @@ require("blink.cmp").setup({
 
 `eggLikeNewline = true` を設定すると、補完候補選択中の `<CR>` で候補を直接確定できます。
 
-### nvim-cmp
-
-[nvim-cmp](https://github.com/hrsh7th/nvim-cmp) の sources に `"skkeleton"` を指定します。`skkeleton.setup()` 時にソースが自動登録されます。
-
-```lua
-local cmp = require("cmp")
-cmp.setup({
-  sources = cmp.config.sources({
-    { name = "skkeleton" },
-    { name = "buffer" },
-  }),
-})
-```
-
-### 組み込み completefunc
-
-Neovim 組み込みの `completefunc`（`<C-x><C-u>`）を使用する場合：
-
-```lua
-vim.bo.completefunc = "v:lua.require'skkeleton.completion'.completefunc"
-```
-
 ### 補完ランクの永続化 (`completionRankFile`)
 
 候補の選択履歴を保存して次回の補完順位に反映させるには、`completionRankFile` を指定します。
@@ -118,8 +96,7 @@ require("skkeleton").setup({
 - `require("skkeleton").get_pre_edit()` (`get_preedit()`): 現在の pre-edit 文字列を取得
 - `require("skkeleton").get_completions()` (`get_completion_result()`): 補完候補一覧を取得
 - `require("skkeleton").get_completion_ranks()`: 候補のランクテーブルを取得
-- `require("skkeleton").complete_callback(kana, word)`: 選択した候補を辞書とランクに登録
-- `require("skkeleton").complete(kana, word)`: 候補を確定してバッファに挿入
+- `require("skkeleton").complete(kana, word)`: 候補を確定してバッファに挿入し、辞書とランクに登録
 
 ## skkeleton からの移行
 
@@ -145,7 +122,7 @@ skkeleton.nvim は skkeleton を置き換えるプラグインです。同じ Ne
 - `skkServer*` は互換性のために型の検証のみ行い、実際の処理では使用しません。
 - 以下の機能には対応していません。
   - `sources` の `"skk_server"` および `"google_japanese_input"`
-  - ddc.vim の補完ソース（blink.cmp、nvim-cmp、組み込み completefunc に対応しています）
+  - ddc.vim の補完ソース（blink.cmp に対応しています）
   - YAML 形式・MessagePack 形式の辞書（JSON 形式の辞書には対応しています）
   - `skkeleton#handle()`、`skkeleton#dangerously_clear_buffer_local_mappings()`
 
@@ -196,11 +173,6 @@ make lint              # stylua --check
 make fmt
 ```
 
-`stylua` は `.tests/bin/stylua` が存在すればそちらを優先して使用します。内部設計は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)、開発計画と経緯は [docs/PLAN.md](docs/PLAN.md) を参照してください。
+`stylua` は `.tests/bin/stylua` が存在すればそちらを優先して使用します。内部設計は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) を参照してください。
 
-### ブランチ構成
-
-- `main`: 主系ブランチ。安定版のコードを管理します。
-- `feat/*`: 新機能の開発用ブランチ。
-- `fix/*`: バグ修正用の作業ブランチ。
-- `poc/*`: 概念実証（PoC）や実験的ツールの検証用ブランチ（モデル検査など）。
+開発の決まり（issue、テスト、コミット、ブランチ）は [AGENTS.md](AGENTS.md) に、モデル検査の考え方と手順は [docs/MODEL_CHECKING.md](docs/MODEL_CHECKING.md) にあります。

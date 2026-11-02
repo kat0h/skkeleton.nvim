@@ -24,7 +24,8 @@ skkeleton.nvim のモジュールの構成と、モジュールのあいだの�
 | `lua/skkeleton/keymap.lua` | コア | 状態ごとのキーマップと `handle_key` |
 | `lua/skkeleton/function/{init,common,input,henkan,mode,disable,dictionary}.lua` | コア | upstream の `function/*.ts` に対応する各機能 |
 | `lua/skkeleton/dictionary/{init,skk,db,user,numeral}.lua` | 辞書 | 辞書管理（Library、SKK 辞書、DB キャッシュ、ユーザー辞書、数値変換） |
-| `lua/skkeleton/indicator/{init,modes}.lua` | インジケータ | `skkeleton_indicator.nvim` の移植 |
+| `lua/skkeleton/indicator/{init,indicator,config,modes,strings}.lua` | インジケータ | `skkeleton_indicator.nvim` の移植。本体の中を見ない（下の indicator） |
+| `lua/skkeleton/completion/{init,blink,sort}.lua` | 補完 | blink.cmp の source と、候補作り・判定・確定の共通の処理（`can_complete()`、`items()`、`confirm()`）。補完は blink.cmp だけ（#69） |
 | `lua/skkeleton/{init,main,render,popup,map}.lua`、`plugin/skkeleton.lua`、`autoload/skkeleton.vim`、`host.lua` の UI 部分 | UI | Neovim との結合。`main.lua` が enable/disable/toggle/handle と autocmd、`render.lua` が描画、`popup.lua` が候補ポップアップ、`map.lua` がマッピングとオプションの退避・復元を担当 |
 | `tests/helpers.lua` のキー入力ドライバ、E2E テスト | UI | 結合テスト・E2E テスト基盤 |
 
@@ -94,11 +95,11 @@ kana.get_table(name?) -> skkeleton.KanaTable  -- 省略時は現在のテーブ�
 kana.current_name / kana.set_current(name)
 kana.register(name, raw_table, create)        -- upstream の registerKanaTable
 kana.load_file(name, path, encoding, create)
--- KanaTable の検索結果は { "あ", "" }（かなと次の feed）または関数（function/ の関数）
+-- KanaTable の検索結果は { "あ", "" }（かなと次の feed）だけ。関数はかなテーブルに置かず、キーマップ（keymap.lua）に置く（#67）
 tbl:find(from) -> result?
 tbl:node(prefix) -> { count = 前方一致する件数, result = 完全一致の結果? }?  -- Trie により O(len) で検索
-tbl:filter(pred) -> KanaTable
 ```
+1 打ごとの処理（`keymap.handle_key`）は、打ちかけ＋キーがかなテーブルにあればかなテーブル、なければキーマップの関数、それもなければ `kana_input` の順に見る。`l`、`q`、`;`、`/`、`L` のように既定のローマ字のテーブルでだけ関数として効くキーは、`function/input.lua` の `kana_function` で包んでいる。
 
 ### Library（辞書）
 ```lua
@@ -111,13 +112,19 @@ lib:purge_candidate(type, word, candidate)
 lib:load(); lib:save()
 -- 個々の辞書は :get_henkan_result(type, word) と :get_prefix(type, prefix, limit) を持つ
 ```
-DB フォーマットは `docs/PLAN.md` の「DB の形式 v1」に従う（`bench/lib/cache.lua` がリファレンス実装）。
+DB の形式 v1（`lua/skkeleton/dictionary/db.lua`）:
+- 置き場所: `stdpath("cache")/skkeleton/<元の辞書の正規化した絶対パスの sha256 の先頭 16 文字>.db`（設定の `databasePath` があればそのディレクトリ）
+- `[0,128)` のヘッダは ASCII で `SKKDB <ver> <nari> <nnasi> <src_size> <src_mtime_sec> <src_mtime_nsec>\n` を空白で埋めたもの。ヘッダのサイズと mtime が元の辞書と合わなければ作り直す
+- `[128,…)` の索引: u32 LE の行頭オフセット。okuri-ari が nari 個＋終端、okuri-nasi が nnasi 個＋終端。行の長さはオフセットの差でわかる
+- データ部: UTF-8 の `読み 候補\n` を、種類ごとにバイト順（LuaJIT の文字列比較と同じ）でソートしたもの
+- 書き込みは `.tmp` に書いてから rename する。同じ読みが 2 回あれば先のものを使う（#48）
 
 ### indicator（インジケータ）
 ```lua
 require("skkeleton.indicator").setup(opts)  -- opts は skkeleton_indicator と同じキー（camelCase）。false で無効化
 ```
-モードは `vim.g["skkeleton#mode"]` と `vim.g["skkeleton#enabled"]` から読み取り、upstream と同じ User イベント（`skkeleton-mode-changed`、`skkeleton-enable-post`、`skkeleton-disable-post`）で表示を更新する。
+インジケータは本体から切り離す。本体が公開する状態（`g:skkeleton#mode`、`g:skkeleton#enabled`、`g:skkeleton#state`）と User イベント（`skkeleton-mode-changed`、`skkeleton-enable-post`、`skkeleton-disable-post`、`skkeleton-handled`）だけを読み、`skkeleton.render` などを `require` しない。本体からインジケータを呼ぶのは `init.lua` の `setup` だけにする。
+インジケータは、挿入モード・コマンドラインモードに入ったときと、skkeleton のモードが変わったときにカーソルの右下に出す。入力が始まったとき（`g:skkeleton#state.preedit` が空でない）、文字が入ったとき、カーソルが動いたとき、`fadeOutMs` がたったときに消す（#63）。挿入に入ってすぐ文字が入ったとき（`Afoo` のようなマッピング）は出さない。
 
 ### 公開インターフェース（UI、upstream と互換）
 - 変数: `g:skkeleton#enabled`、`g:skkeleton#mode`
@@ -125,29 +132,16 @@ require("skkeleton.indicator").setup(opts)  -- opts は skkeleton_indicator と�
 - `<Plug>(skkeleton-enable)`、`<Plug>(skkeleton-disable)`、`<Plug>(skkeleton-toggle)`（`i` / `c` / `t` モード）
 - Lua API: `require("skkeleton").setup(opts)`、`.enable()`、`.disable()`、`.toggle()`、`.mode()`、`.is_enabled()`、`.register_keymap(state, key, func)`、`.register_kanatable(name, tbl, create)`、`.register_kanatable_file(...)`、`.get_config()`、`.initialize()`、`.update_database(path, encoding, force)`
 - pre-edit 用 extmark の namespace は `skkeleton-preedit`、ハイライトグループは `SkkeletonPreedit`（既定では属性未設定）
-- `g:skkeleton#state`（`{ phase, henkanFeed }`）はキー処理（handle）のたびに更新する
+- `g:skkeleton#state`（`{ phase, henkanFeed, preedit }`）はキー処理（handle）のたびに更新する
 - `autoload/skkeleton.vim` にはステータスライン連携用の `skkeleton#mode()` と `skkeleton#is_enabled()` のみを配置する
 
 ### 描画フロー（render）
 - insert モード: 確定文字列がある場合は `nvim_feedkeys(…, "nit")` で送出し、続けて `<Cmd>lua require('skkeleton.render').finish()<CR>` を実行する。`finish()` 内で extmark の再配置、候補ポップアップの表示、`User skkeleton-handled` の発火を行う。確定文字列がない場合はその場で `finish()` を直接呼び出す。
 - 送出する文字列に含まれる `0x80`（「、」などの UTF-8 バイト列に含まれる）は `0x80 0xfe 'X'` にエスケープし、末尾の `<Cmd>...<CR>` のみを `nvim_replace_termcodes` で変換して結合する。
-- pre-edit が残っている状態で、カーソル位置または `changedtick` が前回描画時と異なる場合は、次の handle の冒頭で入力状態をリセットする（extmark は `right_gravity = false`）。
+- pre-edit とバッファのずれは、`main.lua` の `reset_if_stale()` の 1 か所で見つけて片付ける（#61）。判定は `render.is_stale()`。pre-edit を出している間は `nvim_buf_attach` の `on_bytes` でバッファの書き換えを受け、ずれた合図にする（#66）。extmark は `right_gravity = false`。
+- Vim のモードが移ったときの片付けは、`main.lua` の `ModeChanged` 1 か所で受け、`MODE_TRANSITIONS` の表で片付け方を決める（#62）。insert から normal へ移るときは、pre-edit を `<Esc>` と同じく確定してから片付ける（#70）。
 - cmdline モードと terminal モードでは `ctx.preedit:output(ctx:to_string())` を送出する。
 - モードのみが変化し出力文字列がない場合も `finish()` を呼ぶため、upstream の `" \x08"` に相当する再描画ハックは不要。
 - `virtualedit` は変更しない（pre-edit をバッファに書き込まないため）。`textwidth` のみ `0` に退避・設定する。
 
-## テスト
-- テストランナーは `mini.test`。`make test`（全件実行）、`make test FILE=tests/test_kana.lua`（単一ファイル実行）。
-- テストファイルは `tests/test_<領域>.lua`。モジュールレベルの状態（config やかなテーブルなど）を変更するテストでは、`require("helpers").child_set()` で子プロセスの Neovim を使い、テストケースごとに環境を分離する。
-- 辞書のテストデータは `tests/testdata/` に配置（upstream の testdata を複製したもの。EUC-JP エンコーディングのファイルを含む）。
-- upstream の `*_test.ts` の入出力ケースは、可能な限りそのままテーブル駆動テストとして移植する。
-
-## ライセンス
-- 詳細は `LICENSES/README.md` を参照。移植元（skkeleton、skkeleton_indicator.nvim）はいずれも zlib ライセンス。
-- upstream から移植したファイルの先頭には、移植元ファイル名、著作権表示、および改変した旨を明記する（書式は `LICENSES/README.md` を参照）。
-- SKK 辞書（GPL）および upstream が依存している外部パッケージのコードはリポジトリに含めない。数値変換（漢数字、ローマ数字など）は独自に実装する。
-
-## コミット規約
-- `docs/PLAN.md` の方針に従い、1 コミット = 1 つの意味のある単位とし、`make test` が通る状態でコミットする。
-- コミットメッセージは Conventional Commits 形式（`feat:`、`fix:`、`test:`、`docs:` など）とする。
-- コード内のコメントは日本語で、処理の意図を簡潔に記述する。
+テスト、ライセンス、コミットの決まりは [AGENTS.md](../AGENTS.md) にある。

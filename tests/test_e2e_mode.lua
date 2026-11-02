@@ -72,6 +72,7 @@ T["Fire autocmd for mode changed"] = function()
   eq(child.g.mode_actual, "hankata")
 end
 
+-- upstream: "mode change  at enable"
 T["mode change at enable"] = function()
   child.cmd([[autocmd User skkeleton-mode-changed let g:mode_actual = skkeleton#mode()]])
   enable()
@@ -347,17 +348,18 @@ T["the state is exposed in g:skkeleton#state"] = function()
   enable()
   type("K")
   eq(child.g["skkeleton#state"].phase, "input:okurinasi")
+  eq(child.g["skkeleton#state"].preedit ~= "", true)
   type("a")
   eq(child.g["skkeleton#state"].henkanFeed, "か")
   type("n<Space>")
   eq(child.g["skkeleton#state"].phase, "henkan")
   -- ウィンドウを移ったり normal に戻ったりして状態が初期化されたら g:skkeleton#state も初期化される
   child.cmd("botright new")
-  eq(child.g["skkeleton#state"], { phase = "input", henkanFeed = "" })
+  eq(child.g["skkeleton#state"], { phase = "input", henkanFeed = "", preedit = "" })
 end
 
 T["register_kanatable adds a table"] = function()
-  child.lua([[require("skkeleton").register_kanatable("rom", { ["!"] = { "！", "" }, jj = "disable" })]])
+  child.lua([[require("skkeleton").register_kanatable("rom", { ["!"] = { "！", "" } })]])
   enable()
   type("!")
   eq(helpers.buffer(child), { "！" })

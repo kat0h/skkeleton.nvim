@@ -1,4 +1,6 @@
--- upstream の dictionary_test.ts の移植と、Library / load(cfg) のテスト
+-- Ported from skkeleton (denops/skkeleton/dictionary_test.ts)
+-- Copyright (c) 2021 kuuote, zlib license (see LICENSES/skkeleton.txt)
+-- Modified for skkeleton.nvim: rewritten for mini.test.
 local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 local T, child = helpers.child_set()

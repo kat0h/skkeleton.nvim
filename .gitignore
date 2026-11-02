@@ -1,4 +1,5 @@
-/bench/out/
 /.tests/
 *.db
 /doc/tags
+nvim.log
+/.claude/worktrees/

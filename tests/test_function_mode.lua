@@ -1,4 +1,6 @@
--- function/mode_test.ts（enable/disable を通す部分は E2E で扱う）
+-- Ported from skkeleton (denops/skkeleton/function/mode_test.ts)
+-- Copyright (c) 2021 kuuote, zlib license (see LICENSES/skkeleton.txt)
+-- Modified for skkeleton.nvim: rewritten for mini.test.
 local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 local T, child = helpers.child_set()
@@ -77,14 +79,13 @@ T["abbrev"] = function()
   eq(child.lua_get([[ctx:to_string()]]), "▽あ")
 end
 
-T["abbrev keeps only henkan_first in the table"] = function()
+T["abbrev empties the table"] = function()
   init()
   child.lua([[
     ctx = Context.new()
     mode.abbrev(ctx)
   ]])
-  eq(child.lua_get([[ctx.state.table:count()]]), 1)
-  eq(child.lua_get([[ctx.state.table:find(" ") == require("skkeleton.function.henkan").henkan_first]]), true)
+  eq(child.lua_get([[ctx.state.table:count()]]), 0)
   eq(child.lua_get([[ctx.state.direct_input]]), true)
   eq(child.lua_get([[ctx.state.mode]]), "okurinasi")
 end

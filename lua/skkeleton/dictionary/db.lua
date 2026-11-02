@@ -1,4 +1,4 @@
--- SKK 辞書の永続キャッシュ（DB の形式 v1）。docs/PLAN.md の「DB の形式 v1」を実装する。
+-- SKK 辞書の永続キャッシュ（DB の形式 v1）。形式は docs/ARCHITECTURE.md の「DB の形式 v1」。
 --
 --   [0, 128)   ヘッダ: "SKKDB 1 <nari> <nnasi> <src_size> <src_mtime_sec> <src_mtime_nsec>\n" を空白で埋めたもの
 --   [128, ...) 索引: リトルエンディアンの u32 で、各行の先頭のファイル内オフセット（0 起点）

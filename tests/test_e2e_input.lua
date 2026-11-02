@@ -41,6 +41,13 @@ local cases = {
   { "hankaku katakana", "<C-q>ka", { "ｶ" }, "", "hankata" },
   { "zenkaku", "Lab", { "ａｂ" }, "", "zenkaku" },
   { "hankatakana -> zenkaku -> hankatakana restores table (issue #40)", "<C-q>L<C-q>a&", { "ｱ&" }, "", "hankata" },
+  -- かなテーブルから移した関数のキー (#67)
+  { "l disables", "kal", { "か" }, "", "" },
+  { "n then l flushes n", "nl", { "ん" }, "", "" },
+  { "q after a pending feed flushes it first", "kaq", { "か" }, "", "kata" },
+  { "; starts okuri", "Ka;", { "" }, "▽か*", "hira" },
+  { "/ is literal in zenkaku", "L/;lq", { "／；ｌｑ" }, "", "zenkaku" },
+  { "/ ; l q are literal in abbrev", "/a;lq", { "" }, "▽a;lq", "abbrev" },
   { "abbrev", "/abc<Space>", { "" }, "▼ＡＢＣ", "abbrev" },
   { "abbrev: kakutei", "/abc<Space><C-j>", { "ＡＢＣ" }, "", "hira" },
   { "<C-j> without pre-edit is hiragana", "q<C-j>ka", { "か" }, "", "hira" },
@@ -48,7 +55,7 @@ local cases = {
   { "symbols with a sequence", "z,", { "‥" }, "", "hira" },
   { "an unmapped sequence is kept as typed", "ka1", { "か1" }, "", "hira" },
   { "<Bar> is input", "|", { "|" }, "", "hira" },
-  { "<lt> is passed to the kana table", "<LT>", { "" }, "<", "hira" },
+  { "<lt> is input", "<LT>", { "<" }, "", "hira" },
   { "space without pre-edit", "ka ka", { "か か" }, "", "hira" },
   {
     "okurinasi with a candidate that has an annotation-less single entry",
@@ -86,6 +93,34 @@ T["<Esc> after converting inserts the candidate"] = function()
   type("Kan<Space><Esc>")
   eq(helpers.buffer(child), { "缶" })
   eq(child.fn.mode(), "n")
+end
+
+T["<C-c> in the middle of conversion leaves the same text as <Esc> (#70)"] = function()
+  for _, keys in ipairs({ "Kan", "Kan<Space>", "k" }) do
+    child.api.nvim_buf_set_lines(0, 0, -1, false, { "" })
+    child.api.nvim_win_set_cursor(0, { 1, 0 })
+    start()
+    type(keys)
+    type("<Esc>")
+    local esc_text = helpers.buffer(child)
+    local esc_cursor = helpers.cursor(child)
+    eq(#esc_text, 1)
+    eq(esc_text[1] ~= "", true)
+
+    child.api.nvim_buf_set_lines(0, 0, -1, false, { "" })
+    child.api.nvim_win_set_cursor(0, { 1, 0 })
+    start()
+    type(keys)
+    type("<C-c>")
+    eq(helpers.buffer(child), esc_text)
+    eq(helpers.cursor(child), esc_cursor)
+    eq(helpers.preedit(child), "")
+    eq(child.fn.mode(), "n")
+    eq(child.g["skkeleton#enabled"], false)
+    -- 確定した文字は u 1 回で戻せる
+    type("u")
+    eq(helpers.buffer(child), { "" })
+  end
 end
 
 T["the pre-edit follows the cursor in the middle of a line"] = function()
@@ -159,6 +194,7 @@ T["a long line is not broken by textwidth"] = function()
   eq(helpers.buffer(child), { "あいうえおあいうえおあいうえお" })
 end
 
+-- upstream: "new line"
 T["indent is kept by a newline"] = function()
   child.o.autoindent = true
   child.type_keys("i")
@@ -169,32 +205,6 @@ end
 
 local E, echild = helpers.e2e_set({ config = { eggLikeNewline = true } })
 T["eggLikeNewline"] = E
-
-E["<CR> after selecting from the completion menu is passed on as <C-y>"] = function()
-  -- UI の無い子では pum が出ないので、pum が出ている状態を作る。
-  -- メニューが無いときの <C-y> は上の行の文字を写すので、それで <C-y> が流れたことが分かる
-  echild.api.nvim_buf_set_lines(0, 0, -1, false, { "foobar", "" })
-  echild.api.nvim_win_set_cursor(0, { 2, 0 })
-  helpers.type(echild, "i", "<Plug>(skkeleton-enable)")
-  echild.lua([[
-    vim.fn.pumvisible = function() return 1 end
-    vim.fn.complete_info = function() return { selected = 0 } end
-  ]])
-  helpers.type(echild, "<CR>")
-  eq(helpers.buffer(echild), { "foobar", "f" })
-end
-
-E["<CR> with a pum but nothing selected is a newline"] = function()
-  echild.api.nvim_buf_set_lines(0, 0, -1, false, { "foobar", "" })
-  echild.api.nvim_win_set_cursor(0, { 2, 0 })
-  helpers.type(echild, "i", "<Plug>(skkeleton-enable)")
-  echild.lua([[
-    vim.fn.pumvisible = function() return 1 end
-    vim.fn.complete_info = function() return { selected = -1 } end
-  ]])
-  helpers.type(echild, "<CR>")
-  eq(helpers.buffer(echild), { "foobar", "", "" })
-end
 
 E["<CR> while converting only confirms"] = function()
   helpers.type(echild, "i", "<Plug>(skkeleton-enable)")
@@ -442,6 +452,21 @@ T["kanatable with space mapped to fullwidth space still allows conversion (#43)"
   eq(helpers.buffer(child), { "あ　缶" })
 end
 
+T["kanatable entry for l overrides the disable key (#67)"] = function()
+  child.lua([[require("skkeleton").register_kanatable("rom", { l = false, la = { "ぁ" } })]])
+  start()
+  type("la")
+  eq(helpers.buffer(child), { "ぁ" })
+end
+
+T["kanatable entry for q overrides the katakana key (#67)"] = function()
+  child.lua([[require("skkeleton").register_kanatable("rom", { q = { "く", "" } })]])
+  start()
+  type("q")
+  eq(helpers.buffer(child), { "く" })
+  eq(helpers.mode(child), "hira")
+end
+
 T["longer kanatable entry takes precedence over keymap function (#42)"] = function()
   child.lua([[
     require("skkeleton").register_kanatable("rom", {
@@ -455,13 +480,38 @@ T["longer kanatable entry takes precedence over keymap function (#42)"] = functi
   eq(helpers.buffer(child), { "　" })
 end
 
-T["symbol after henkanFirst in kanatable is not duplicated (#41)"] = function()
+T["symbol after henkanFirst in keymap is not duplicated (#41)"] = function()
   child.lua([[
-    require("skkeleton").register_kanatable("rom", { z = "henkanFirst" })
+    require("skkeleton").register_keymap("input", "&", "henkanFirst")
   ]])
   start()
-  type("z&")
-  eq(helpers.buffer(child), { "z&" })
+  type("&@")
+  eq(helpers.buffer(child), { "&@" })
+end
+
+T["stale preedit: on_bytes detects line modification during pre-edit (#66)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "line1" })
+  start()
+  type("Kan")
+  eq(helpers.preedit(child), "▽かn")
+  -- 外部から現在行が書き換えられた場合
+  child.lua([[vim.api.nvim_buf_set_lines(0, 0, 1, false, { "modified" })]])
+  helpers.settle(child)
+  local marks =
+    child.lua_get([[vim.api.nvim_buf_get_extmarks(0, vim.api.nvim_get_namespaces()["skkeleton-preedit"], 0, -1, {})]])
+  eq(#marks, 0)
+  eq(helpers.preedit(child), "")
+end
+
+T["<Esc> のすぐあとに insert へ戻っても escape の状態が残らない (#32)"] = function()
+  child.type_keys("i")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+  -- <Esc> と a を 1 度に送ると、a は SafeState より先に処理される（端末の <M-a> と同じ）
+  child.api.nvim_input("<Esc>a")
+  helpers.settle(child)
+  eq(child.fn.mode(), "i")
+  eq(child.lua_get([[require("skkeleton.store").context().state.type]]), "input")
 end
 
 return T

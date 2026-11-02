@@ -2,7 +2,7 @@
 -- 差分テストで違いが出ても、ここに当てはまれば除外する。
 -- applies(scenario, step_index, a, b, r) は a = Lua 版、b = denops 版のその時点の状態、
 -- r は 2 つの実行結果全体（r.a.steps、r.b.steps）を受けて、除外してよいなら true を返す。
--- 理由は docs/PLAN.md、docs/ARCHITECTURE.md、LICENSES/README.md も参照
+-- 理由は docs/ARCHITECTURE.md、LICENSES/README.md も参照
 --
 -- ここに入れないもの（Lua 版の不具合）:
 --   半角カタカナモードの ▽ で q を押すとカタカナで確定する（denops 版はひらがな）: kat0h/skkeleton.nvim#51

@@ -6,7 +6,7 @@ STYLUA ?= $(if $(wildcard .tests/bin/stylua),.tests/bin/stylua,stylua)
 # make test FILE=tests/test_kana.lua で 1 ファイルだけ動かす
 FILE ?=
 
-.PHONY: test deps lint fmt bench difftest bench-keys jisyotest
+.PHONY: test deps lint fmt difftest jisyotest
 
 test: deps
 	MINI_PATH=$(MINI_PATH) $(NVIM) --headless --noplugin -u tests/minimal_init.lua \
@@ -18,23 +18,16 @@ $(MINI_PATH):
 	git clone --depth 1 --filter=blob:none $(MINI_REPO) $(MINI_PATH)
 
 lint:
-	$(STYLUA) --check lua plugin tests bench
+	$(STYLUA) --check lua plugin tests
 
 fmt:
-	$(STYLUA) lua plugin tests bench
-
-bench:
-	bench/run_all.sh 1
+	$(STYLUA) lua plugin tests
 
 # denops 版（upstream）との差分テスト。deno と denops.vim が要る（無ければ skip）。
 # make difftest ARGS="--random 50 --filter Kan" のように絞れる
 ARGS ?=
 difftest: deps
 	MINI_PATH=$(MINI_PATH) $(NVIM) --headless -u NONE -i NONE -l tests/diff/run.lua $(ARGS)
-
-# キー 1 回ごとの処理時間を測る
-bench-keys: deps
-	MINI_PATH=$(MINI_PATH) $(NVIM) --headless -u NONE -i NONE -l bench/keys.lua $(ARGS)
 
 # SKK-JISYO.L の全候補が変換で出るか確かめる（重いので make test には入れない）。
 # make jisyotest ARGS="--sample 2000" のように絞れる

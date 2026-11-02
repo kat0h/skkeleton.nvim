@@ -124,4 +124,25 @@ T["splits undo during pre-edit without changing existing behavior"] = function()
   eq(helpers.buffer(child), { "" })
 end
 
+T["splits undo before first chunk only in streaming paste (phase 1, 2, 3)"] = function()
+  child.type_keys("i")
+  helpers.type(child, "<Plug>(skkeleton-enable)")
+  helpers.type(child, "a")
+  eq(helpers.buffer(child), { "あ" })
+
+  child.lua([[vim.paste({ "chunk1" }, 1)]])
+  child.lua([[vim.paste({ "chunk2" }, 2)]])
+  child.lua([[vim.paste({ "chunk3" }, 3)]])
+  eq(helpers.buffer(child), { "あchunk1chunk2chunk3" })
+
+  child.type_keys("<Esc>", "u")
+  helpers.settle(child)
+  -- 全チャンクが 1 回の u で消え、前の入力は残る
+  eq(helpers.buffer(child), { "あ" })
+
+  child.type_keys("u")
+  helpers.settle(child)
+  eq(helpers.buffer(child), { "" })
+end
+
 return T

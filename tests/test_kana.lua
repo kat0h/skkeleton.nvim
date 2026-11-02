@@ -1,4 +1,6 @@
--- kana_test.ts と、trie のかなテーブル（register / load_file / node）のテスト
+-- Ported from skkeleton (denops/skkeleton/kana_test.ts)
+-- Copyright (c) 2021 kuuote, zlib license (see LICENSES/skkeleton.txt)
+-- Modified for skkeleton.nvim: rewritten for mini.test.
 local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 local T, child = helpers.child_set()
@@ -13,13 +15,13 @@ end
 
 T["customize kanatable"] = function()
   init()
-  -- 関数の登録名、{ かな, feed }、{ かな } だけ（feed は ""）、false で削除
+  -- { かな, feed }、{ かな } だけ（feed は ""）、false で削除
   child.lua([[
-    kana.register("rom", { jj = "newline", ["z,"] = { "―", "" }, ["z."] = { "―" }, ["!"] = { "!!" } })
+    kana.register("rom", { jj = { "じ", "j" }, ["z,"] = { "―", "" }, ["z."] = { "―" }, ["!"] = { "!!" } })
     kana.register("rom", { ["!"] = false })
     ctx = require("skkeleton.context").new()
   ]])
-  local cases = { { "jj", "\n" }, { "z,", "―" }, { "z.", "―" }, { "!", "!" } }
+  local cases = { { "jj", "じ" }, { "z,", "―" }, { "z.", "―" }, { "!", "!" } }
   for _, c in ipairs(cases) do
     local code = [[(function(keys) H.dispatch(ctx, keys); return ctx.preedit:output("") end)(...)]]
     eq(child.lua_get(code, { c[1] }), c[2])
@@ -40,15 +42,16 @@ end
 T["register errors"] = function()
   init()
   eq(child.lua_get([[select(2, pcall(kana.register, "nothing", { a = { "x" } }))]]), "table nothing is not found.")
-  eq(child.lua_get([[select(2, pcall(kana.register, "rom", { a = "nofunc" }))]]), "function not found: nofunc")
+  -- 関数はかなテーブルには置けない。register_keymap を使う (#67)
+  eq(child.lua_get([[pcall(kana.register, "rom", { a = "henkanFirst" })]]), false)
+  eq(child.lua_get([[pcall(kana.register, "rom", { a = function() end })]]), false)
   eq(child.lua_get([[pcall(kana.register, "rom", { a = 1 })]]), false)
   eq(child.lua_get([[select(2, pcall(kana.get_table, "nothing"))]]), "undefined table: nothing")
 end
 
-T["uppercase key becomes <s-x> and string result becomes a function"] = function()
+T["uppercase key becomes <s-x>"] = function()
   init()
-  child.lua([[kana.register("rom", { X = "newline", Q = { "Q", "" } })]])
-  eq(child.lua_get([[kana.get_table():find("<s-x>") == require("skkeleton.function").functions.newline]]), true)
+  child.lua([[kana.register("rom", { Q = { "Q", "" } })]])
   eq(child.lua_get([[kana.get_table():find("<s-q>")]]), { "Q", "" })
 end
 
@@ -62,15 +65,12 @@ end
 
 T["builtin tables"] = function()
   init()
-  eq(child.lua_get([[kana.get_table("rom"):count()]]), 248)
+  eq(child.lua_get([[kana.get_table("rom"):count()]]), 242)
   eq(child.lua_get([[kana.get_table("zen"):count()]]), 94)
-  -- 関数の値は本物の関数（abbrev が == で絞り込む）
-  eq(child.lua_get([[kana.get_table():find(" ") == require("skkeleton.function.henkan").henkan_first]]), true)
-  eq(child.lua_get([[kana.get_table():find(";") == require("skkeleton.function.input").henkan_point]]), true)
-  eq(child.lua_get([[kana.get_table():find("l") == require("skkeleton.function.disable").disable]]), true)
-  eq(child.lua_get([[kana.get_table():find("/") == require("skkeleton.function.mode").abbrev]]), true)
-  eq(child.lua_get([[kana.get_table():find("q") == require("skkeleton.function.mode").katakana]]), true)
-  eq(child.lua_get([[kana.get_table():find("<s-l>") == require("skkeleton.function.mode").zenkaku]]), true)
+  -- 関数のキー（l q ; / L <Space>）はかなテーブルではなくキーマップにある (#67)
+  for _, k in ipairs({ "l", "q", ";", "/", "<s-l>", " " }) do
+    eq(child.lua_get(('kana.get_table():find("%s")'):format(k)), vim.NIL)
+  end
   eq(child.lua_get([[kana.get_table():find("z ")]]), { "　", "" })
   eq(child.lua_get([[kana.get_table("zen"):find("<s-a>")]]), { "Ａ", "" })
   eq(child.lua_get([[kana.get_table("zen"):find("\\")]]), { "＼", "" })
@@ -87,20 +87,9 @@ T["trie node"] = function()
   eq(child.lua_get([[kana.get_table():node("n").count]]), 13)
   eq(child.lua_get([[kana.get_table():node("n").result]]), { "ん", "" })
   eq(child.lua_get([[kana.get_table():node("kz") == nil]]), true)
-  eq(child.lua_get([[kana.get_table():node("").count]]), 248)
+  eq(child.lua_get([[kana.get_table():node("").count]]), 242)
   eq(child.lua_get([[kana.get_table():find("kya")]]), { "きゃ", "" })
   eq(child.lua_get([[kana.get_table():find("ky")]]), vim.NIL)
-end
-
-T["filter"] = function()
-  init()
-  eq(child.lua_get([[kana.get_table():filter(function(from) return from:sub(1, 1) == "k" end):count()]]), 11)
-  eq(
-    child.lua_get([[
-      kana.get_table():filter(function(_, func) return type(func) == "function" end):node("").count
-    ]]),
-    6
-  )
 end
 
 T["load_file"] = function()
@@ -158,25 +147,9 @@ end
 
 T["multi-char uppercase keys are not converted to <s-...>"] = function()
   init()
-  child.lua([[kana.register("rom", { zL = { "伸", "" }, ["<C-j>"] = "kakutei" })]])
+  child.lua([[kana.register("rom", { zL = { "伸", "" } })]])
   eq(child.lua_get([[kana.get_table():find("zL")]]), { "伸", "" })
   eq(child.lua_get([[kana.get_table():find("<s-zl>") ]]), vim.NIL)
-  eq(child.lua_get([[kana.get_table():find("<C-j>") == require("skkeleton.function").functions.kakutei]]), true)
-end
-
-T["custom lua function in register"] = function()
-  init()
-  child.lua([[
-    custom_called = false
-    local custom_fn = function(ctx, feed)
-      custom_called = true
-      ctx.state.feed = ""
-    end
-    kana.register("rom", { myfn = custom_fn })
-    ctx = require("skkeleton.context").new()
-    H.dispatch(ctx, "myfn")
-  ]])
-  eq(child.lua_get([[custom_called]]), true)
 end
 
 T["load_file supports 3 columns and comma key"] = function()
@@ -196,16 +169,15 @@ T["load_file supports 3 columns and comma key"] = function()
   eq(child.lua_get([[H.output("bba")]]), "っば")
 end
 
-T["function entry in kanatable does not duplicate following characters (#41)"] = function()
+T["key mapped to henkanFirst in keymap does not duplicate following characters (#41)"] = function()
   init()
   child.lua([[
-    kana.register("rom", { z = "henkanFirst" })
+    require("skkeleton.keymap").register("input", "&", "henkanFirst")
     ctx = require("skkeleton.context").new()
-    local input = require("skkeleton.function.input")
-    input.kana_input(ctx, "z")
-    input.kana_input(ctx, "&")
+    require("skkeleton.keymap").handle_key(ctx, "&")
+    require("skkeleton.keymap").handle_key(ctx, "@")
   ]])
-  eq(child.lua_get([[ctx.preedit:output("")]]), "z&")
+  eq(child.lua_get([[ctx.preedit:output("")]]), "&@")
 end
 
 return T

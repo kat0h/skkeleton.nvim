@@ -18,6 +18,10 @@ M.count = 0
 -- 今出している extmark。line は描いたときの行の文字列
 ---@type { buf: integer, id: integer, annot_id?: integer, row: integer, col: integer, line: string }?
 local mark
+-- pre-edit の行が外部から書き換えられたフラグ
+local mark_bytes_changed = false
+---@type integer?
+local attached_buf = nil
 -- cmdline に書いた pre-edit の位置と、書いた直後の cmdline 全体
 ---@type { text: string, start_pos: integer, end_pos: integer, line: string }?
 local cmd_mark
@@ -131,9 +135,19 @@ local function feed(keys, cmd, mode)
   vim.api.nvim_feedkeys(keys .. (cmd or ""), flags, false)
 end
 
+-- 今出している pre-edit を書く位置（バッファと 0 起点の行・列）。出していなければ nil
+---@return integer? buf, integer? row, integer? col
+function M.preedit_position()
+  if not mark or not vim.api.nvim_buf_is_valid(mark.buf) or mark.buf ~= vim.api.nvim_get_current_buf() then
+    return nil
+  end
+  return mark.buf, mark.row, mark.col
+end
+
 -- pre-edit の extmark を消す
 function M.clear()
   pending = false
+  mark_bytes_changed = false
   if mark then
     if vim.api.nvim_buf_is_valid(mark.buf) then
       pcall(vim.api.nvim_buf_del_extmark, mark.buf, ns, mark.id)
@@ -143,6 +157,52 @@ function M.clear()
     end
     mark = nil
   end
+end
+
+-- pre-edit が stale になったときに、残骸を片付ける
+---@param mode? string
+function M.clean_stale(mode)
+  M.clear()
+  mode = mode or (vim.api.nvim_get_mode().mode:sub(1, 1))
+  if mode == "c" then
+    M.clean_stale_cmdline()
+  end
+end
+
+-- pre-edit を出している間、バッファの書き換えを on_bytes で受ける
+local function attach_buf(buf)
+  if attached_buf == buf then
+    return
+  end
+  attached_buf = buf
+  pcall(vim.api.nvim_buf_attach, buf, false, {
+    on_bytes = function(_, _, b, start_row, _, _, old_end_row, _, _, new_end_row, _, _)
+      if attached_buf ~= b then
+        return true
+      end
+      if not mark or mark.buf ~= b then
+        attached_buf = nil
+        return true
+      end
+      if pending then
+        return
+      end
+      local max_end_row = start_row + math.max(old_end_row, new_end_row)
+      if start_row <= mark.row and mark.row <= max_end_row then
+        mark_bytes_changed = true
+        vim.schedule(function()
+          if M.on_stale then
+            M.on_stale()
+          end
+        end)
+      end
+    end,
+    on_detach = function(_, b)
+      if attached_buf == b then
+        attached_buf = nil
+      end
+    end,
+  })
 end
 
 local function draw(text, chunks, annot)
@@ -185,12 +245,15 @@ local function draw(text, chunks, annot)
   end
   local cur_line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1] or ""
   mark = { buf = buf, id = id, annot_id = annot_id, row = row, col = col, line = cur_line }
+  mark_bytes_changed = false
+  attach_buf(buf)
 end
 
 -- いま出している pre-edit（注釈を含む）の文字列（カーソルがまだ指している行・列のときだけ。なければ ""）。
--- inline の virtual text は relative = "cursor" や screenpos() の位置に入らないので、インジケータが足す
+-- inline の virtual text は relative = "cursor" や screenpos() の位置に入らないので、
+-- 画面からはみ出すかを確かめるときに使う
 ---@return string
-function M.preedit_text()
+local function preedit_text()
   if not mark or current_text == "" or not vim.api.nvim_buf_is_valid(mark.buf) then
     return ""
   end
@@ -204,12 +267,6 @@ function M.preedit_text()
   return current_text .. (current_annot or "")
 end
 
--- 上の文字列の表示幅
----@return integer
-function M.preedit_width()
-  return vim.fn.strdisplaywidth(M.preedit_text())
-end
-
 -- pre-edit が残っているのにバッファや cmdline がそれと合わなくなっているか
 -- （矢印キーで動いた、補完で文字が入ったなど）
 ---@param ctx skkeleton.Context
@@ -219,6 +276,9 @@ function M.is_stale(ctx, vim_mode)
   local pre = ctx:to_string()
   if pre == "" then
     return false
+  end
+  if mark_bytes_changed then
+    return true
   end
   if ctx.vim_mode ~= vim_mode then
     return true
@@ -303,7 +363,7 @@ local function adjust_scroll()
   if not vim.wo[win].wrap then
     return
   end
-  local preedit = M.preedit_text()
+  local preedit = preedit_text()
   if preedit == "" then
     return
   end
@@ -361,8 +421,6 @@ function M.finish()
     draw(current_text, current_chunks, current_annot)
     adjust_scroll()
     popup.open()
-    -- pre-edit の幅が変わったので、インジケータを画面上のカーソルに寄せ直す
-    require("skkeleton.indicator").move()
   elseif vm == "c" then
     M.clear()
     if current_cmd_text ~= "" then
@@ -390,9 +448,10 @@ end
 -- ctx の今の状態を出す。prefix は先に流すキー
 ---@param ctx skkeleton.Context
 ---@param prefix? string
-function M.update(ctx, prefix)
+---@param pre? string ctx:to_string() の結果（呼び出し側で作ったもの）
+function M.update(ctx, prefix, pre)
   local vm = ctx.vim_mode
-  local pre = ctx:to_string()
+  pre = pre or ctx:to_string()
   local keys, esc
   if vm == "c" or vm == "t" then
     esc = pre == "\27"

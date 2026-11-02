@@ -16,6 +16,7 @@ local store = require("skkeleton.store")
 local util = require("skkeleton.util")
 
 local functions = util.lazy("skkeleton.function")
+local common_func = util.lazy("skkeleton.function.common")
 local disable_func = util.lazy("skkeleton.function.disable")
 
 local options = config.options
@@ -32,22 +33,57 @@ local function doautocmd(name)
   end
 end
 
--- g:skkeleton#state を更新する（補完ソースなどが読む）
-local function update_state_variable()
-  local st = store.context().state
+-- g:skkeleton#state を更新する（補完ソースやインジケータが読む）
+---@param pre? string ctx:to_string() の結果（呼び出し側で作ったもの）
+local function update_state_variable(pre)
+  local ctx = store.context()
+  local st = ctx.state
   local phase
   if st.type == "input" then
     phase = st.mode == "okurinasi" and "input:okurinasi" or st.mode == "okuriari" and "input:okuriari" or "input"
   else
     phase = st.type
   end
-  vim.g["skkeleton#state"] = { phase = phase, henkanFeed = st.henkan_feed or "" }
+  pre = pre or ctx:to_string()
+  vim.g["skkeleton#state"] = {
+    phase = phase,
+    henkanFeed = st.henkan_feed or "",
+    preedit = st.type ~= "escape" and pre or "",
+  }
+end
+
+-- pre-edit を消したときに g:skkeleton#state.preedit も消す。
+-- 値は handle でしか更新しないので、cmdline の pre-edit を片付けたときに残ってしまう
+local function clear_preedit_state()
+  local state = vim.g["skkeleton#state"]
+  -- vim.g の表はコピーなので、書き換えたら入れ直す
+  if type(state) == "table" and state.preedit ~= "" then
+    state.preedit = ""
+    vim.g["skkeleton#state"] = state
+  end
 end
 
 -- Context を作り直す（使い終わった state の片付け）
 local function reset()
   store.init_context()
   update_state_variable()
+end
+
+-- insert から normal へ移ったとき、今の pre-edit を <Esc> と同じ文字列としてバッファに書く (#70)。
+-- <Esc> はマップされた escape が確定してから抜けるが、<C-c> はマップされていないのでここで確定する
+local function commit_preedit()
+  local buf, row, col = render.preedit_position()
+  if not buf then
+    return
+  end
+  local ctx = store.context()
+  -- kakutei の undo point を付けずに、確定する文字列だけ取り出す
+  ctx.vim_mode = "n"
+  common_func.kakutei(ctx)
+  local text = ctx.preedit:take_kakutei()
+  if text ~= "" then
+    vim.api.nvim_buf_set_text(buf, row, col, row, col, { text })
+  end
 end
 
 local function should_delete_hist(item)
@@ -75,7 +111,31 @@ end
 -- handle の実行中か（辞書登録の input() などで誤って初期化しない）
 local handling_depth = 0
 
--- pre-edit が出ているのにバッファやカーソルがずれたら、すぐ状態を初期化して表示を片付ける
+-- pre-edit が出ているのにバッファやカーソルがずれたら、状態を初期化して表示を片付ける。
+-- 戻り値: ずれていてリセットしたかどうか
+local function reset_if_stale(vm)
+  vm = vm or vim.api.nvim_get_mode().mode:sub(1, 1)
+  if vm ~= "i" and vm ~= "c" then
+    return false
+  end
+  local ctx = store.context()
+  if not render.is_stale(ctx, vm) then
+    return false
+  end
+  render.clean_stale(vm)
+  mode_mod.initialize_state_with_abbrev(ctx, { "converter" })
+  ctx.preedit:output("")
+  popup.close()
+  update_state_variable()
+  doautocmd("skkeleton-handled")
+  -- 折り返した pre-edit でウィンドウに収まらず @ になっていた行は、extmark を消しても描き直されない
+  if vm == "i" and vim.api.nvim__redraw then
+    pcall(vim.api.nvim__redraw, { win = 0, valid = false })
+  end
+  return true
+end
+
+-- autocmd などから非同期に呼ばれるチェック
 local function check_stale()
   local vm = vim.api.nvim_get_mode().mode:sub(1, 1)
   if
@@ -86,24 +146,7 @@ local function check_stale()
   then
     return
   end
-  local ctx = store.context()
-  if not render.is_stale(ctx, vm) then
-    return
-  end
-  render.clear()
-  if vm == "c" then
-    render.clean_stale_cmdline()
-  end
-  mode_mod.initialize_state_with_abbrev(ctx, { "converter" })
-  ctx.preedit:output("")
-  popup.close()
-  update_state_variable()
-  doautocmd("skkeleton-handled")
-  require("skkeleton.indicator").move()
-  -- 折り返した pre-edit でウィンドウに収まらず @ になっていた行は、extmark を消しても描き直されない
-  if vm == "i" and vim.api.nvim__redraw then
-    pcall(vim.api.nvim__redraw, { win = 0, valid = false })
-  end
+  reset_if_stale(vm)
 end
 
 -- 最初に使うときに一度だけ呼ぶ。autocmd を作り、skkeleton-initialize-pre/post を発火する
@@ -122,91 +165,84 @@ function M.init(force)
   doautocmd("skkeleton-initialize-pre")
 
   local group = vim.api.nvim_create_augroup("skkeleton-internal", { clear = true })
-  -- 使い終わった state を片付ける。CmdlineEnter にすると辞書登録の呼び出しで壊れる。
-  -- 挿入モードの <C-o>（niI）などで解除されないよう ModeChanged の :n にする。
-  -- SafeState を挟むのは、プラグインによる ModeChanged の呼び出しで解除されるのを防ぐため。
-  -- このイベントは利用者の操作を受け付けるときに呼ばれるので、insert / cmdline / terminal でなければ片付ける
+  -- モード遷移に伴う後片付けの遷移表 (#62)
+  -- 移る前と後のモードに応じて、片付け方（"reset"、"safe_reset"、"none"）を引く
+  local MODE_TRANSITIONS = {
+    -- 1. insert / completion 中から visual / select モードへの直接遷移（マウス選択など）
+    { from = "^i", to = "^[vV\022sS\019]", action = "reset" },
+    -- 2. insert 中から <Insert> キーで置換モードへの遷移
+    { from = "^i", to = "^R", action = "reset" },
+    -- 3. normal モードへの遷移（プラグイン等による一瞬の遷移を SafeState で待つ）
+    { from = ".*", to = "^n", action = "safe_reset" },
+    -- 4. cmdline から visual / select / operator-pending などへ戻ったとき
+    { from = "^c", to = "^[^ictn]", action = "safe_reset" },
+  }
+
   vim.api.nvim_create_autocmd("ModeChanged", {
     group = group,
-    pattern = "*:n",
     callback = function()
-      vim.api.nvim_create_autocmd("SafeState", {
-        group = group,
-        once = true,
-        callback = function()
-          local m = vim.fn.mode()
-          local s = m:sub(1, 1)
-          if s ~= "i" and s ~= "c" and s ~= "t" and not vim.startswith(m, "ni") and not host.is_in_input() then
-            reset()
-            host.disable()
-          end
-        end,
-      })
-    end,
-  })
-  -- visual・select・operator-pending から入った cmdline を抜けて戻ったときも片付ける。
-  -- insert・cmdline・terminal に移るときは使い続けるので触らない（insert の <C-o> は niI のまま）
-  vim.api.nvim_create_autocmd("ModeChanged", {
-    group = group,
-    pattern = "c:*",
-    callback = function()
-      clean_history()
-      local new_mode = vim.v.event.new_mode:sub(1, 1)
-      if new_mode == "i" or new_mode == "c" or new_mode == "t" or new_mode == "n" then
-        return
+      local old_mode = vim.v.event.old_mode
+      local new_mode = vim.v.event.new_mode
+      if old_mode:sub(1, 1) == "c" then
+        clean_history()
       end
-      vim.api.nvim_create_autocmd("SafeState", {
-        group = group,
-        once = true,
-        callback = function()
-          local m = vim.fn.mode():sub(1, 1)
-          if m ~= "i" and m ~= "c" and m ~= "t" and not host.is_in_input() then
-            reset()
-            host.disable()
-          end
-        end,
-      })
+      local action = "none"
+      for _, rule in ipairs(MODE_TRANSITIONS) do
+        if old_mode:find(rule.from) and new_mode:find(rule.to) then
+          action = rule.action
+          break
+        end
+      end
+      if action == "reset" then
+        if not host.is_in_input() then
+          reset()
+          host.disable()
+        end
+      elseif action == "safe_reset" and store.context().state.type == "escape" and not host.is_in_input() then
+        -- skkeleton の <Esc> はもう確定して無効にしてある。SafeState を待つと、すぐ次の a などで
+        -- insert に戻ったときに escape の状態が残るので、ここで片付ける (#32)
+        reset()
+      elseif action == "safe_reset" then
+        -- insert から normal へ抜けたときは、捨てずに <Esc> と同じく確定する
+        local commit = old_mode:sub(1, 1) == "i"
+        vim.api.nvim_create_autocmd("SafeState", {
+          group = group,
+          once = true,
+          callback = function()
+            -- vim.fn.mode() は terminal-normal（nt）を n と返すので、nvim_get_mode() で見る (#74)
+            local m = vim.api.nvim_get_mode().mode
+            local s = m:sub(1, 1)
+            if
+              s ~= "i"
+              and s ~= "c"
+              and s ~= "t"
+              and not vim.startswith(m, "ni")
+              and not vim.startswith(m, "nt")
+              and not host.is_in_input()
+            then
+              if commit then
+                commit_preedit()
+              end
+              reset()
+              host.disable()
+            end
+          end,
+        })
+      end
     end,
   })
+
   -- cmdline を抜ける際（取り消しも含めて）に pre-edit を取り除き、履歴にマーカーを残さない
   vim.api.nvim_create_autocmd("CmdlineLeave", {
     group = group,
     callback = function()
       render.clean_stale_cmdline()
+      clear_preedit_state()
       local cmdtype = vim.v.event.cmdtype
       clean_history(cmdtype)
       vim.schedule(function()
         clean_history(cmdtype)
       end)
-    end,
-  })
-  -- insert から直接 visual・select モードへ遷移したとき（マウス選択など）も片付ける。
-  -- 挿入モードの <C-o>（niI）は insert のままなので除外する
-  vim.api.nvim_create_autocmd("ModeChanged", {
-    group = group,
-    pattern = { "i:*", "ic:*", "ix:*" },
-    callback = function()
-      local m = vim.v.event.new_mode:sub(1, 1)
-      if m == "v" or m == "V" or m == "\22" or m == "s" or m == "S" or m == "\19" then
-        if host.is_in_input() then
-          return
-        end
-        reset()
-        host.disable()
-      end
-    end,
-  })
-  -- 置換モードでは有効にできない（enable で断る）ので、insert で有効にしたまま <Insert> で
-  -- 置換モードに移ったときも、pre-edit を捨てて無効にする（InsertLeave も InsertEnter も来ない）
-  vim.api.nvim_create_autocmd("ModeChanged", {
-    group = group,
-    pattern = "i:R*",
-    callback = function()
-      if host.is_in_input() then
-        return
-      end
-      reset()
-      host.disable()
     end,
   })
   -- insert のままウィンドウやバッファを切り替えても残らないようにする
@@ -219,6 +255,7 @@ function M.init(force)
       end
       if vim.fn.mode():sub(1, 1) == "c" then
         render.clean_stale_cmdline()
+        clear_preedit_state()
       end
       reset()
       host.disable()
@@ -236,6 +273,7 @@ function M.init(force)
       require("skkeleton").save_user_dict()
     end,
   })
+  render.on_stale = check_stale
   doautocmd("skkeleton-initialize-post")
 end
 
@@ -257,16 +295,6 @@ local function handle_keys(opts, vim_mode)
   local ctx = store.context()
   ctx.vim_mode = vim_mode:sub(1, 1)
   local keys = normalize_keys(opts.key)
-
-  -- 補完の pum が出ているときの <CR>。native の pum だけ対応する
-  if vim.fn.pumvisible() == 1 and table.concat(keys) == "<cr>" and options.eggLikeNewline then
-    local ok, info = pcall(vim.fn.complete_info, { "selected" })
-    if ok and info.selected >= 0 then
-      mode_mod.initialize_state_with_abbrev(ctx, { "converter" })
-      ctx.preedit:output("")
-      return "\25"
-    end
-  end
 
   -- blink.cmp のメニューで項目を選んでいるときの <CR>。選んだ項目で確定する（確定は completion の execute が行う）
   if table.concat(keys) == "<cr>" and options.eggLikeNewline and require("skkeleton.completion").accept_selected() then
@@ -347,16 +375,8 @@ function M.handle_inner(func, opts)
   end
   popup.close()
 
-  local ctx = store.context()
   -- 補完の後など pre-edit とバッファが合わなくなったときはリセットする
-  if render.is_stale(ctx, short) then
-    render.clear()
-    if short == "c" then
-      render.clean_stale_cmdline()
-    end
-    mode_mod.initialize_state_with_abbrev(ctx, { "converter" })
-    ctx.preedit:output("")
-  end
+  reset_if_stale(short)
 
   local prefix
   if func == "handleKey" then
@@ -377,8 +397,19 @@ function M.handle_inner(func, opts)
   end
   ctx = store.context()
   ctx.vim_mode = ctx.vim_mode ~= "" and ctx.vim_mode or short
-  update_state_variable()
-  render.update(ctx, prefix)
+  local pre = ctx:to_string()
+  update_state_variable(pre)
+  render.update(ctx, prefix, pre)
+end
+
+-- 補完で選んだ語をユーザー辞書に登録して、直前の候補にする
+---@param kana string
+---@param word string
+---@param kind? skkeleton.HenkanType
+local function register_completion(kana, word, kind)
+  kind = kind or "okurinasi"
+  store.library():register_henkan_result(kind, kana, word)
+  store.context().last_candidate = { type = kind, word = kana, candidate = word }
 end
 
 -- 補完で語を選んだとき。pre-edit を捨てて語を確定し、ユーザー辞書に登録する。
@@ -397,29 +428,20 @@ function M.complete(kana, word, kind)
     local conv = ctx.state.converter
     -- 変換中の状態は捨てる。モード（ひらがななど）は変えない
     mode_mod.initialize_state_with_abbrev(ctx, { "converter", "table" })
-    M.complete_callback(kana, word, kind)
+    register_completion(kana, word, kind)
     local text = candidate.modify(word or kana or "") or ""
     if conv then
       text = conv(text)
     end
     ctx:kakutei_with_undo_point(text)
-    update_state_variable()
-    render.update(ctx)
+    local pre = ctx:to_string()
+    update_state_variable(pre)
+    render.update(ctx, nil, pre)
   end)
   handling_depth = handling_depth - 1
   if not ok then
     error(err, 0)
   end
-end
-
--- 補完で選んだ語をユーザー辞書に登録して、直前の候補にする
----@param kana string
----@param word string
----@param kind? skkeleton.HenkanType
-function M.complete_callback(kana, word, kind)
-  kind = kind or "okurinasi"
-  store.library():register_henkan_result(kind, kana, word)
-  store.context().last_candidate = { type = kind, word = kana, candidate = word }
 end
 
 return M
