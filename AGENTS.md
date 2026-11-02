@@ -51,6 +51,7 @@
 - Neovim 専用で、純粋な Lua です。FFI や外部コマンドには頼りません。
 - upstream から移したファイルは、先頭に移植元と著作権とライセンスを書きます（`LICENSES/README.md` の形）。ほかの zlib のプロジェクト（skkelua.nvim など）のコードを写すときも同じです。考え方を借りるだけなら要りません。
 - SKK-JISYO などの辞書（GPL）や npm のパッケージのコードは、リポジトリに入れません。
+- コードのコメントは日本語で、処理の意図を短く書きます。
 - 整形は stylua です（`make fmt`、`make lint`）。
 
 ## テスト
@@ -58,6 +59,7 @@
 - 直したら `make test` と `make lint` を通します。CI は Neovim の stable と nightly で `make test` を流します。
 - バグを直したら、そのバグの回帰テストを `tests/` に足します。足したテストは直す前のコードでは落ち、直したあとのコードでは通ることを確かめてください。
 - 動きを変えない作り直しで、既存のテストの期待値を変えないと通らないときは、動きが変わっているということです。そこで止めて、何がどう変わるかを issue に書いてください。
+- テストは `tests/test_<領域>.lua` に置きます。config やかなテーブルのようなモジュールの状態を変えるテストは、`require("helpers").child_set()` で子の nvim を使い、ケースごとに分けます。辞書のテストデータは `tests/testdata/` にあります。
 - テストと検査では、一時ディレクトリの辞書だけを使います。`~/.skkeleton`、`~/.cache/skk.db` など、使う人の辞書やデータには触りません。シェルを起動するテストは `HISTFILE=/dev/null` にし、使う人のシェルの履歴に書かないようにします。
 - upstream との差分テストは `make difftest` です（deno と denops.vim が要ります）。違いが出たら、Lua 版の不具合か、わざと変えたところかを分け、わざとなら `tests/diff/known.lua` に書きます。
 - Neovim nightly だけで動きが違うことがあります。そのときは Neovim の変更を探して、テストを機能があるかどうかで分けます。たとえば nightly では `input()` の中から cmdline window を開けなくなりました（`tests/test_e2e_dictionary.lua` の #54 のテスト）。
