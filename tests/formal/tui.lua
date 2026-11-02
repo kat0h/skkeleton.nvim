@@ -154,6 +154,8 @@ function Session.new()
     end
     vim.uv.sleep(10)
   end
+  -- 手元のクリップボード（中クリックの * レジスタなど）を子に読ませない。検査の結果に利用者の手元の文字が混ざるのを防ぐ
+  vim.rpcrequest(self.chan, "nvim_exec_lua", "vim.g.clipboard = false", {})
   return self
 end
 

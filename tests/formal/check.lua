@@ -244,6 +244,8 @@ end
 
 local function start(child, mutation, init, config)
   child.restart({ "-u", root .. "/tests/minimal_init.lua" })
+  -- 手元のクリップボード（中クリックの * レジスタなど）を子に読ませない。検査の結果に利用者の手元の文字が混ざるのを防ぐ
+  child.lua("vim.g.clipboard = false")
   local dir = vim.fn.tempname()
   vim.fn.mkdir(dir, "p")
   local dict = dir .. "/dict"
