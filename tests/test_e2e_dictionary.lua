@@ -465,7 +465,10 @@ T["dictionary input clears the state variable and the outer pre-edit (#54)"] = f
   -- 登録の Context は新しく作られるので、参照用の変数もその状態に合わせる
   eq(child.g["skkeleton#state"].henkanFeed, "")
   -- 外側の pre-edit の extmark は残らない
-  eq(child.lua_get([[#vim.api.nvim_buf_get_extmarks(0, require("skkeleton.render").ns, 0, -1, {})]]), 0)
+  eq(
+    child.lua_get([[#vim.api.nvim_buf_get_extmarks(0, vim.api.nvim_get_namespaces()["skkeleton-preedit"], 0, -1, {})]]),
+    0
+  )
   child.type_keys("<Esc>")
   helpers.settle(child)
 end

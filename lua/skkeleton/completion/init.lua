@@ -135,8 +135,8 @@ function M.items()
   local sort = require("skkeleton.completion.sort")
   local candidate_mod = require("skkeleton.candidate")
 
-  local completions = skkeleton.get_completions()
-  local sorted = sort.sort_completions(completions, skkeleton.get_completion_ranks())
+  local completions = skkeleton.get_completion_result()
+  local sorted = sort.sort_completions(completions, require("skkeleton").get_completion_ranks())
 
   local items = {}
   for _, entry in ipairs(sorted) do

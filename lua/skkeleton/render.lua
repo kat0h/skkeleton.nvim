@@ -10,11 +10,6 @@ local M = {}
 
 local ns = vim.api.nvim_create_namespace("skkeleton-preedit")
 local ns_annot = vim.api.nvim_create_namespace("skkeleton-annotation")
-M.ns = ns
-M.ns_annot = ns_annot
-
--- 出し終えた回数（テストが処理の完了を待つために数える）
-M.count = 0
 
 -- 今出している extmark。line は描いたときの行の文字列
 ---@type { buf: integer, id: integer, annot_id?: integer, row: integer, col: integer, line: string }?
@@ -121,16 +116,6 @@ function M.clear()
       end
     end
     mark = nil
-  end
-end
-
--- pre-edit が stale になったときに、残骸を片付ける
----@param mode? string
-function M.clean_stale(mode)
-  M.clear()
-  mode = mode or (vim.api.nvim_get_mode().mode:sub(1, 1))
-  if mode == "c" then
-    cmdline.clean()
   end
 end
 
@@ -345,21 +330,19 @@ function M.finish()
     M.clear()
     popup.close()
   end
-  M.count = M.count + 1
   vim.api.nvim_exec_autocmds("User", { pattern = "skkeleton-handled", modeline = false })
 end
 
--- ctx の今の状態を出す。prefix は先に流すキー
+-- ctx の今の状態を出す
 ---@param ctx skkeleton.Context
----@param prefix? string
 ---@param pre? string ctx:to_string() の結果（呼び出し側で作ったもの）
-function M.update(ctx, prefix, pre)
+function M.update(ctx, pre)
   local vm = ctx.vim_mode
   pre = pre or ctx:to_string()
   local keys, esc
   if vm == "c" or vm == "t" then
     esc = pre == "\27"
-    keys = (prefix or "") .. ctx.preedit:output(pre)
+    keys = ctx.preedit:output(pre)
     current_mode = vm
     current_text = ""
     current_cmd_text = (vm == "c" and not esc) and pre or ""
@@ -369,7 +352,7 @@ function M.update(ctx, prefix, pre)
     local kakutei = ctx.preedit:take_kakutei()
     -- escape の state は <Esc> そのものを返す
     esc = pre == "\27"
-    keys = (prefix or "") .. kakutei .. (esc and "\27" or "")
+    keys = kakutei .. (esc and "\27" or "")
     current_mode = "i"
     current_text = esc and "" or pre
     current_cmd_text = ""

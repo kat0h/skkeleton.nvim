@@ -43,16 +43,4 @@ function M.init()
   end
 end
 
--- テストやリセット用
-function M.get_original_paste()
-  return original_paste
-end
-
-function M.restore()
-  if original_paste then
-    vim.paste = original_paste
-    original_paste = nil
-  end
-end
-
 return M
