@@ -1337,15 +1337,6 @@ end
 -- 当てはまる違反は「既知」として出し、失敗にしない
 M.known = {}
 
--- cmdline の ▽ の途中で中クリックで貼ると、pre-edit を片付けても ▽ と読みが cmdline に残る（#12 の残り）
-M.known[#M.known + 1] = {
-  property = "cmdline: pre-edit が無ければマーカーを残さない",
-  match = function(keys)
-    return vim.tbl_contains(keys, "<RightClickMid>")
-  end,
-  reason = "#12: cmdline の ▽ の途中で中クリックで貼ると、▽ と読みが cmdline に残る",
-}
-
 -- 未マップの特殊キー（<C-.>・<S-CR>・<Left>・<F5> など）を ▽/▼ の途中で押すと、打った読みが黙って消える（#56）
 M.known[#M.known + 1] = {
   property = "unmapped: 未マップの特殊キーのあと、打った読みが黙って消えない",
@@ -1377,47 +1368,6 @@ for _, name in ipairs({
   }
 end
 
--- insert の中でウィンドウを移ると、出ているインジケータ（relative = "cursor"）が新しいウィンドウのカーソルの右下に動く。
--- インジケータの不具合は追わない方針なので既知にしてある（本物の挙動の差。窓を移ったときに閉じていない）
-M.known[#M.known + 1] = {
-  property = "indicator: 出ているあいだ動かず、文字・カーソル・スクロールの変化で閉じる",
-  match = function(keys, msg)
-    if not (msg or ""):find("動いた", 1, true) then
-      return false
-    end
-    for _, k in ipairs(keys) do
-      if
-        k:find("wincmd", 1, true)
-        or k:find("Steal", 1, true)
-        or k:find("Click", 1, true)
-        or k:find("<C-w>", 1, true)
-      then
-        return true
-      end
-    end
-    return false
-  end,
-  reason = "#85: insert の中でウィンドウを移っても閉じず、新しいウィンドウのカーソルの右下に動く",
-}
-
--- <C-o>: で cmdline に入って戻ると、CmdlineLeave が g:skkeleton#state.preedit を空にするが、insert の pre-edit は残っている。
--- インジケータは state.preedit だけを見るので、残った pre-edit に重ねて出る（lua/skkeleton/main.lua の clear_preedit_state）
-M.known[#M.known + 1] = {
-  property = "indicator: 出ているのは insert・cmdline で pre-edit が無いときだけ、1 つで今のモードの文字列",
-  match = function(keys, msg)
-    if not (msg or ""):find("あるのに", 1, true) then
-      return false
-    end
-    for _, k in ipairs(keys) do
-      if k:find("<C-o>", 1, true) or k:find("<C-r>=", 1, true) then
-        return true
-      end
-    end
-    return false
-  end,
-  reason = "#86: <C-o>: などで cmdline に入って戻ると、残っている pre-edit に重ねて出る（state.preedit が空になる）",
-}
-
 if not CHECK_INDICATOR then
   for _, kind in ipairs({ M.state, M.action }) do
     for name in pairs(kind) do
@@ -1435,14 +1385,5 @@ function M.is_known(name, keys, msg)
     end
   end
 end
-
--- カタカナ系のモードで <C-g> を押すと converter が落ち、▽ がひらがなで出て q でカタカナに確定する（#87。upstream も同じ）
-M.known[#M.known + 1] = {
-  property = "mode: カタカナ系のモードの ▽ で q を押すと、ひらがなの読みで確定する",
-  match = function(keys)
-    return vim.tbl_contains(keys, "<C-g>")
-  end,
-  reason = "#87: カタカナ系のモードで <C-g> のあと、▽ がひらがなで出て q でカタカナに確定する",
-}
 
 return M
