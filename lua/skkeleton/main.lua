@@ -12,6 +12,7 @@ local mode_mod = require("skkeleton.mode")
 local notation = require("skkeleton.notation")
 local popup = require("skkeleton.popup")
 local render = require("skkeleton.render")
+local cmdline = require("skkeleton.render.cmdline")
 local store = require("skkeleton.store")
 local util = require("skkeleton.util")
 
@@ -148,8 +149,8 @@ local function check_stale()
   end
   local did_reset = reset_if_stale(vm)
   -- 前の CmdlineChanged で片付けきれなかった cmdline の pre-edit を、もう一度試す (#12)
-  if vm == "c" and not did_reset and render.has_stale_cmdline() then
-    render.clean_stale_cmdline()
+  if vm == "c" and not did_reset and cmdline.has_stale() then
+    cmdline.clean()
   end
 end
 
@@ -240,8 +241,8 @@ function M.init(force)
   vim.api.nvim_create_autocmd("CmdlineLeave", {
     group = group,
     callback = function()
-      render.clean_stale_cmdline()
-      render.reset_cmdline()
+      cmdline.clean()
+      cmdline.reset()
       -- <C-o>: から戻ったときなど、insert の pre-edit が残っていればその値を保つ (#86)
       update_state_variable()
       local cmdtype = vim.v.event.cmdtype
@@ -260,8 +261,8 @@ function M.init(force)
         return
       end
       if vim.fn.mode():sub(1, 1) == "c" then
-        render.clean_stale_cmdline()
-        render.reset_cmdline()
+        cmdline.clean()
+        cmdline.reset()
         clear_preedit_state()
       end
       reset()
