@@ -253,6 +253,11 @@ function M.snapshot()
       end
       return out
     end)(),
+    -- terminal のジョブが実行した行（regcmd プロファイルの PROMPT_COMMAND が書く）。無ければ nil
+    job_log = (function()
+      local f = _G.formal_job_log
+      return f and vim.fn.filereadable(f) == 1 and table.concat(vim.fn.readfile(f), "\n") or nil
+    end)(),
     -- マクロ（レジスタ a と、記録中か）
     reg_a = vim.fn.getreg("a"),
     recording = vim.fn.reg_recording(),

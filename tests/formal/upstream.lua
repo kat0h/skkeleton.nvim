@@ -31,7 +31,15 @@ end
 
 local results = {}
 for _, impl in ipairs({ "lua", "denops" }) do
-  results[impl] = driver.run(impl, MiniTest.new_child_neovim(), profiles.default.dict, keys)
+  -- formal の検査と同じく、<C-j> を i と c の toggle にする（cmdline や terminal の中で skkeleton を切り替える。
+  -- driver は子を作り直してから設定するので、restart のあとで割り当てる）
+  local child = MiniTest.new_child_neovim()
+  local restart = child.restart
+  child.restart = function(...)
+    restart(...)
+    child.lua([[vim.keymap.set({ "i", "c", "t" }, "<C-j>", "<Plug>(skkeleton-toggle)")]])
+  end
+  results[impl] = driver.run(impl, child, profiles.default.dict, keys)
 end
 local a, b = results.lua, results.denops
 print(("%-10s %-36s %s"):format("key", "Lua 版", "denops 版"))

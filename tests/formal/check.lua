@@ -336,7 +336,7 @@ local function check(base, prev, key, s, hist)
   local saved_ambi = vim.o.ambiwidth
   vim.o.ambiwidth = s.ambiwidth or saved_ambi
   for name, f in vim.spairs(spec.state) do
-    local ok, msg = pcall(f, s, base)
+    local ok, msg = pcall(f, s, base, hist)
     if not ok or msg then
       out[#out + 1] = { name = name, msg = tostring(msg) }
     end
@@ -668,7 +668,7 @@ if opts.keys then
     end
     local s = snapshot(child)
     print(
-      ("%-12s mode=%s pre-edit=%q 行=%q カーソル=%s popup=%d bufs=%d wins=%d"):format(
+      ("%-12s mode=%s pre-edit=%q 行=%q カーソル=%s popup=%d bufs=%d wins=%d%s"):format(
         key,
         s.vim_mode,
         s.ctx_text,
@@ -676,7 +676,9 @@ if opts.keys then
         vim.inspect(s.cursor),
         #s.popup,
         s.bufs,
-        s.wins
+        s.wins,
+        s.cmdline and (" cmdline=%q(%s) depth=%d"):format(s.cmdline, s.cmdtype, s.input_depth or 0)
+          or (s.job_log and (" job=%q"):format(s.job_log) or "")
       )
     )
     if os.getenv("FORMAL_DEBUG") then

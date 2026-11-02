@@ -143,7 +143,11 @@ M.state["screen: 画面の行はバッファに pre-edit を差し込んだも�
   end
 end
 
-M.state["buffer: マーカーがバッファに漏れない"] = function(s)
+M.state["buffer: マーカーがバッファに漏れない"] = function(s, _, hist)
+  -- cmdline window（<C-f>）は、開く前の cmdline の文字（本物の ▽ を含む）をバッファに持つ。upstream も同じ
+  if s.cmdwin ~= "" then
+    return
+  end
   -- terminal では pre-edit を本物の文字として流すので、pre-edit があるあいだは見ない
   if s.buftype == "terminal" and (s.ctx_text ~= "" or registering(s)) then
     return
@@ -151,6 +155,14 @@ M.state["buffer: マーカーがバッファに漏れない"] = function(s)
   -- terminal の前の行は動いているプログラムの出力（<C-c> で ^C つきで残るなど）なので、カーソルの行だけ見る
   if s.buftype == "terminal" then
     local l = s.lines[s.cursor[1]] or ""
+    -- pre-edit のあいだに <C-r> を押すと、キーはジョブ（bash）に渡り、行に書いてあった本物の ▽ がそのまま残る。upstream も同じ
+    if hist and hist.term_ctrl_r then
+      return
+    end
+    -- bash の <C-r>（reverse-i-search）は、行に書いてあった ▼ を本物の文字として検索の入力に持つ。upstream も同じ
+    if l:find("(failed reverse-i-", 1, true) or l:find("(reverse-i-", 1, true) then
+      return
+    end
     for _, m in ipairs(markers(s)) do
       if l:find(m, 1, true) then
         return ("terminal の今の行 %q に %s"):format(l, m)
@@ -171,13 +183,18 @@ M.state["mode: normal に戻ったら片付いている"] = function(s)
   if s.vim_mode ~= "n" then
     return
   end
-  if s.enabled then
+  -- 辞書登録の欄の <C-f> で開く cmdline window は normal だが、欄は続いている（skkeleton は有効のまま）
+  if s.enabled and s.cmdwin == "" then
     return "normal なのに enabled"
+  end
+  if s.cmdwin ~= "" then
+    return
   end
   if s.ctx_text ~= "" or s.state.type ~= "input" or s.state.mode ~= "direct" then
     return ("normal なのに状態 %s %q が残っている"):format(short(s.state), s.ctx_text)
   end
-  if s.textwidth ~= 78 then
+  -- cmdline window（: の中の <C-f>）のバッファは、Vim が 'textwidth' を 0 にする（regcmd の検査で見つけた誤検出）
+  if s.textwidth ~= 78 and s.cmdwin == "" then
     return ("'textwidth' が %d のまま（元は 78）"):format(s.textwidth)
   end
 end
@@ -351,19 +368,6 @@ end
 
 -- cmdline の pre-edit は本物の文字なので、カーソルの前が pre-edit で終わる。
 -- pre-edit が無いのにマーカーが残っていたら、消し忘れ（#12 の型）
-M.state["cmdline: pre-edit が無ければマーカーを残さない"] = function(s)
-  if not s.cmdline or not s.enabled then
-    return
-  end
-  if s.ctx_text == "" then
-    for _, m in ipairs(markers(s)) do
-      if s.cmdline:find(m, 1, true) then
-        return ("pre-edit が無いのに cmdline %q に %s が残っている"):format(s.cmdline, m)
-      end
-    end
-  end
-end
-
 -- blink.cmp の skkeleton の候補は ▽ の入力中だけ（upstream の getCompletionResult と同じ）。
 -- ▽ を抜けたら（確定、取り消し、変換）メニューは閉じる
 M.state["blink: 有効なら、メニューは ▽ の入力中だけ"] = function(s)
@@ -450,19 +454,22 @@ M.state["register: プロンプトが無いのに登録の深さが残らない"
   end
 end
 
-M.state["global: レジスタと履歴にマーカーや内部のコマンドが漏れない"] = function(s)
+M.state["global: レジスタと履歴にマーカーや内部のコマンドが漏れない"] = function(s, _, hist)
   if not s.globals or s.recording ~= "" then
     return
   end
+  -- <C-r> で貼り付けたあとの cmdline に本物の ▽ が残っていたら、履歴にもそのまま入る（upstream も同じ）
+  local pasted = hist and hist.pasted_marker
   for where, text in vim.spairs(s.globals) do
-    if where:find("^hist @") and text:find("__skkeleton_return__", 1, true) then
+    -- 登録の取り消しの内部の語は @ だけでなく、外側の cmdline の履歴（: と /）にも入ってはいけない（regcmd）
+    if where:find("^hist ") and text:find("__skkeleton_return__", 1, true) then
       return ("%s に登録の取り消しの内部の語 %q"):format(where, text)
     end
     if text:find("skkeleton.render", 1, true) then
       return ("%s に skkeleton の内部のコマンド %q"):format(where, vim.fn.strtrans(text):sub(1, 60))
     end
     for _, m in ipairs(markers(s)) do
-      if text:find(m, 1, true) then
+      if text:find(m, 1, true) and not (pasted and (where:find("^hist ") or where == "reg /" or where == "reg :")) then
         return ("%s に %s（%q）"):format(where, m, vim.fn.strtrans(text):sub(1, 60))
       end
     end
@@ -481,6 +488,20 @@ function M.observe(hist, prev, s)
   end
   -- これまでに観測したバッファの状態（undo の性質で使う）
   hist.texts = hist.texts or {}
+  -- cmdline の中で <C-r> を押したとき、すでに本物の ▽ があった。その cmdline（と、閉じたあとの履歴の 1 手）では残ってよい
+  -- <C-f> も同じ: cmdline の本物の ▽ が cmdline window の行になり、<CR> で履歴に入る（upstream も同じ）
+  if prev and prev.buftype == "terminal" and prev.ctx_text ~= "" and (s.key or ""):find("^<C%-r>") then
+    hist.term_ctrl_r = true
+  end
+  if prev and prev.cmdline and ((s.key or ""):find("^<C%-r>") or s.key == "<C-f>") then
+    for _, m in ipairs(markers(s)) do
+      if prev.cmdline:find(m, 1, true) then
+        hist.pasted_marker = true
+      end
+    end
+  elseif hist.pasted_marker and prev and not prev.cmdline and prev.cmdwin == "" then
+    hist.pasted_marker = nil
+  end
   if prev then
     hist.texts[(prev.buf or 0) .. ":" .. table.concat(prev.lines, "\n")] = true
   end
@@ -519,6 +540,21 @@ function M.observe(hist, prev, s)
 end
 
 M.action = {}
+
+-- 例外: <C-r> での貼り付け（hist.pasted_marker。regcmd の検査で見つけた誤検出）。skkeleton を通らない挿入は pre-edit の状態を捨てるが、
+-- すでに cmdline に書いてあった ▽ は本物の文字として残る。upstream（denops 版）も同じ（"ab▽か" + <C-r>" は "ab▽かふが"）
+M.action["cmdline: pre-edit が無ければマーカーを残さない"] = function(p, key, s, hist)
+  if not s.cmdline or not s.enabled or (hist and hist.pasted_marker) or key:find("^<C%-r>") then
+    return
+  end
+  if s.ctx_text == "" then
+    for _, m in ipairs(markers(s)) do
+      if s.cmdline:find(m, 1, true) then
+        return ("pre-edit が無いのに cmdline %q に %s が残っている"):format(s.cmdline, m)
+      end
+    end
+  end
+end
 
 -- 組み込みの補完（<C-x><C-u>）は pre-edit の読みだけを候補で置き換え、カーソルの前にあった文字は消さない
 M.action["completion: <C-x><C-u> でカーソルの前の文字が消えない"] = function(p, key, s)
@@ -787,12 +823,12 @@ end
 
 -- 辞書登録のプロンプトが 1 つ閉じた直後（深さが 1 減った）の前後の観測を返す。
 -- b は、そのプロンプトを開く直前の観測。typed は、閉じる直前のプロンプトの中身
-local function closed_prompt(p, key, s, hist)
+local function closed_prompt(p, key, s, hist, allow_term)
   if not (p.input_depth and s.input_depth and p.input_depth == s.input_depth + 1) then
     return
   end
   local b = hist and hist.reg_stack and hist.reg_stack[p.input_depth]
-  if not b or s.buftype == "terminal" or b.buftype == "terminal" then
+  if not b or (not allow_term and (s.buftype == "terminal" or b.buftype == "terminal")) then
     return
   end
   local typed = p.cmdline
@@ -880,13 +916,107 @@ M.action["register: 閉じたあとのバッファは登録した語か元の �
   end
 end
 
+-- cmdline（: と /）か terminal の中で始めた辞書登録のプロンプト（regcmd プロファイル）が閉じたあと。
+-- 登録は外側の cmdline や terminal のジョブの上で開くので、外側の状態が壊れていないかを見る。
+--   確定: 外側の行は「pre-edit の手前の文字列 + 登録した語」になり、マーカーは残らない
+--   取り消し: 外側の行は「pre-edit の手前の文字列 + ▽ の読み」に戻る（upstream の cmdline・terminal と同じ。
+--             tests/formal/upstream.lua の c ではなく、tmux で : の ▽か<Space><Esc> を見比べた）
+--   どちらも外側の cmdline は閉じておらず、種類（: か /）と手前の文字列が同じ
+-- terminal は pre-edit も本物の文字としてジョブに流すので、ジョブから見える行（バッファの今の行）で同じことを見る
+M.action["regcmd: 登録のあと、外側の cmdline と terminal の行が戻る"] = function(p, key, s, hist)
+  if (p.input_depth or 0) ~= 1 or (s.input_depth or 0) ~= 0 or p.cmdwin ~= "" then
+    return
+  end
+  local b, word, cancel = closed_prompt(p, key, s, hist, true)
+  if not b or not (word or cancel) then
+    return
+  end
+  local term = b.buftype == "terminal"
+  local outer = b.cmdtype
+  if not term and outer ~= ":" and outer ~= "/" then
+    return
+  end
+  -- 外側の行: cmdline は getcmdline()、terminal はカーソルの行
+  local function text(o)
+    if term then
+      return o.lines[o.cursor[1]] or ""
+    end
+    return o.cmdline or ""
+  end
+  local before, after = text(b), text(s)
+  -- 手前の文字列 = 登録を始める前の行から、pre-edit を除いたもの
+  local pre = b.ctx_text or ""
+  if pre == "" or before:sub(-#pre) ~= pre then
+    return
+  end
+  local prefix = before:sub(1, #before - #pre)
+  if term then
+    if s.buf ~= b.buf or s.vim_mode:sub(1, 1) ~= "t" then
+      return ("terminal に戻っていない（mode %s）"):format(s.vim_mode)
+    end
+  elseif s.vim_mode:sub(1, 1) ~= "c" or s.cmdtype ~= outer then
+    return ("外側の cmdline が閉じた（mode %s、cmdtype %q、登録の前は %q）"):format(
+      s.vim_mode,
+      tostring(s.cmdtype),
+      outer
+    )
+  end
+  if after:sub(1, #prefix) ~= prefix then
+    return ("pre-edit の手前の文字列が変わった: %q（期待 %q）"):format(after, prefix)
+  end
+  local rest = after:sub(#prefix + 1)
+  if word then
+    -- 確定: 語（と送り仮名）が入り、pre-edit は残らない
+    if rest:sub(1, #word) ~= word then
+      return ("確定した語 %q が外側に入っていない: %q（手前 %q）"):format(word, after, prefix)
+    end
+    if s.ctx_text ~= "" then
+      return ("確定したのに pre-edit %q が残っている"):format(s.ctx_text)
+    end
+  else
+    -- 取り消し: ▽ の読みに戻る。打ちかけのローマ字は <Space> で捨てられるので、その分だけ短くなってよい
+    if rest ~= s.ctx_text then
+      return ("取り消しのあとの外側が %q、pre-edit は %q"):format(rest, s.ctx_text)
+    end
+    if b.state.feed == "" and rest ~= pre then
+      return ("取り消しのあとの読みが %q（登録の前は %q）"):format(rest, pre)
+    end
+  end
+  for _, m in ipairs(markers(s)) do
+    -- ▽ は取り消しで戻した pre-edit としては残る。それ以外（確定のあと、▼）にはマーカーが無い
+    local allowed = cancel and m == s.opt.markerHenkan
+    if after:find(m, 1, true) and not allowed then
+      return ("閉じたあとの外側 %q に %s が残っている"):format(after, m)
+    end
+  end
+  if not term and word and s.cmdpos and s.cmdpos < #prefix + #word + 1 then
+    return ("外側の cmdline のカーソル位置 %d が語の手前（%d）"):format(s.cmdpos, #prefix + #word + 1)
+  end
+end
+
+-- terminal のジョブが実行した行には、pre-edit のマーカーも登録の内部の語も入らない（確定した文字だけが渡る）
+M.state["regcmd: terminal のジョブに渡った行にマーカーや内部の語が無い"] = function(s, _, hist)
+  -- pre-edit のあいだの <C-r> はジョブ（bash）に渡り、行の本物の ▽ ごと実行されうる。upstream も同じ
+  if not s.job_log or (hist and hist.term_ctrl_r) then
+    return
+  end
+  if s.job_log:find("__skkeleton_return__", 1, true) then
+    return ("ジョブが受けた行に登録の内部の語: %q"):format(s.job_log)
+  end
+  for _, m in ipairs(markers(s)) do
+    if s.job_log:find(m, 1, true) then
+      return ("ジョブが受けた行に %s: %q"):format(m, s.job_log)
+    end
+  end
+end
+
 -- ユーザー辞書に新しい見出しが増えるのは、空でない確定のときだけ。取り消しと空の確定では、中身が変わらない。
 -- 確定したら、登録した語が先頭の候補としてどれかの見出しに入る
 M.action["register: ユーザー辞書は空でない確定のときだけ増える"] = function(p, key, s, hist)
   if not p.user_dict or not s.user_dict then
     return
   end
-  local b, word, cancel = closed_prompt(p, key, s, hist)
+  local b, word, cancel = closed_prompt(p, key, s, hist, true)
   local grown = {}
   for k in pairs(s.user_dict) do
     if not p.user_dict[k] then

@@ -288,7 +288,7 @@ M.terminal = {
     ["#term"] = {
       lines = { "ab cd" },
       cursor = { 1, 2 },
-      cmd = "terminal env PS1='$ ' bash --norc --noprofile",
+      cmd = "terminal env PS1='$ ' HISTFILE=/dev/null bash --norc --noprofile",
       keys = "i",
     },
   },
@@ -776,6 +776,69 @@ M.register = {
   }, "\n"),
 }
 
+-- cmdline（: と /）と terminal の中から始める辞書登録。▽ の読みで <Space> が外れると、登録の input() が
+-- 動いている cmdline の上（入れ子の cmdline）か、terminal のジョブの上で開く。プロンプトの中では、かな入力、
+-- 確定と取り消し（<CR>、空の <CR>、<Esc>、<C-c>）、入れ子の登録、<C-r> の貼り付け、<C-f> を流す。
+-- 外側の cmdline は閉じたあとも同じ種類（: か /）・同じ手前の文字列で開いていて、terminal のジョブには
+-- 確定した文字だけが渡る（spec.lua の regcmd の性質）。cmdline の " は無効にするが、: は実行しない
+M.regcmd = {
+  doc = "cmdline（: と /）と terminal から始める辞書登録: 確定・取り消し・入れ子・<C-r>・<C-f>",
+  config = {},
+  wait_ms = 60,
+  setup = [[
+    vim.keymap.set("t", "<C-j>", "<Plug>(skkeleton-toggle)")
+  ]],
+  alphabet = {
+    "<C-j>",
+    "Ka",
+    "Kan",
+    "Kaer",
+    "ka",
+    "a",
+    "k",
+    "<Space>",
+    "<CR>",
+    "<Esc>",
+    "<C-c>",
+    "<C-g>",
+    "<BS>",
+    "<C-u>",
+    '<C-r>"',
+    "<C-r>a",
+    "<C-f>",
+    "<Left>",
+  },
+  inits = {
+    -- 外側の cmdline に手前の文字列（"ab "）がある状態で、skkeleton を有効にしておく。レジスタ a と " は貼り付け用
+    ["#colon"] = {
+      lines = { "ab cd" },
+      cursor = { 1, 2 },
+      cmd = "let @a='ほげ' | let @\"='ふが'",
+      keys = ":ab <C-j>",
+    },
+    ["#slash"] = {
+      lines = { "ab cd" },
+      cursor = { 1, 2 },
+      cmd = "let @a='ほげ' | let @\"='ふが'",
+      keys = "/ab <C-j>",
+    },
+    ["#term"] = {
+      lines = { "ab cd" },
+      cursor = { 1, 2 },
+      -- ジョブが実行した行を PROMPT_COMMAND で記録し（HISTFILE を空にして、利用者の ~/.bash_history を読み書きしない）、ジョブに渡った文字を観測する（observe.lua の job_log）
+      cmd = [[lua _G.formal_job_log = vim.fn.tempname(); vim.cmd("terminal env PS1='$ ' HISTFILE=/dev/null PROMPT_COMMAND='history 1 >> " .. _G.formal_job_log .. "' bash --norc --noprofile")]],
+      keys = "i<C-j>",
+    },
+  },
+  dict = table.concat({
+    ";; okuri-ari entries.",
+    "かえr /帰/",
+    ";; okuri-nasi entries.",
+    "かん /缶/感/",
+    "",
+  }, "\n"),
+}
+
 -- インジケータを切ったもの（ちらつきなどの原因がインジケータかを切り分けるため）
 M.noindicator = {
   doc = "インジケータを切った既定の設定（原因の切り分け用）",
@@ -800,6 +863,7 @@ M.names = {
   "wrap",
   "okuri",
   "register",
+  "regcmd",
 }
 
 return M
