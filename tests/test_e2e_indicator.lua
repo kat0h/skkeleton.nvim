@@ -1,5 +1,4 @@
--- インジケータは出した位置を追いかけない。入力が始まったとき、出した位置からカーソルが
--- 動いたとき、cmdline で最初の変化があったときに消えることを確かめる
+-- インジケータは、出したあとに入力が始まるかカーソルが動くと消える (#63)
 local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 
@@ -13,7 +12,7 @@ local function start()
   type("<Plug>(skkeleton-enable)")
 end
 
--- インジケータの画面上の { 行, 列 }（0 起点）、カーソルの { 行, 列 }（0 起点）、幅
+-- インジケータの画面上の位置と、カーソルの位置（すべて 0 起点）
 local function positions()
   return child.lua_get([[(function()
     for _, w in ipairs(vim.api.nvim_list_wins()) do
@@ -22,125 +21,205 @@ local function positions()
         return {
           float = vim.api.nvim_win_get_position(w),
           cursor = { vim.fn.screenrow() - 1, vim.fn.screencol() - 1 },
-          width = cfg.width,
-          columns = vim.o.columns,
         }
       end
     end
   end)()]])
 end
 
-local function is_shown()
-  return positions() ~= vim.NIL
-end
-
-T["shows at the cursor's lower right when insert starts"] = function()
-  start()
+-- カーソルの右下（既定の row = 1、col = 1）に出ている
+local function expect_at_cursor()
   local p = positions()
   eq(p.float, { p.cursor[1] + 1, p.cursor[2] + 1 })
 end
 
-T["closes when the pre-edit appears"] = function()
-  start()
-  eq(is_shown(), true)
-  type("k")
-  eq(helpers.preedit(child), "k")
-  eq(is_shown(), false)
+T["shows the mode at the cursor when insert starts"] = function()
+  child.type_keys("i")
+  helpers.settle(child)
+  eq(helpers.indicator(child).text, "Aa")
+  expect_at_cursor()
+
+  -- 文字が入ったら閉じる
+  child.type_keys("x")
+  helpers.settle(child)
+  eq(positions(), vim.NIL)
 end
 
-T["closes when the pre-edit appears with a conversion marker"] = function()
-  start()
-  type("Kan")
-  eq(helpers.preedit(child), "▽かn")
-  eq(is_shown(), false)
-end
-
-T["closes when a character is committed"] = function()
-  start()
-  type("a")
-  eq(helpers.buffer(child), { "あ" })
-  eq(is_shown(), false)
-end
-
-T["closes when a character is typed without skkeleton"] = function()
-  type("i")
-  eq(is_shown(), true)
-  type("a")
-  eq(is_shown(), false)
-end
-
-T["stays after entering insert with o and closes when a character is typed"] = function()
-  child.api.nvim_buf_set_lines(0, 0, -1, false, { "abc" })
-  type("o")
-  eq(is_shown(), true)
-  type("x")
-  eq(is_shown(), false)
-end
-
-T["closes when the cursor moves from the position it was shown at"] = function()
-  child.api.nvim_buf_set_lines(0, 0, -1, false, { "abc" })
+T["stays after entering insert with A or o"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "hello" })
   child.api.nvim_win_set_cursor(0, { 1, 0 })
-  type("i")
-  eq(is_shown(), true)
-  type("<Right>")
-  eq(is_shown(), false)
+  child.type_keys("A")
+  helpers.settle(child)
+  eq(positions() ~= nil, true)
+
+  child.type_keys("<Esc>o")
+  helpers.settle(child)
+  eq(positions() ~= nil, true)
 end
 
-T["shows after a mode change confirms the pre-edit"] = function()
+T["closes when the cursor moves from where it was shown"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "hello" })
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.type_keys("i")
+  helpers.settle(child)
+  eq(positions() ~= nil, true)
+
+  type("<Right>")
+  eq(positions(), vim.NIL)
+end
+
+T["closes when the preedit starts"] = function()
+  start()
+  eq(positions() ~= nil, true)
+
+  type("K")
+  eq(helpers.preedit(child) ~= "", true)
+  eq(positions(), vim.NIL)
+end
+
+T["clears the preedit when leaving cmdline with <C-r>="] = function()
+  start()
+  type("<C-r>=")
+  eq(positions() ~= nil, true)
+
+  type("Kan")
+  eq(positions(), vim.NIL)
+
+  type("<Esc>")
+  eq(child.g["skkeleton#state"].preedit, "")
+  eq(positions() ~= nil, true)
+end
+
+T["clears the preedit when leaving cmdline with <C-c> from <C-r>="] = function()
+  start()
+  type("<C-r>=")
+  type("Kan")
+  eq(positions(), vim.NIL)
+
+  -- <C-c> は skkeleton が奪わないので、handle を通らずに cmdline を抜ける
+  child.type_keys("<C-c>")
+  helpers.settle(child)
+  eq(child.fn.mode(), "i")
+  eq(child.g["skkeleton#state"].preedit, "")
+  eq(positions() ~= nil, true)
+end
+
+T["does not show on a mode change while the preedit remains"] = function()
   start()
   type("Kan")
-  eq(is_shown(), false)
-  type("L")
-  eq(helpers.mode(child), "zenkaku")
-  eq(is_shown(), true)
-  local p = positions()
-  eq(p.float, { p.cursor[1] + 1, p.cursor[2] + 1 })
+  eq(positions(), vim.NIL)
+  eq(child.g["skkeleton#state"].preedit ~= "", true)
+
+  child.g["skkeleton#mode"] = "kata"
+  child.lua("vim.api.nvim_exec_autocmds('User', { pattern = 'skkeleton-mode-changed' })")
+  helpers.settle(child)
+  eq(positions(), vim.NIL)
+end
+
+T["shows on a mode change after the preedit is confirmed"] = function()
+  start()
+  type("Kan<C-j>")
+  eq(helpers.buffer(child), { "かん" })
+  eq(positions(), vim.NIL)
+
+  type("q")
+  eq(helpers.mode(child), "kata")
+  eq(positions() ~= nil, true)
+  eq(helpers.indicator(child).text, "ア")
+end
+
+T["closes on the first CmdlineChanged"] = function()
+  child.type_keys(":")
+  helpers.settle(child)
+  eq(positions() ~= nil, true)
+
+  child.type_keys("a")
+  helpers.settle(child)
+  eq(positions(), vim.NIL)
+
+  child.type_keys("<Esc>")
+end
+
+T["updates the mode in the middle of cmdline"] = function()
+  child.type_keys(":")
+  helpers.settle(child)
+  eq(helpers.indicator(child).text, "Aa")
+
+  child.g["skkeleton#mode"] = "hira"
+  child.lua("vim.api.nvim_exec_autocmds('User', { pattern = 'skkeleton-mode-changed' })")
+  helpers.settle(child)
+  eq(helpers.indicator(child).text, "あ")
+
+  child.type_keys("<Esc>")
 end
 
 T["is closed when insert is left with <C-c> (#27)"] = function()
   start()
-  eq(is_shown(), true)
+  eq(positions() ~= nil, true)
   type("<C-c>")
   eq(child.fn.mode(), "n")
-  eq(is_shown(), false)
+  eq(positions(), vim.NIL)
 end
 
 T["is closed when insert is left with <C-c> without enabling skkeleton (#27)"] = function()
-  type("i")
-  eq(is_shown(), true)
+  child.type_keys("i")
+  helpers.settle(child)
+  eq(positions() ~= nil, true)
   type("<C-c>")
   eq(child.fn.mode(), "n")
-  eq(is_shown(), false)
+  eq(positions(), vim.NIL)
 end
 
 T["reopens when returning from replace to insert with <Insert> (#38)"] = function()
   start()
-  eq(is_shown(), true)
+  eq(positions() ~= nil, true)
   type("<Insert>")
   eq(child.fn.mode(), "R")
-  eq(is_shown(), false)
+  eq(positions(), vim.NIL)
   type("<Insert>")
   eq(child.fn.mode(), "i")
-  eq(is_shown(), true)
+  eq(positions() ~= nil, true)
+  expect_at_cursor()
 end
 
 T["reopens when returning from replace to insert with <Insert> without enabling skkeleton (#38)"] = function()
-  type("i")
-  eq(is_shown(), true)
+  child.type_keys("i")
+  helpers.settle(child)
+  eq(positions() ~= nil, true)
   type("<Insert>")
   eq(child.fn.mode(), "R")
-  eq(is_shown(), false)
+  eq(positions(), vim.NIL)
   type("<Insert>")
   eq(child.fn.mode(), "i")
-  eq(is_shown(), true)
+  eq(positions() ~= nil, true)
 end
 
-T["closes on the first change in cmdline"] = function()
-  child.type_keys(":")
-  eq(is_shown(), true)
-  type("a")
-  eq(is_shown(), false)
-  type("<Esc>")
+T["opens at the cursor when returning from visual to insert (#47)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "line 1", "line 2", "line 3" })
+  start()
+  helpers.settle(child)
+
+  -- visual モードに入る（選択）
+  child.type_keys("<Esc>", "v")
+  helpers.settle(child)
+  eq(child.fn.mode(), "v")
+  eq(positions(), vim.NIL)
+
+  -- visual から c で insert に戻る際、ModeChanged の直後にカーソルが動く
+  child.lua([[
+    vim.api.nvim_create_autocmd("ModeChanged", {
+      pattern = "v:i",
+      once = true,
+      callback = function()
+        vim.api.nvim_win_set_cursor(0, { 3, 4 })
+      end,
+    })
+  ]])
+  child.type_keys("c")
+  helpers.settle(child)
+  eq(child.fn.mode(), "i")
+  eq(positions() ~= nil, true)
+  expect_at_cursor()
 end
 
 return T

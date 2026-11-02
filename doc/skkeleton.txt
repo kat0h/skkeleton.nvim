@@ -159,17 +159,12 @@ get_completion_ranks()
 	ユーザー辞書および |skkeleton-config-completionRankFile| に保存され
 	ている候補のランクテーブル（`table<string, integer>`）を返します。
 
-                                              *skkeleton.complete_callback()*
-complete_callback({kana}, {word} [, {kind}])
-	補完で選んだ候補をユーザー辞書に登録し、選択履歴のランクを更新しま
-	す（pre-edit の消去やバッファへの挿入は行いません）。{kind} は省略時
-	`"okurinasi"` です。
-
                                                         *skkeleton.complete()*
 complete({kana}, {word} [, {kind}])
 	補完候補で確定します。pre-edit を破棄して {word} をバッファに挿入・
 	確定し、ユーザー辞書への登録とランク更新を行います。入力モードの変
-	換関数（converter）が設定されている場合は適用されます。
+	換関数（converter）が設定されている場合は適用されます。insert モード
+	で ▽ の読みを入力している間だけ効き、それ以外では何もしません。
 
                                                   *skkeleton.save_user_dict()*
 save_user_dict()
@@ -661,7 +656,7 @@ g:skkeleton#state
 	- `phase`: 入力段階。`"input"`（直接入力）、`"input:okurinasi"`、
 	  `"input:okuriari"`、`"henkan"`、`"escape"` のいずれか。
 	- `henkanFeed`: 変換開始位置から入力された読みの文字列。
-	- `preedit`: 画面に出ている pre-edit の文字列。出ていなければ `""`。
+	- `preedit`: 表示中の pre-edit の文字列。無いときは空文字列です。
 
                                                            *g:skkeleton#debug*
 g:skkeleton#debug
@@ -673,6 +668,9 @@ g:skkeleton#debug
 
 現在の入力モードをカーソル付近の小さなフローティングウィンドウに表示します。
 skkeleton_indicator.nvim をベースに、skkeleton.nvim に内蔵しています。
+インジケータは、挿入モードやコマンドラインモードに入ったとき、skkeleton の
+モードが変わったときにカーソルの右下に出ます。入力が始まったとき、文字が
+入ったとき、カーソルが動いたとき、`fadeOutMs` がたったときに消えます。
 |skkeleton.setup()| の `indicator` オプションにテーブルを渡すと設定を変更で
 き、`false` を渡すと無効になります。省略時は既定の設定で有効になります。
 >lua
@@ -750,15 +748,15 @@ zindex ~
 alwaysShown ~
 	既定値: true
 	型: boolean
-	真の場合は、SKK が無効なときも挿入モードでインジケータを表示します。
-	偽の場合は、SKK が有効なときのみ表示します（直接入力時の「英字」表示
-	が出なくなります）。
+	真の場合は、SKK が無効なときもインジケータを表示します。偽の場合は、
+	SKK が有効なときのみ表示します（直接入力時の「英字」表示が出なくなりま
+	す）。
 
 fadeOutMs ~
 	既定値: 3000
 	型: integer
 	インジケータが自動的に消えるまでの時間（ミリ秒）です。`0` を指定すると
-	フェードアウトせず、挿入モードの間常に表示し続けます。
+	自動では消えず、入力やカーソル移動があるまで表示し続けます。
 
 ignoreFt ~
 	既定値: {}

@@ -46,6 +46,27 @@
 - 同じことが upstream でも起きると確かめられたときだけ、`upstream` ラベルを付けます。確かめていなければ、本文にそう書きます。
 - ラベル：バグは `bug`、改良は `enhancement`、作者に決めてほしいことは `question`。
 
+## GitHub（gh コマンド）
+
+`gh` コマンドが使えます。認証は済んでいて、`git push` も `gh` の認証（HTTPS）で通ります。リポジトリは `-R kat0h/skkeleton.nvim` で指定します。
+
+```sh
+gh issue view 33 -R kat0h/skkeleton.nvim --comments     # issue を読む
+gh issue list -R kat0h/skkeleton.nvim --state open       # 開いている issue
+gh issue create -R kat0h/skkeleton.nvim -t "題" -F body.md -l bug   # issue を立てる
+gh issue comment 12 -R kat0h/skkeleton.nvim -F comment.md            # コメントする
+gh issue reopen 12 -R kat0h/skkeleton.nvim                           # 開き直す
+gh pr create -R kat0h/skkeleton.nvim -B main -H <ブランチ> -t "題" -F body.md
+gh pr view 76 -R kat0h/skkeleton.nvim                    # PR を読む（gh pr diff で差分）
+gh pr checks 76 -R kat0h/skkeleton.nvim --watch          # CI を待つ
+gh run view <run の番号> -R kat0h/skkeleton.nvim --log-failed   # 落ちた CI のログ
+```
+
+- 本文は、文字列で渡さずにファイルに書いて `-F` で渡します。引用符や改行が崩れないようにするためです。
+- 本文に `@名前` を書くと、その人に通知が届きます。人を呼ぶとき以外は、`@` を書かないか、バッククォートで囲みます。
+- 書き込む（issue、コメント、PR、ラベル）のは kat0h/skkeleton.nvim だけです。upstream（vim-skk/skkeleton など）には書き込みません。
+- PR のマージは作者が行います（「git」の節）。
+
 ## コード
 
 - Neovim 専用で、純粋な Lua です。FFI や外部コマンドには頼りません。

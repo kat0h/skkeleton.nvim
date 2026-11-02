@@ -34,7 +34,8 @@ local function doautocmd(name)
 end
 
 -- g:skkeleton#state を更新する（補完ソースやインジケータが読む）
-local function update_state_variable()
+---@param pre? string ctx:to_string() の結果（呼び出し側で作ったもの）
+local function update_state_variable(pre)
   local ctx = store.context()
   local st = ctx.state
   local phase
@@ -43,7 +44,23 @@ local function update_state_variable()
   else
     phase = st.type
   end
-  vim.g["skkeleton#state"] = { phase = phase, henkanFeed = st.henkan_feed or "", preedit = ctx:to_string() }
+  pre = pre or ctx:to_string()
+  vim.g["skkeleton#state"] = {
+    phase = phase,
+    henkanFeed = st.henkan_feed or "",
+    preedit = st.type ~= "escape" and pre or "",
+  }
+end
+
+-- pre-edit を消したときに g:skkeleton#state.preedit も消す。
+-- 値は handle でしか更新しないので、cmdline の pre-edit を片付けたときに残ってしまう
+local function clear_preedit_state()
+  local state = vim.g["skkeleton#state"]
+  -- vim.g の表はコピーなので、書き換えたら入れ直す
+  if type(state) == "table" and state.preedit ~= "" then
+    state.preedit = ""
+    vim.g["skkeleton#state"] = state
+  end
 end
 
 -- Context を作り直す（使い終わった state の片付け）
@@ -220,6 +237,7 @@ function M.init(force)
     group = group,
     callback = function()
       render.clean_stale_cmdline()
+      clear_preedit_state()
       local cmdtype = vim.v.event.cmdtype
       clean_history(cmdtype)
       vim.schedule(function()
@@ -237,6 +255,7 @@ function M.init(force)
       end
       if vim.fn.mode():sub(1, 1) == "c" then
         render.clean_stale_cmdline()
+        clear_preedit_state()
       end
       reset()
       host.disable()
@@ -378,8 +397,19 @@ function M.handle_inner(func, opts)
   end
   ctx = store.context()
   ctx.vim_mode = ctx.vim_mode ~= "" and ctx.vim_mode or short
-  update_state_variable()
-  render.update(ctx, prefix)
+  local pre = ctx:to_string()
+  update_state_variable(pre)
+  render.update(ctx, prefix, pre)
+end
+
+-- 補完で選んだ語をユーザー辞書に登録して、直前の候補にする
+---@param kana string
+---@param word string
+---@param kind? skkeleton.HenkanType
+local function register_completion(kana, word, kind)
+  kind = kind or "okurinasi"
+  store.library():register_henkan_result(kind, kana, word)
+  store.context().last_candidate = { type = kind, word = kana, candidate = word }
 end
 
 -- 補完で語を選んだとき。pre-edit を捨てて語を確定し、ユーザー辞書に登録する。
@@ -398,29 +428,20 @@ function M.complete(kana, word, kind)
     local conv = ctx.state.converter
     -- 変換中の状態は捨てる。モード（ひらがななど）は変えない
     mode_mod.initialize_state_with_abbrev(ctx, { "converter", "table" })
-    M.complete_callback(kana, word, kind)
+    register_completion(kana, word, kind)
     local text = candidate.modify(word or kana or "") or ""
     if conv then
       text = conv(text)
     end
     ctx:kakutei_with_undo_point(text)
-    update_state_variable()
-    render.update(ctx)
+    local pre = ctx:to_string()
+    update_state_variable(pre)
+    render.update(ctx, nil, pre)
   end)
   handling_depth = handling_depth - 1
   if not ok then
     error(err, 0)
   end
-end
-
--- 補完で選んだ語をユーザー辞書に登録して、直前の候補にする
----@param kana string
----@param word string
----@param kind? skkeleton.HenkanType
-function M.complete_callback(kana, word, kind)
-  kind = kind or "okurinasi"
-  store.library():register_henkan_result(kind, kana, word)
-  store.context().last_candidate = { type = kind, word = kana, candidate = word }
 end
 
 return M
