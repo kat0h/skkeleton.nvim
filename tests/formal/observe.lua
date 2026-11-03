@@ -311,6 +311,7 @@ function M.snapshot()
     recording = vim.fn.reg_recording(),
     -- 矩形選択の insert を <Esc> で抜けたところか（block プロファイル）
     block_done = _G.formal_block_done == true,
+    block_insert = _G.formal_block == true,
     block_rows = _G.formal_block_rows,
     list = vim.wo[win].list,
     editor_lines = vim.o.lines,

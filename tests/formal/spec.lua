@@ -479,11 +479,11 @@ end
 -- 矩形選択の I・A は、<Esc> で入力した文字を選んだ全部の行に繰り返す（Vim の仕様）。
 -- block プロファイルの行は全部同じ文字列で始まるので、繰り返しが終わったあとも全部の行が同じになる。
 -- skkeleton の確定やマーカーの掃除が繰り返しをずらしたり、マーカーが一部の行に混ざったりしないかを見る
-M.state["block: 矩形選択の insert を抜けたら、全部の行が同じ"] = function(s)
+M.state["block: 矩形選択の insert を抜けたら、全部の行が同じ"] = function(s, _, hist)
   -- Vim 自身が繰り返さない場合は見ない（素の Vim でも同じ）。開始位置より前を <BS> で消すと、
   -- 繰り返しは 1 行目だけ（"XYb cd" / "aYb cd"）になる。<CR> で行が増えたときも、行をまたぐ入力は繰り返さない。
   -- 行頭の "a" が残っていて行数が変わらないときだけ、全部の行が同じになるはず
-  if not s.block_done or not s.block_rows or #s.lines ~= 3 then
+  if not s.block_done or not s.block_rows or #s.lines ~= 3 or (hist and hist.block_bs) then
     return
   end
   -- 選んだ行（block_rows）だけを比べる。k・j で選ぶ行は変わる
@@ -547,6 +547,11 @@ function M.observe(hist, prev, s)
   -- 複数のキーをまとめた操作（Q1 など）のあいだにバッファが変わると、途中の状態（undo の区切り）を
   -- 観測していないので、そのあとの undo は確かめない
   local key = s.key or ""
+  -- 矩形選択の insert で <BS> を押したときは、素の Vim でも選択した全行には繰り返さない
+  -- （繰り返すのは入力した文字だけ）。block の性質では見ない
+  if s.block_insert and key == "<BS>" then
+    hist.block_bs = true
+  end
   local multi = #key > 1 and not key:match("^<[^>]+>$")
   if prev and multi and table.concat(prev.lines, "\n") ~= table.concat(s.lines, "\n") then
     hist.unseen = true
@@ -935,7 +940,15 @@ M.state["register: 登録の間も外側の pre-edit が見える"] = function(s
   end
   -- 外側のバッファが今の画面に出ているときだけ、画面の行も見る（<C-f> の cmdline window では隠れる）。
   -- タイマーがカーソルを別の行に奪ったとき（<StealCursor>）は、pre-edit の行を見ていないので比べない
-  if s.cmdwin == "" and s.buf == (s.input_buf or s.buf) and not insert_mode(s) and s.cursor[1] == found.row + 1 then
+  if
+    s.cmdwin == ""
+    and s.buf == (s.input_buf or s.buf)
+    and s.win == b.win
+    and (s.other_floats or 0) == 0
+    and not s.win_float
+    and not insert_mode(s)
+    and s.cursor[1] == found.row + 1
+  then
     if not s.screen_line:find(found.text, 1, true) then
       return ("登録の間の画面 %q に pre-edit %q が無い"):format(s.screen_line, found.text)
     end
