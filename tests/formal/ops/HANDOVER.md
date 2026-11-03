@@ -76,6 +76,11 @@ cd /home/kat0h/ghq/github.com/kat0h/skkeleton.nvim/.claude/worktrees/formal-ui
 - `NVIM=/path/to/nvim` は `run.sh`・`make verify`・`rotate.sh`・`attach.sh` の nvim を切り替えます。`Makefile` の `NVIM` も同じです。
 - stable では出ずに nightly だけで出た違反は、Neovim の変更を探して issue に書きます（AGENTS.md の「テスト」の節）。
 
+## 開いてから閉じた issue（記録）
+
+- **#149（blink.cmp のメニュー位置）**: ヘッドレスの子で `is_menu_visible()` が true、`nvim_win_get_position()` が `(1,1)` だったため issue を立てましたが、`tui.lua` の本物の端末と利用者の設定の nvim では、メニューは pre-edit の近くに出て行頭ではありませんでした。ヘッドレスではウィンドウがあっても描かれていないことがあります。
+- 浮動ウィンドウの位置の違反は、ヘッドレスの観測だけで issue にしないでください。`tui.lua` の画面（できれば利用者の設定の nvim）で確かめてから issue にします。詳しくは main の `docs/MODEL_CHECKING.md` の「開いてから閉じた issue」に書きました。
+
 ## 仕分け
 
 1. **再現するか**
