@@ -169,7 +169,9 @@ vim.keymap.set({ "i", "c" }, "<C-j>", "<Plug>(skkeleton-toggle)")
 
 ```sh
 make test              # 全テストを実行（.tests/mini.nvim がなければ自動で clone します）
+make test JOBS=4       # ファイルごとの並列数（既定はコア数 − 2）
 make test FILE=tests/test_kana.lua
+make jisyotest         # SKK-JISYO.L の全候補と、SKK-JISYO.L を使う重いテスト
 make lint              # stylua --check
 make fmt
 ```
