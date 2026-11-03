@@ -1640,6 +1640,22 @@ M.known = {
       return table.concat(keys, " "):find("<C-k>a:", 1, true) ~= nil
     end,
   },
+  -- #154: 登録の取り消し（<C-c>）のあと、もう一度 <C-c> で抜けると外側の pre-edit が消える
+  {
+    property = "cursor: 確定したあとの行とカーソルは <Esc> と同じ",
+    reason = "#154 登録の取り消し後の <C-c> で外側の pre-edit が消える",
+    match = function(keys)
+      return table.concat(keys, " "):find("<C-c> <C-c>", 1, true) ~= nil
+    end,
+  },
+  -- #155: <M-a> で有効なまま disable-post が発火する
+  {
+    property = "event: disable-post は無効になったときだけ",
+    reason = "#155 <M-a> で有効なまま disable-post が発火する",
+    match = function(keys)
+      return table.concat(keys, " "):find("<M-a>", 1, true) ~= nil
+    end,
+  },
 }
 
 -- #56 の別の現れ方。キーが先に通るので、pre-edit が残ったまま cmdline や terminal の文字がずれる、

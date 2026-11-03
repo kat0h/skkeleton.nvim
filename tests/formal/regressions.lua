@@ -59,6 +59,19 @@ return {
   -- blink のメニューの位置（#143）
   { issue = 142, profile = "misc", keys = { "#mid", "<C-j>", "Kan", "<C-c>" } },
   { issue = 151, profile = "steal", keys = { "#eol", "<C-j>", "/", "<C-o>u" } },
+  { issue = 154, profile = "default", keys = { "#mid", "<C-j>", "A", "Kan", "<C-c>", "<C-c>" } },
+  {
+    issue = 155,
+    profile = "unmapped",
+    config = {
+      acceptIllegalResult = true,
+      eggLikeNewline = false,
+      immediatelyCancel = true,
+      keepState = true,
+      markerHenkanSelect = "▼",
+    },
+    keys = { "<M-a>" },
+  },
   {
     issue = 152,
     profile = "steal",
