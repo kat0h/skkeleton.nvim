@@ -583,8 +583,17 @@ function M.observe(hist, prev, s)
   if s.block_insert and key == "<BS>" then
     hist.block_bs = true
   end
-  if key:find("^<Paste") then
-    hist.pasted = true
+  -- 貼り付けは pre-edit の確定と貼り付けを別の undo のまとまりに分ける（#157 の作者の指示）。
+  -- 見ないのは、pre-edit があった貼り付けのあと、バッファを変えないキー（<Esc> など）を挟んだ
+  -- 最初の u だけ。pre-edit が無い貼り付けや、途中でバッファを変えたあとの u は今までどおり見る
+  if key ~= "u" and key ~= "<C-r>" then
+    local changed = prev and table.concat(prev.lines, "\n") ~= table.concat(s.lines, "\n")
+    if not prev or changed then
+      hist.pasted = nil
+    end
+    if key:find("^<Paste") and prev and (prev.ctx_text or "") ~= "" then
+      hist.pasted = true
+    end
   end
   -- keepState は Esc のあとの最初の InsertEnter だけ。. は入力の繰り返しで、
   -- その一度を使うので、. のあとの <C-k>a: は keepState の対象にしない
@@ -836,8 +845,8 @@ M.action["undo: u と <C-r> は観測したことのある状態に戻る"] = fu
   if (key ~= "u" and key ~= "<C-r>") or p.vim_mode ~= "n" or not hist or not hist.texts or hist.unseen then
     return
   end
-  -- 貼り付けは pre-edit の確定と貼り付けを別の undo のまとまりに分ける。確定した読みは画面に
-  -- 出ていないので、そのあと最初の u は「観測したことのある状態」に戻らない
+  -- pre-edit があった貼り付けの、バッファを変えないキーを挟んだ最初の u だけ見ない（observe で
+  -- 狭めてある）。確定した読みは画面に出ていないので、「観測したことのある状態」に戻らない
   if hist.pasted then
     hist.pasted = nil
     return
@@ -1742,13 +1751,13 @@ end
 
 -- 作者の指示: insert の中の <C-c> は <Esc> と同じように振る舞う。
 -- カーソルだけでなく、観測している状態全体を、最後のキーを <Esc> に替えた基準と比べる
+-- 作者の指示（#157）: insert・cmdline・辞書登録の入力の中では、<C-c> は <Esc> と同じように振る舞う。
+-- terminal は比べない（<Esc> は job に渡り、<C-c> は job に割り込みを送るので、Vim の意味が違う）
 M.action["cursor: <C-c> と <Esc> は状態全体が同じ"] = function(p, key, s, hist)
   if
     key ~= "<C-c>"
-    or not insert_mode(p)
+    or not (insert_mode(p) or p.vim_mode:sub(1, 1) == "c" or registering(p))
     or p.buftype == "terminal"
-    or p.cmdline ~= nil
-    or registering(p)
     or not hist
     or not hist.esc_ref
   then
@@ -1774,7 +1783,8 @@ M.action["cursor: <C-c> と <Esc> は状態全体が同じ"] = function(p, key, 
   diff("indicator", #s.indicator, #a.indicator)
   diff("popup", #s.popup, #a.popup)
   diff("menu", s.menu, a.menu)
-  diff("undo", s.undo_seq, a.undo_seq)
+  -- undo のまとまりは比べない。#158: <C-c> の確定は <Esc> と別の undo のまとまりになり、
+  -- 作者の判断で違いを受け入れた（cmdline の履歴も比べない）
   if #differences > 0 then
     return ("<C-c> と <Esc> が違う: " .. table.concat(differences, " / "))
   end
@@ -1799,14 +1809,6 @@ end
 -- 見つかったが、今は直さないもの。反例の性質の名前と、キー列で見分ける。
 -- 当てはまる違反は「既知」として出し、失敗にしない
 M.known = {
-  -- #158: <C-c> の確定が <Esc> と違う undo のまとまりになる（undo の違いだけを見る）
-  {
-    property = "cursor: <C-c> と <Esc> は状態全体が同じ",
-    reason = "#158 <C-c> の undo が <Esc> と違う",
-    match = function(_, msg)
-      return msg ~= nil and msg:find("undo=", 1, true) ~= nil
-    end,
-  },
   -- #153: which-key などの normal のトリガーマッピングが <C-o>z を 1 コマンドで終わらせる。
   -- プラグイン側では直さない（which-key の不具合）が、検査では既知として残す
   {
