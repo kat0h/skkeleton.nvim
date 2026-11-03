@@ -199,6 +199,20 @@ T["register"]["<C-c> cancels"] = function()
   eq(user_dictionary():find("よみ", 1, true), nil)
 end
 
+T["register"]["<C-c> twice keeps the outer pre-edit (#154)"] = function()
+  enable()
+  type("A")
+  type("Kan")
+  eq(child.fn.mode(), "c")
+  type("<C-c>")
+  eq(child.fn.mode(), "i")
+  eq(helpers.preedit(child), "▽あ*か")
+  type("<C-c>")
+  eq(child.fn.mode(), "n")
+  eq(helpers.buffer(child), { "あか" })
+  eq(helpers.preedit(child), "")
+end
+
 T["register"]["<C-g> after <C-w> cancels and keeps the outer reading (#116)"] = function()
   enable()
   -- 送り仮名の変換で候補が無いときの登録になる。欄で打った「んじ」と打ちかけの n が残る
