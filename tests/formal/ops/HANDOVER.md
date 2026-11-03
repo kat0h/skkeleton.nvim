@@ -18,16 +18,16 @@ skkeleton.nvim（Neovim の SKK、純 Lua）のモデル検査を、決まった
 ### バグの直し（main に push してよい）
 検査で見つけたバグ（区分が「新しいバグ」か「閉じた issue の残り」のもの）は、自分で直して main に push してかまいません。
 
-- **作業場所**：main のツリー（`/home/kat0h/ghq/github.com/kat0h/skkeleton.nvim`）は agy が使っているので、触らない。直すための worktree を 1 つ作り、そこで作業する。
+- **作業場所**：リポジトリの最上位（main の作業ツリー、以下 `$REPO`）では作業しない（AGENTS.md の「同時に作業するとき」）。直すための worktree を 1 つ作り、そこで作業する。
   ```sh
-  git -C /home/kat0h/ghq/github.com/kat0h/skkeleton.nvim fetch origin
-  git -C /home/kat0h/ghq/github.com/kat0h/skkeleton.nvim worktree add --detach /home/kat0h/ghq/github.com/kat0h/skkeleton.nvim/.claude/worktrees/opencode-fix origin/main
+  git -C "$REPO" fetch origin
+  git -C "$REPO" worktree add --detach "$REPO/.claude/worktrees/opencode-fix" origin/main
   ```
   2 回目からは、その worktree で `git fetch origin && git switch --detach origin/main` をしてから始める。
 - **直すもの**：`lua/`、`plugin/`、`tests/`（`tests/formal/` を除く）、`doc/`。直したら、そのバグの回帰テストを `tests/` に足す。
-- **確かめること**：直した worktree で `make test` と `make lint` を通す。整形には `/home/kat0h/ghq/github.com/kat0h/skkeleton.nvim/.tests/bin/stylua` を使う。足した回帰テストが、直す前の版では落ちて、直したあとでは通ることも確かめる。検査の worktree の `lua/` は古いままなので、モデル検査での確かめ直し（`--regress`）は、push のあとに引き継ぎ元が `sync.sh` で取り込んでから行う。
+- **確かめること**：直した worktree で `make test` と `make lint` を通す。整形には `$REPO/.tests/bin/stylua` を使う。足した回帰テストが、直す前の版では落ちて、直したあとでは通ることも確かめる。検査の worktree の `lua/` は古いままなので、モデル検査での確かめ直し（`--regress`）は、push のあとに引き継ぎ元が `sync.sh` で取り込んでから行う。
 - **コミット**：メッセージは英語の conventional commits（`fix(...): ...`）にする。issue があれば本文に `Closes #番号`（閉じた issue の残りなら `Refs #番号`）を書く。issue が無い新しいバグなら、`.tests/formal-ops/issues/` の下書きのファイル名を本文に書く。
-- **push**：`git push origin HEAD:main`（HTTPS）。先に agy の push があって通らなければ、`git pull --rebase origin main` をして、テストを流し直してから push する。force push はしない。
+- **push**：`git push origin HEAD:main`（HTTPS）。先にほかの人の push があって通らなければ、`git pull --rebase origin main` をして、テストを流し直してから push する。force push はしない。
 - **直さずに止めるもの**：直すのに「どちらにするか」を決める必要があるもの、使う人から見た動きが変わるもの、`lua/` を大きく作り直すもの。これは issue の下書きに選択肢を書くだけにする。
 - **互換**：互換のためのコードや警告は足さない。差分は小さくする。
 
@@ -51,7 +51,7 @@ skkeleton.nvim（Neovim の SKK、純 Lua）のモデル検査を、決まった
 作業はすべてこの worktree で行います。
 
 ```sh
-cd /home/kat0h/ghq/github.com/kat0h/skkeleton.nvim/.claude/worktrees/formal-ui
+cd "$REPO/.claude/worktrees/formal-ui"
 ```
 
 1. **今の版を確かめる**
