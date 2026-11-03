@@ -279,6 +279,24 @@ local SETUP = [[
   if extra_code then
     assert(loadstring(extra_code))()
   end
+  -- blink.cmp のメニューを skkeleton の refresh が開いたか（auto_show と区別する）。
+  -- blink の show / hide を包んで、検査だけの印を付ける
+  do
+    local blink = package.loaded["blink.cmp"]
+    if type(blink) == "table" and type(blink.show) == "function" then
+      local show, hide = blink.show, blink.hide
+      blink.show = function(...)
+        _G.formal_menu_by_refresh = true
+        return show(...)
+      end
+      if type(hide) == "function" then
+        blink.hide = function(...)
+          _G.formal_menu_by_refresh = false
+          return hide(...)
+        end
+      end
+    end
+  end
 ]]
 
 local function new_child()
@@ -786,13 +804,15 @@ if opts.keys then
       )
     )
     if os.getenv("FORMAL_DEBUG") then
-      print(
-        "  "
-          .. vim.inspect(
-            { screen = s.screen, popup = s.popup, indicator = s.indicator, win_pos = s.win_pos },
-            { newline = " ", indent = "" }
-          )
-      )
+      print("  " .. vim.inspect({
+        screen = s.screen,
+        popup = s.popup,
+        indicator = s.indicator,
+        win_pos = s.win_pos,
+        menu = s.menu,
+        menu_pos = s.menu_pos,
+        menu_size = s.menu_size,
+      }, { newline = " ", indent = "" }))
     end
     hist.esc_ref = function()
       return esc_reference(sent)

@@ -58,6 +58,13 @@ return {
   -- カーソルが確定した文字の後ろに来ない（#142）、辞書登録の間の外側の pre-edit（#144）、
   -- blink のメニューの位置（#143）
   { issue = 142, profile = "misc", keys = { "#mid", "<C-j>", "Kan", "<C-c>" } },
+  { issue = 151, profile = "steal", keys = { "#eol", "<C-j>", "/", "<C-o>u" } },
+  {
+    issue = 152,
+    profile = "steal",
+    config = { keepState = true },
+    keys = { "<C-j>", "<Esc>", ".", "<C-k>a:" },
+  },
   { issue = 143, profile = "blink", keys = { "#eol", "<C-j>", "Kanji" } },
   { issue = 144, profile = "register", keys = { "#mid", "<C-j>", "A", "<Space>", "k" } },
   -- DB の置き場の .tmp（#138）。db_check は dict.lua の最後に 1 回だけ流す

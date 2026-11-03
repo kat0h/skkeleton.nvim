@@ -275,6 +275,97 @@ local function compare_completion(dict, model, where)
   end
 end
 
+-- DB の作り直しを rename の前で止める（別の nvim を kill する）。乱数の操作からも呼ぶ。
+-- 止めたあとに開き直すと、DB を作り直してメモリの辞書と同じになる。新しい .tmp は残ってよく、
+-- 1 時間より古い .tmp は次の作り直しで消える (#138)
+local function db_kill_check()
+  local db = require("skkeleton.dictionary.db")
+  local skk = require("skkeleton.dictionary.skk")
+  local dir = vim.fn.tempname()
+  vim.fn.mkdir(dir, "p")
+  local function finish(msg)
+    vim.fn.delete(dir, "rf")
+    return msg
+  end
+  local text = table.concat({
+    ";; okuri-ari entries.",
+    "わるk /悪/",
+    ";; okuri-nasi entries.",
+    "かん /缶/感/",
+    "にほん /日本/",
+    "",
+  }, "\n")
+  local src, dbdir = dir .. "/dict", dir .. "/db"
+  local f = assert(io.open(src, "wb"))
+  f:write(text)
+  f:close()
+  local dst = db.path_for(src, dbdir)
+  local script = dir .. "/kill.lua"
+  f = assert(io.open(script, "wb"))
+  f:write(([[
+      vim.opt.rtp:prepend(%q)
+      local uv = vim.uv
+      local pid = uv.os_getpid()
+      local rename = uv.fs_rename
+      uv.fs_rename = function(...)
+        uv.kill(pid, "sigkill")
+        return rename(...)
+      end
+      require("skkeleton.dictionary.db").build(%q, %q)
+    ]]):format(root, src, dst))
+  f:close()
+  local r = vim
+    .system({ vim.v.progpath, "--headless", "-u", "NONE", "-i", "NONE", "-l", script }, { text = true })
+    :wait()
+  local killed_tmp
+  for _, name in ipairs(vim.fn.glob(dbdir .. "/*", false, true)) do
+    if name:match("%.tmp$") then
+      killed_tmp = name
+    end
+  end
+  if not killed_tmp then
+    return finish(
+      ("rename の前で止めたのに .tmp が残っていない（終了コード %s）: %s"):format(
+        tostring(r.code),
+        tostring(r.stderr or r.stdout or "")
+      )
+    )
+  end
+  if vim.uv.fs_stat(dst) then
+    return finish("rename の前で止めたのに .db ができている")
+  end
+  db.ensure(src, { dir = dbdir })
+  local mem = skk.load_memory(src)
+  local ok, disk = pcall(db.open_dictionary, src, { dir = dbdir })
+  if not ok then
+    return finish("止めたあとに DB を開けない: " .. tostring(disk))
+  end
+  for _, w in ipairs({ "かん", "にほん" }) do
+    local a = mem:get_henkan_result("okurinasi", w)
+    local b = disk:get_henkan_result("okurinasi", w)
+    if not vim.deep_equal(a, b) then
+      return finish(("止めたあとの %q の候補 %s、メモリ %s"):format(w, vim.inspect(b), vim.inspect(a)))
+    end
+  end
+  -- 新しい .tmp は、まだ 1 時間たっていないので残ってよい
+  if not vim.uv.fs_stat(killed_tmp) then
+    return finish("止めた直後の新しい .tmp が消えた")
+  end
+  -- 1 時間より古い .tmp は、次の作り直しで消える
+  local old = os.time() - 7200
+  vim.uv.fs_utime(killed_tmp, old, old)
+  db.ensure(src, { dir = dbdir, force = true })
+  if vim.uv.fs_stat(killed_tmp) then
+    return finish("1 時間より古い .tmp が残っている")
+  end
+  for _, name in ipairs(vim.fn.glob(dbdir .. "/*", false, true)) do
+    if name:match("%.tmp$") then
+      return finish("掃除のあとに .tmp が残っている: " .. vim.fs.basename(name))
+    end
+  end
+  return finish()
+end
+
 local function run(ops)
   local dir = vim.fn.tempname()
   vim.fn.mkdir(dir, "p")
@@ -308,6 +399,12 @@ local function run(ops)
       dict:purge_candidate(op[2], op[3], op[4])
       model_purge(model, op[2], op[3], op[4])
       rank_drop(model, op[4])
+    elseif op[1] == "dbkill" then
+      -- DB の作り直しを rename の前で止め、開き直して中身を確かめる
+      local msg = db_kill_check()
+      if msg then
+        return finish(i, msg)
+      end
     elseif op[1] == "reload" then
       -- ユーザー辞書を直接 save / save_ranks して、読み直す
       dict:save()
@@ -380,6 +477,8 @@ local function random_ops(n)
       ops[i] = { "purge", kind, word, cand }
     elseif r < 0.67 then
       ops[i] = { "rwpurge", kind, word, cand }
+    elseif r < 0.70 then
+      ops[i] = { "dbkill" }
     elseif r < 0.78 then
       ops[i] = { "reload" }
     else
@@ -394,6 +493,8 @@ local function fmt(ops)
     vim.tbl_map(function(o)
       if o[1] == "reload" then
         return "reload"
+      elseif o[1] == "dbkill" then
+        return "dbkill"
       elseif o[1] == "libsave" then
         return ("libsave(rw=%s)"):format(tostring(o[2]))
       end
@@ -493,66 +594,8 @@ local function db_check()
 
   -- 2. rename の前で nvim を kill する。.tmp が残り、DB はまだ無い。
   -- そのあと開き直すと、DB を作り直してメモリの辞書と同じになる
-  local src2, dbdir2 = dir .. "/dict2", dir .. "/db2"
-  write(src2)
-  local dst2 = db.path_for(src2, dbdir2)
-  local script = dir .. "/kill.lua"
-  local f = assert(io.open(script, "wb"))
-  f:write(([[
-      vim.opt.rtp:prepend(%q)
-      local uv = vim.uv
-      local pid = uv.os_getpid()
-      local rename = uv.fs_rename
-      uv.fs_rename = function(...)
-        uv.kill(pid, "sigkill")
-        return rename(...)
-      end
-      require("skkeleton.dictionary.db").build(%q, %q)
-    ]]):format(root, src2, dst2))
-  f:close()
-  local r = vim
-    .system({ vim.v.progpath, "--headless", "-u", "NONE", "-i", "NONE", "-l", script }, { text = true })
-    :wait()
-  local killed_tmp
-  for _, name in ipairs(files(dbdir2)) do
-    if name:match("%.tmp$") then
-      killed_tmp = dbdir2 .. "/" .. name
-    end
-  end
-  if not killed_tmp then
-    return finish(
-      ("rename の前で止めたのに .tmp が残っていない（終了コード %s）: %s"):format(
-        tostring(r.code),
-        tostring(r.stderr or r.stdout or "")
-      )
-    )
-  end
-  if vim.uv.fs_stat(dst2) then
-    return finish("rename の前で止めたのに .db ができている")
-  end
-  db.ensure(src2, { dir = dbdir2 })
-  msg = check_content(src2, dbdir2, "止めたあとに開き直したとき")
-  if msg then
-    return finish(msg)
-  end
-  -- 新しい .tmp は、まだ 1 時間たっていないので残ってよい（#138）
-  if not vim.uv.fs_stat(killed_tmp) then
-    return finish("止めた直後の新しい .tmp が消えた")
-  end
-  -- 1 時間より古い .tmp は、次の作り直しで消える
-  local old = os.time() - 7200
-  vim.uv.fs_utime(killed_tmp, old, old)
-  db.ensure(src2, { dir = dbdir2, force = true })
-  if vim.uv.fs_stat(killed_tmp) then
-    return finish("1 時間より古い .tmp が残っている")
-  end
-  local rest = files(dbdir2)
-  for _, name in ipairs(rest) do
-    if name:match("%.tmp$") then
-      return finish("掃除のあとに .tmp が残っている: " .. vim.inspect(rest))
-    end
-  end
-  return finish()
+  vim.fn.delete(dir, "rf")
+  return db_kill_check()
 end
 
 math.randomseed(opts.seed)

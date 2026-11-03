@@ -344,7 +344,10 @@ M.blink = {
     "<Left>",
     "<C-w>",
   },
-  inits = line_inits,
+  -- blink のメニューの位置は、利用者の 1 ウィンドウの画面でも見る（検査の下の "xy" ウィンドウを閉じる）
+  inits = vim.tbl_extend("force", line_inits, {
+    ["#one"] = { lines = { "ab cd" }, cursor = { 1, 2 }, keys = "i", cmd = "only" },
+  }),
   dict = dict,
 }
 

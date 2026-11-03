@@ -208,6 +208,11 @@ M.state["mode: normal に戻ったら片付いている"] = function(s)
 end
 
 M.state["disabled: マッピング・インジケータ・popup が残らない"] = function(s)
+  -- 辞書登録の入力の中は、登録の Context だけを無効にできる。外側の pre-edit は登録が
+  -- 終わるまで見えている（upstream も同じ）。登録が閉じたあとの片付けは register: の性質で見る
+  if registering(s) then
+    return
+  end
   if s.enabled then
     return
   end
@@ -416,6 +421,7 @@ end
 M.state["blink: メニューは pre-edit の画面の位置の 1 行下"] = function(s)
   if
     not s.menu
+    or not s.menu_by_refresh
     or not s.menu_pos
     or not s.enabled
     or not insert_mode(s)
@@ -910,7 +916,8 @@ M.state["register: 登録の間も外側の pre-edit が見える"] = function(s
   end
   -- 登録を開いたキーが <Space> のときだけ、登録の前の pre-edit と同じ文字列を期待する。
   -- Kanji のようなマクロや送り仮名の A は、開くキーが外側の状態も変える（HANDOVER の register の注意）
-  local exact = hist.before_register_key == "<Space>" and b.ctx_text ~= ""
+  -- 打ちかけのローマ字（feed）があると、<Space> がそれをかなに直すので、前の文字列とは変わる
+  local exact = hist.before_register_key == "<Space>" and b.ctx_text ~= "" and b.state.feed == ""
   local found
   for _, m in ipairs(s.preedit_marks) do
     if m.buf == s.input_buf or m.buf == s.buf then
@@ -926,8 +933,9 @@ M.state["register: 登録の間も外側の pre-edit が見える"] = function(s
       short(s.preedit_marks)
     )
   end
-  -- 外側のバッファが今の画面に出ているときだけ、画面の行も見る（<C-f> の cmdline window では隠れる）
-  if s.cmdwin == "" and s.buf == (s.input_buf or s.buf) and not insert_mode(s) then
+  -- 外側のバッファが今の画面に出ているときだけ、画面の行も見る（<C-f> の cmdline window では隠れる）。
+  -- タイマーがカーソルを別の行に奪ったとき（<StealCursor>）は、pre-edit の行を見ていないので比べない
+  if s.cmdwin == "" and s.buf == (s.input_buf or s.buf) and not insert_mode(s) and s.cursor[1] == found.row + 1 then
     if not s.screen_line:find(found.text, 1, true) then
       return ("登録の間の画面 %q に pre-edit %q が無い"):format(s.screen_line, found.text)
     end
@@ -1023,7 +1031,9 @@ M.action["register: 閉じたあとのバッファは登録した語か元の �
         b.ctx_text
       )
     end
-    if b.cmdtype == "@" and s.cmdtype == "@" and s.cmdline ~= b.cmdline then
+    -- 内側を開く <Space> が、打ちかけのローマ字をかなに直すことがある（feed があるとき）。
+    -- そのときは外側のプロンプトの末尾が 1 文字変わるのが正しい
+    if b.cmdtype == "@" and s.cmdtype == "@" and b.state.feed == "" and s.cmdline ~= b.cmdline then
       return ("取り消しのあとの外側のプロンプトが %q（内側を開く前は %q）"):format(
         s.cmdline,
         b.cmdline
@@ -1221,9 +1231,11 @@ M.action["register: 閉じたあとのモードと状態が登録の前と同じ
     end
     return
   end
-  -- abbrev・カタカナ・半角カタカナから始めた登録は、確定するとひらがなに戻る（upstream も同じ）
+  -- abbrev・カタカナ・半角カタカナから始めた登録は、確定するとひらがなに戻る（upstream も同じ）。
+  -- 空の <CR> は取り消しなので、モードは戻さない
+  local confirmed = word ~= nil or (key == "<CR>" and (p.cmdline or "") ~= "" and p.ctx_text == "")
   local want_mode = b.skk_mode
-  if (word or key == "<CR>") and (b.skk_mode == "abbrev" or b.skk_mode == "kata" or b.skk_mode == "hankata") then
+  if confirmed and (b.skk_mode == "abbrev" or b.skk_mode == "kata" or b.skk_mode == "hankata") then
     want_mode = "hira"
   end
   if s.enabled ~= b.enabled or s.skk_mode ~= want_mode then
@@ -1467,6 +1479,9 @@ local function same_state(a, b)
     and a.vim_mode == b.vim_mode
     and a.state.type == b.state.type
     and a.state.mode == b.state.mode
+    and (a.state.feed or "") == (b.state.feed or "")
+    and (a.state.henkan_feed or "") == (b.state.henkan_feed or "")
+    and a.pending == b.pending
 end
 
 -- キー自体は文字を足さず、pre-edit を確定するだけの道か。
@@ -1506,6 +1521,10 @@ M.action["cursor: 確定したあとの行とカーソルは <Esc> と同じ"] =
   if not (commits_only(key) or visual) then
     return
   end
+  -- 折り返さない長い行は、端末のスクロールで <Esc> の基準がずれる（画面の性質と同じ扱い）
+  if width(cur_line(p)) >= p.win_width - p.textoff then
+    return
+  end
   local ref = hist.esc_ref()
   if not ref or not ref.before or not ref.after or not same_state(p, ref.before) then
     return
@@ -1534,9 +1553,81 @@ M.action["cursor: 確定したあとの行とカーソルは <Esc> と同じ"] =
   end
 end
 
+-- 未マップの特殊キーや貼り付けは、キー自体がカーソルを動かす・文字を足すので、<Esc> と
+-- カーソルの位置は同じにならない。代わりに、<Esc> で確定したときの読みが、pre-edit の
+-- 位置に入っているかを見る（キーが足した文字はその後ろにあってよい）
+M.action["cursor: 未マップ・貼り付けでも、確定した読みは pre-edit の位置に入る"] = function(
+  p,
+  key,
+  s,
+  hist
+)
+  if
+    not hist
+    or not hist.esc_ref
+    or not insert_mode(p)
+    or p.buftype == "terminal"
+    or p.ctx_text == ""
+    or s.ctx_text ~= ""
+    or s.buf ~= p.buf
+  then
+    return
+  end
+  if not (is_unmapped(key) or key == "<Paste>" or key == "<PasteLines>") then
+    return
+  end
+  local ref = hist.esc_ref()
+  if not ref or not ref.before or not ref.after or not same_state(p, ref.before) then
+    return
+  end
+  local row = p.cursor[1]
+  local pl = p.lines[row] or ""
+  local sl = s.lines[row] or ""
+  local rl = ref.after.lines[row] or ""
+  local before = pl:sub(1, p.cursor[2])
+  local after = pl:sub(p.cursor[2] + 1)
+  if rl:sub(1, #before) ~= before then
+    return ("<Esc> のあとの行 %q が、pre-edit の手前 %q で始まらない"):format(short(rl), before)
+  end
+  local inserted
+  if after ~= "" and rl:sub(-#after) == after then
+    inserted = rl:sub(#before + 1, #rl - #after)
+  else
+    inserted = rl:sub(#before + 1)
+  end
+  if inserted == "" then
+    return
+  end
+  if sl:sub(1, #before) ~= before or sl:sub(#before + 1, #before + #inserted) ~= inserted then
+    return ("%s のあとの行 %q に、確定した %q が入っていない（<Esc> なら %q）"):format(
+      key,
+      short(sl),
+      inserted,
+      short(rl)
+    )
+  end
+end
+
 -- 見つかったが、今は直さないもの。反例の性質の名前と、キー列で見分ける。
 -- 当てはまる違反は「既知」として出し、失敗にしない
-M.known = {}
+M.known = {
+  -- #151: abbrev から hira に戻るとき（<C-o>u のあと）にインジケータが出ない
+  {
+    property = "indicator: モードが変わったあと pre-edit が無ければ出ている",
+    reason = "#151 abbrev から hira に戻るときにインジケータが出ない",
+    match = function(keys)
+      return table.concat(keys, " "):find("/ <C-o>u", 1, true) ~= nil
+    end,
+  },
+  -- #152: keepState で <Esc> のあと . と <C-k> から insert に戻っても有効にならない
+  {
+    property = "keepState: 同じバッファで insert に戻ると有効になる（keepMode ならモードも戻る）",
+    reason = "#152 . と <C-k> で insert に戻ると keepState が効かない",
+    match = function(keys)
+      return table.concat(keys, " "):find("<C-k>a:", 1, true) ~= nil
+    end,
+  },
+}
 
 -- #56 の別の現れ方。キーが先に通るので、pre-edit が残ったまま cmdline や terminal の文字がずれる、
 -- pre-edit が消えても cmdline にマーカーと読みが文字で残る

@@ -192,6 +192,7 @@ function M.snapshot()
     buftype = vim.bo[buf].buftype,
     -- blink.cmp のメニュー（読んでいなければ nil）
     menu = package.loaded["blink.cmp"] and require("blink.cmp").is_menu_visible() or nil,
+    menu_by_refresh = _G.formal_menu_by_refresh == true,
     menu_items = package.loaded["blink.cmp"] and require("blink.cmp").is_menu_visible() and vim.tbl_map(function(i)
       return i.label
     end, require("blink.cmp").get_items()) or nil,
@@ -209,6 +210,30 @@ function M.snapshot()
         return nil
       end
       return vim.api.nvim_win_get_position(w)
+    end)(),
+    menu_size = (function()
+      if not package.loaded["blink.cmp"] or not require("blink.cmp").is_menu_visible() then
+        return nil
+      end
+      local ok, menu = pcall(require, "blink.cmp.completion.windows.menu")
+      if not ok or not menu.win then
+        return nil
+      end
+      local w = menu.win:get_win()
+      if not w or not vim.api.nvim_win_is_valid(w) then
+        return nil
+      end
+      local cfg = vim.api.nvim_win_get_config(w)
+      local pos = vim.api.nvim_win_get_position(w)
+      return {
+        width = vim.api.nvim_win_get_width(w),
+        height = vim.api.nvim_win_get_height(w),
+        hide = cfg.hide,
+        relative = cfg.relative,
+        zindex = cfg.zindex,
+        focusable = cfg.focusable,
+        first = vim.fn.screenstring(pos[1] + 1, pos[2] + 1),
+      }
     end)(),
     pum = vim.fn.pumvisible() == 1,
     -- 組み込みの補完のメニューの項目（word と menu = 読み）と、そのときの▽の読み
