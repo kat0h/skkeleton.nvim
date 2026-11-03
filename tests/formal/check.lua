@@ -57,6 +57,12 @@ local MUTATIONS = {
       local restore = map.restore
       map.restore = function() restore(); pcall(vim.keymap.del, "i", "<C-g>", { buffer = 0 }) end]],
   },
+  ["no-c-o-commit"] = {
+    issue = "175b8ef <C-o>l から戻ったときに pre-edit を確定しない",
+    code = [[local cleanup = require("skkeleton.cleanup")
+      cleanup.reset_if_stale = function() return false end
+      pcall(vim.api.nvim_clear_autocmds, { group = "skkeleton-internal", event = "CursorMovedI" })]],
+  },
   ["textwidth-not-restored"] = {
     issue = "'textwidth' を戻し忘れる",
     code = [[require("skkeleton.map").restore_options = function() end]],
@@ -392,8 +398,9 @@ end
 -- 性質（spec.lua の cursor:）が、確定したあとのカーソルを <Esc> と比べるために使う
 local function esc_reference_factory(mutation, init, config)
   local child, cache = nil, {}
-  return function(prefix)
-    local cache_key = table.concat(prefix, "\0")
+  return function(prefix, suffix)
+    suffix = suffix or {}
+    local cache_key = table.concat(prefix, "\0") .. "\0" .. table.concat(suffix, "\0")
     if cache[cache_key] ~= nil then
       return cache[cache_key] or nil
     end
@@ -415,6 +422,13 @@ local function esc_reference_factory(mutation, init, config)
     if not settle(child) then
       cache[cache_key] = false
       return nil
+    end
+    for _, key in ipairs(suffix) do
+      pcall(child.type_keys, profiles.expand(key))
+      if not settle(child) then
+        cache[cache_key] = false
+        return nil
+      end
     end
     local s = { before = before, after = snapshot(child) }
     cache[cache_key] = s
@@ -500,8 +514,8 @@ local function run(child, keys, mutation, every, config)
       end
       local s = snapshot(child)
       if every or i == #keys then
-        hist.esc_ref = function()
-          return esc_reference(sent)
+        hist.esc_ref = function(suffix)
+          return esc_reference(sent, suffix)
         end
         local v = check(base, prev, key, s, hist)
         if #v > 0 then
@@ -814,8 +828,8 @@ if opts.keys then
         menu_size = s.menu_size,
       }, { newline = " ", indent = "" }))
     end
-    hist.esc_ref = function()
-      return esc_reference(sent)
+    hist.esc_ref = function(suffix)
+      return esc_reference(sent, suffix)
     end
     for _, v in ipairs(check(base, prev, key, s, hist)) do
       print("  ✗ " .. v.name .. ": " .. v.msg)

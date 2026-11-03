@@ -1621,6 +1621,62 @@ M.action["cursor: 未マップ・貼り付けでも、確定した読みは pre-
   end
 end
 
+-- #117・175b8ef の型。カーソルを動かす <C-o> から insert に戻ったら、pre-edit は確定している。
+-- <C-o>zz や <C-o>: のようにカーソルを動かさないものは、pre-edit を残すのが正しい
+M.action["cursor: カーソルを動かす <C-o> は pre-edit を確定する"] = function(p, key, s)
+  if not insert_mode(p) or p.ctx_text == "" then
+    return
+  end
+  if not key:match("^<C%-o>[hljk0%$wbe]") then
+    return
+  end
+  if s.ctx_text ~= "" then
+    return ("%s のあと pre-edit %q が残っている"):format(key, s.ctx_text)
+  end
+end
+
+-- 未マップの特殊キーや貼り付けでも、カーソルは「<Esc> で確定してから insert に戻り、
+-- 同じキーを押したとき」と同じにする。キー自体の移動・挿入も基準側で同じように起こす
+M.action["cursor: 未マップ・貼り付けのカーソルは、確定して同じキーを押したときと同じ"] = function(
+  p,
+  key,
+  s,
+  hist
+)
+  if
+    not hist
+    or not hist.esc_ref
+    or not insert_mode(p)
+    or p.buftype == "terminal"
+    or p.ctx_text == ""
+    or s.ctx_text ~= ""
+    or s.buf ~= p.buf
+    or not (is_unmapped(key) or key == "<Paste>" or key == "<PasteLines>")
+  then
+    return
+  end
+  local ref = hist.esc_ref({ "a", key })
+  if not ref or not ref.before or not ref.after or not same_state(p, ref.before) then
+    return
+  end
+  local after = ref.after
+  if after.buf ~= s.buf or after.vim_mode ~= s.vim_mode then
+    return
+  end
+  if table.concat(s.lines, "\n") ~= table.concat(after.lines, "\n") then
+    -- 文字の位置は、上の「確定した読みは pre-edit の位置に入る」で見る
+    return
+  end
+  if s.cursor[1] ~= after.cursor[1] or s.cursor[2] ~= after.cursor[2] then
+    return ("%s のあとのカーソル %s、<Esc> で確定して同じキーを押すと %s（行 %q）"):format(
+      key,
+      short(s.cursor),
+      short(after.cursor),
+      cur_line(s)
+    )
+  end
+end
+
 -- 見つかったが、今は直さないもの。反例の性質の名前と、キー列で見分ける。
 -- 当てはまる違反は「既知」として出し、失敗にしない
 M.known = {
@@ -1654,6 +1710,14 @@ M.known = {
     reason = "#155 <M-a> で有効なまま disable-post が発火する",
     match = function(keys)
       return table.concat(keys, " "):find("<M-a>", 1, true) ~= nil
+    end,
+  },
+  -- #156: pre-edit の途中の <Insert> で、置換モードのカーソルが読みの先頭に来る
+  {
+    property = "cursor: 未マップ・貼り付けのカーソルは、確定して同じキーを押したときと同じ",
+    reason = "#156 <Insert> の置換モードのカーソルが読みの先頭に来る",
+    match = function(keys)
+      return table.concat(keys, " "):find("Kan <Insert>", 1, true) ~= nil
     end,
   },
 }
