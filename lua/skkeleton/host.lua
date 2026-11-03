@@ -147,6 +147,7 @@ local function pop_input_frame(frame)
 
   pcall(vim.api.nvim_buf_del_keymap, frame.buf, "c", "<Esc>")
   pcall(vim.api.nvim_buf_del_keymap, frame.buf, "c", "<C-g>")
+  pcall(vim.api.nvim_buf_del_keymap, frame.buf, "c", "<C-c>")
   map.restore_mode(frame.buf, "c")
 
   doautocmd("skkeleton-enable-pre")
@@ -196,7 +197,7 @@ function M.input(prompt)
         map.map()
         -- 印をかな入力に通さず、<Cmd> から書いて <CR> で抜ける (#116)
         local cancel = "<Cmd>lua require('skkeleton.host').cancel_input()<CR><CR>"
-        for _, k in ipairs({ "<Esc>", "<C-g>" }) do
+        for _, k in ipairs({ "<Esc>", "<C-g>", "<C-c>" }) do
           vim.api.nvim_buf_set_keymap(frame.buf, "c", k, cancel, { noremap = true, silent = true })
         end
       end,
