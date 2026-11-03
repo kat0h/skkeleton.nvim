@@ -301,8 +301,9 @@ function Indicator:on_mode_changed()
     return
   end
   -- visual などから insert に戻ると、ModeChanged のあとにカーソルが動く。
-  -- その移動は入力ではないので、insert に入ったときの位置とは比べない
-  if old_mode:sub(1, 1) ~= "n" then
+  -- その移動は入力ではないので、insert に入ったときの位置とは比べない。
+  -- insert-normal（<C-o>）から戻るときも、<C-o> のコマンドでカーソルが動くので同じ扱い (#151)
+  if old_mode:sub(1, 1) ~= "n" or old_mode:sub(1, 2) == "ni" then
     self.insert_cursor = nil
   end
   self:update()

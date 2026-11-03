@@ -552,6 +552,11 @@ function M.observe(hist, prev, s)
   if s.block_insert and key == "<BS>" then
     hist.block_bs = true
   end
+  -- keepState は Esc のあとの最初の InsertEnter だけ。. は入力の繰り返しで、
+  -- その一度を使うので、. のあとの <C-k>a: は keepState の対象にしない
+  if key == "." and hist.left_insert then
+    hist.keep_consumed = true
+  end
   local multi = #key > 1 and not key:match("^<[^>]+>$")
   if prev and multi and table.concat(prev.lines, "\n") ~= table.concat(s.lines, "\n") then
     hist.unseen = true
@@ -811,7 +816,9 @@ end
 -- disable-post は、有効から無効に変わったときだけ発火する
 -- @a や . は記録したキーを 1 ステップでまとめて再生するので、途中で有効・無効が行き来してもよい
 local function replays(key)
-  return key == "." or (key or ""):match("^@") ~= nil
+  -- <M-a> は <Esc>+a の 2 キー。1 つの遷移の中で一時的に disable/enable するので、
+  -- disable-post の回数だけを見る性質では縛らない
+  return key == "." or (key or ""):match("^@") ~= nil or (key or ""):match("^<M%-") ~= nil
 end
 
 M.action["event: disable-post は無効になったときだけ"] = function(p, key, s)
@@ -888,6 +895,9 @@ M.action["keepState: 同じバッファで insert に戻ると有効になる（
   local l = hist and hist.left_insert
   -- upstream と同じく、抜けたバッファで insert に戻ったときだけ（InsertEnter <buffer>）
   -- keepState は skkeleton の <Esc>（escape）で抜けたときだけ効く（<C-c> などは skkeleton を通らない。upstream も同じ）
+  if hist and hist.keep_consumed then
+    return
+  end
   if
     not (s.opt.keepState and l and l.enabled and l.by_esc and p.vim_mode == "n" and insert_mode(s) and s.buf == l.buf)
   then
@@ -1679,32 +1689,7 @@ end
 
 -- 見つかったが、今は直さないもの。反例の性質の名前と、キー列で見分ける。
 -- 当てはまる違反は「既知」として出し、失敗にしない
-M.known = {
-  -- #151: abbrev から hira に戻るとき（<C-o>u のあと）にインジケータが出ない
-  {
-    property = "indicator: モードが変わったあと pre-edit が無ければ出ている",
-    reason = "#151 abbrev から hira に戻るときにインジケータが出ない",
-    match = function(keys)
-      return table.concat(keys, " "):find("/ <C-o>u", 1, true) ~= nil
-    end,
-  },
-  -- #152: keepState で <Esc> のあと . と <C-k> から insert に戻っても有効にならない
-  {
-    property = "keepState: 同じバッファで insert に戻ると有効になる（keepMode ならモードも戻る）",
-    reason = "#152 . と <C-k> で insert に戻ると keepState が効かない",
-    match = function(keys)
-      return table.concat(keys, " "):find("<C-k>a:", 1, true) ~= nil
-    end,
-  },
-  -- #155: <M-a> で有効なまま disable-post が発火する
-  {
-    property = "event: disable-post は無効になったときだけ",
-    reason = "#155 <M-a> で有効なまま disable-post が発火する",
-    match = function(keys)
-      return table.concat(keys, " "):find("<M-a>", 1, true) ~= nil
-    end,
-  },
-}
+M.known = {}
 
 -- #56 の別の現れ方。キーが先に通るので、pre-edit が残ったまま cmdline や terminal の文字がずれる、
 -- pre-edit が消えても cmdline にマーカーと読みが文字で残る

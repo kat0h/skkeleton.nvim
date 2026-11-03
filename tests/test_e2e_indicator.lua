@@ -196,6 +196,19 @@ T["is closed when insert is left with <C-c> without enabling skkeleton (#27)"] =
   eq(positions(), vim.NIL)
 end
 
+T["reopens after <C-o>u from abbrev to hira (#151)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "ef gh" })
+  child.api.nvim_win_set_cursor(0, { 1, 4 })
+  child.type_keys("a")
+  type("<Plug>(skkeleton-enable)")
+  type("/")
+  eq(positions(), vim.NIL)
+  child.type_keys("<C-o>u")
+  helpers.settle(child)
+  eq(helpers.indicator(child).text, "あ")
+  eq(positions() ~= nil, true)
+end
+
 T["reopens when returning from replace to insert with <Insert> (#38)"] = function()
   start()
   eq(positions() ~= nil, true)

@@ -830,6 +830,8 @@ if opts.keys then
         input_depth = s.input_depth,
         handled = s.handled,
         state = s.state,
+        g_state = s.g_state,
+        enabled = s.enabled,
       }, { newline = " ", indent = "" }))
     end
     hist.esc_ref = function(suffix)
