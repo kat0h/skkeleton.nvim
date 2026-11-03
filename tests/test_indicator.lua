@@ -161,12 +161,13 @@ T["hooks"]["alwaysShown = true は無効でも disable-post で閉じない"] = 
 end
 
 T["hooks"]["ignoreFt のファイルタイプでは出ない"] = function()
-  setup({ ignoreFt = { "help" } })
-  child.bo.filetype = "help"
+  -- ftplugin のある filetype（help、lua など）は、readonly や treesitter の準備で遅くなる
+  setup({ ignoreFt = { "skktest_ignored" } })
+  child.bo.filetype = "skktest_ignored"
   child.type_keys("i")
   eq(#floats(), 0)
   child.type_keys("<Esc>")
-  child.bo.filetype = "lua"
+  child.bo.filetype = "skktest_shown"
   child.type_keys("i")
   eq(#floats(), 1)
 end

@@ -178,8 +178,9 @@ function M.input(prompt)
   -- 辞書登録に入る前に補完メニューや候補ポップアップを閉じる
   require("skkeleton.popup").close()
   require("skkeleton.completion").hide()
-  -- 外側の pre-edit は登録の読みに変わるので、extmark を残さない
-  require("skkeleton.render").clear()
+  -- 登録の間も、外側の pre-edit をそのまま見せる (#144)
+  local render = require("skkeleton.render")
+  local frozen = render.freeze()
 
   local win = vim.api.nvim_get_current_win()
   local buf = vim.api.nvim_get_current_buf()
@@ -202,6 +203,7 @@ function M.input(prompt)
     })
     return vim.fn.input(prompt)
   end)
+  render.unfreeze(frozen)
   marker.drop_marker_history("@")
 
   pop_input_frame(frame)

@@ -50,7 +50,45 @@ local last_key ---@type string?
 -- skkeleton が blink のメニューを開いているか
 local shown = false
 
+-- blink のメニューは既定ではキーワードの開始位置に揃う。skkeleton の pre-edit は
+-- バッファに無いので、カーソルの前に日本語があるとメニューが行頭に寄る (#143)。
+-- メニューを出している間だけカーソルに揃え、閉じたら元の設定へ戻す。
+local align_to_before ---@type string?
+
+local function config_draw()
+  local ok, cfg = pcall(require, "blink.cmp.config")
+  if not ok then
+    return nil
+  end
+  return cfg.completion and cfg.completion.menu and cfg.completion.menu.draw
+end
+
+local function align_menu_to_cursor()
+  if align_to_before ~= nil then
+    return
+  end
+  local draw = config_draw()
+  if not draw or draw.align_to == "cursor" then
+    return
+  end
+  align_to_before = draw.align_to
+  draw.align_to = "cursor"
+end
+
+local function restore_menu_align()
+  local before = align_to_before
+  if before == nil then
+    return
+  end
+  align_to_before = nil
+  local draw = config_draw()
+  if draw then
+    draw.align_to = before
+  end
+end
+
 local function hide(force)
+  restore_menu_align()
   last_key = nil
   if not shown and not force then
     return
@@ -207,6 +245,7 @@ function M.refresh()
     return
   end
   last_key = key
+  align_menu_to_cursor()
   -- blink は設定していない状態や、自分の都合で失敗することがある。skkeleton の入力は止めない
   if pcall(blink.show, { providers = { id } }) then
     shown = true

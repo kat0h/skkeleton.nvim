@@ -61,8 +61,10 @@ local function reset()
 end
 
 -- insert から normal へ移ったとき、今の pre-edit を <Esc> と同じ文字列としてバッファに書く (#70)。
--- <Esc> はマップされた escape が確定してから抜けるが、<C-c> はマップされていないのでここで確定する
-local function commit_preedit()
+-- <Esc> はマップされた escape が確定してから抜けるが、<C-c> はマップされていないのでここで確定する。
+-- move_cursor を真にすると、確定した文字の末尾へカーソルを移す（<Esc> と同じ位置にする。#142）
+---@param move_cursor? boolean
+local function commit_preedit(move_cursor)
   local buf, row, col = render.preedit_position()
   if not buf then
     return
@@ -74,6 +76,11 @@ local function commit_preedit()
   local text = ctx.preedit:take_kakutei()
   if text ~= "" then
     vim.api.nvim_buf_set_text(buf, row, col, row, col, { text })
+    if move_cursor then
+      -- 最後の文字の先頭バイトへ移す（normal モードのカーソルは文字の上に置く）
+      local last = vim.fn.byteidx(text, vim.fn.strchars(text) - 1)
+      vim.api.nvim_win_set_cursor(0, { row + 1, col + last })
+    end
   end
   return text, buf, row, col
 end
@@ -227,7 +234,8 @@ function M.setup()
               and not host.is_in_input()
             then
               if commit then
-                commit_preedit()
+                -- <C-c> などで insert を抜けたとき、確定した文字の末尾へ移す (#142)
+                commit_preedit(true)
               end
               reset()
               host.disable()

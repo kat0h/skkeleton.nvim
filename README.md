@@ -32,6 +32,10 @@ Neovim で SKK 方式の日本語入力を行うプラグインです。kuuote �
 
 設定項目や使い方の詳細は `:help skkeleton` にまとめています。
 
+## pre-edit の確定
+
+▽ / ▼ を表示している間に、skkeleton が奪っていない特殊キー（`<Left>` など）や端末モードの Ctrl + 文字、`<C-c>`、`<Insert>`、visual / select への移動、`<C-o>` でカーソルを動かす操作（`<C-o>l` など）、貼り付け（`vim.paste()`）を行うと、打った読みを `<Esc>` と同じ形で確定してから、その操作を行います。`<C-o>zz` や `<C-o>:` のように、カーソルが動かずに戻る場合は、pre-edit を残します。
+
 ## インジケータ
 
 `setup()` を呼ぶと、カーソル付近に現在の入力モードを示す小さなウィンドウが表示されます。表示する文字列や色、位置などは `indicator` オプションで変更できます。無効にする場合は `false` を指定してください。
@@ -54,7 +58,7 @@ require("skkeleton").setup({ indicator = false })
 
 ## 補完
 
-送りなし入力中にblink.cmp を利用できます。
+送りなし入力中に blink.cmp を利用できます。
 
 補完候補は、**読みの長さ（短い順）** → **選択履歴ランク（頻度順）** → **辞書の出現順** の 3 段階でソートされます。
 
@@ -96,7 +100,7 @@ require("skkeleton").setup({
 - `require("skkeleton").get_preedit()`: 現在の pre-edit 文字列を取得
 - `require("skkeleton").get_completion_result()`: 補完候補一覧を取得
 - `require("skkeleton").get_completion_ranks()`: 候補のランクテーブルを取得
-- `require("skkeleton").complete(kana, word)`: 候補を確定してバッファに挿入し、辞書とランクに登録
+- `require("skkeleton").complete(kana, word, kind)`: 候補を確定してバッファに挿入し、辞書とランクに登録
 
 ## skkeleton からの移行
 
@@ -165,7 +169,9 @@ vim.keymap.set({ "i", "c" }, "<C-j>", "<Plug>(skkeleton-toggle)")
 
 ```sh
 make test              # 全テストを実行（.tests/mini.nvim がなければ自動で clone します）
+make test JOBS=4       # ファイルごとの並列数（既定はコア数 − 2）
 make test FILE=tests/test_kana.lua
+make jisyotest         # SKK-JISYO.L の全候補と、SKK-JISYO.L を使う重いテスト
 make lint              # stylua --check
 make fmt
 ```

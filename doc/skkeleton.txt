@@ -36,6 +36,23 @@ skkeleton を Neovim 向けに Lua で再実装しています。
 スト（virtual text）として表示します。確定した文字列のみがバッファに挿入され
 ます。
 
+pre-edit の確定~
+
+pre-edit（▽ / ▼）を表示している間に次の操作をすると、打った読みを <Esc> と
+同じ形で確定してから、その操作を行います。
+
+- skkeleton が奪っていない特殊キー（|<Left>|、|<F5>|、|<C-.>| など）と、端末
+  モードの Ctrl + 文字
+- |<C-c>|、|<Insert>|、visual / select への移動、|<C-o>| でカーソルを動かす
+  操作（`<C-o>l` など）。`<C-o>zz` や `<C-o>:` のようにカーソルが動かずに戻る
+  ときは、pre-edit を残します
+- 貼り付け（|vim.paste()|）。ストリーミングの貼り付けでは最初のチャンクの前
+  に確定します。
+
+確定した文字列は undo で戻せます。貼り付けは、確定のあとにアンドゥを区切る
+ので、貼った文字だけを |u| で戻せます。
+|<C-o>:| のように cmdline に入って戻る場合は、pre-edit を残します。
+
 必要なもの~
 
 - Neovim 0.12（動作確認済み）
@@ -246,7 +263,8 @@ newline                                          *skkeleton-functions-newline*
 cancel                                            *skkeleton-functions-cancel*
 	(input: <C-g>, henkan: <C-g>)
 	現在の入力や変換をキャンセルします。キャンセル時の戻り先は
-	|skkeleton-config-immediatelyCancel| で変更できます。
+	|skkeleton-config-immediatelyCancel| で変更できます。カタカナ / 半角カ
+	タカナモードでは、キャンセルのあとも変換（converter）を残します。
 
 disable                                          *skkeleton-functions-disable*
 	(input, henkan)
@@ -275,7 +293,8 @@ henkanBackward                            *skkeleton-functions-henkanBackward*
 purgeCandidate                            *skkeleton-functions-purgeCandidate*
 	(input, henkan: X)
 	選択中の変換候補をユーザー辞書から削除します。変換中でない場合は、直前
-	に確定した候補が対象になります。削除後は未入力状態に戻ります。
+	に確定した候補が対象になります。削除後は未入力状態に戻ります。補完の
+	ランクは消しません（別の読みにある同じ候補の順位を保つため）。
 
 henkanInput                                  *skkeleton-functions-henkanInput*
 	(henkan)
@@ -454,8 +473,9 @@ setUndoPoint                                   *skkeleton-config-setUndoPoint*
 setUndoPointOnPaste                     *skkeleton-config-setUndoPointOnPaste*
 	(既定値: true)
 	真にすると、skkeleton が有効な挿入モードでの貼り付け（|vim.paste()| を
-	通る操作）の直前にアンドゥを区切ります。貼り付けた文字だけを一度の
-	アンドゥで取り消せるようになります。
+	通る操作）の直前にアンドゥを区切ります。pre-edit があるときは、先に
+	打った読みを確定してから区切るので、貼り付けた文字だけを一度のアンドゥ
+	で取り消せます。
 
 showCandidatesCount                     *skkeleton-config-showCandidatesCount*
 	(既定値: 4)
@@ -644,7 +664,9 @@ g:skkeleton#debug
 skkeleton_indicator.nvim をベースに、skkeleton.nvim に内蔵しています。
 インジケータは、挿入モードやコマンドラインモードに入ったとき、skkeleton の
 モードが変わったときにカーソルの右下に出ます。入力が始まったとき、文字が
-入ったとき、カーソルが動いたとき、`fadeOutMs` がたったときに消えます。
+入ったとき、カーソルが動いたとき、ウィンドウを移ったとき、`fadeOutMs` が
+たったときに消えます。|<C-o>:| から戻ったときなど、pre-edit が残っていると
+きは出しません。
 |skkeleton.setup()| の `indicator` オプションにテーブルを渡すと設定を変更で
 き、`false` を渡すと無効になります。省略時は既定の設定で有効になります。
 >lua
@@ -850,12 +872,13 @@ DB ファイルはどこに保存され、どのように再生成されます�
 あるいはキャッシュディレクトリ内の `.db` ファイルを直接削除しても構いません
 （次回使用時に再生成されます）。
 
-変換マーカー（▽・▼）の描画が崩れる~
+変換マーカー（▽・▼）の描画やカーソル位置が崩れる~
 
 既定のマーカーである `▽` と `▼` は 'ambiwidth'（曖昧幅文字）の対象です。Neovim
-と端末エミュレータやフォントの設定が一致していないと、文字幅のズレにより表示が
-崩れることがあります。'ambiwidth' の設定を見直すか、曖昧幅ではない文字をマー
-カーに指定してください。
+と端末エミュレータ（kitty など）やフォントの設定が一致していないと、文字幅の
+ズレにより表示が崩れたり、マーカーのあとのカーソルが文字の途中に見えたり、
+折り返しがずれたりすることがあります。'ambiwidth' を端末の扱いに合わせるか、
+曖昧幅ではない文字をマーカーに指定してください。
 >lua
     markerHenkan = "▿",
     markerHenkanSelect = "▾",

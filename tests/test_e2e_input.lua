@@ -123,6 +123,34 @@ T["<C-c> in the middle of conversion leaves the same text as <Esc> (#70)"] = fun
   end
 end
 
+T["<C-c> commits at the same cursor as <Esc> when there is text before it (#142)"] = function()
+  for _, keys in ipairs({ "Kan", "Kan<Space>", "k" }) do
+    child.api.nvim_buf_set_lines(0, 0, -1, false, { "ああああ" })
+    child.api.nvim_win_set_cursor(0, { 1, 0 })
+    child.type_keys("A")
+    type("<Plug>(skkeleton-enable)")
+    type(keys)
+    type("<Esc>")
+    local esc_text = helpers.buffer(child)
+    local esc_cursor = helpers.cursor(child)
+    eq(#esc_text, 1)
+    eq(esc_text[1]:sub(1, 12), "ああああ")
+    eq(esc_cursor[1], 1)
+    eq(esc_cursor[2] >= 12, true)
+
+    child.api.nvim_buf_set_lines(0, 0, -1, false, { "ああああ" })
+    child.api.nvim_win_set_cursor(0, { 1, 0 })
+    child.type_keys("A")
+    type("<Plug>(skkeleton-enable)")
+    type(keys)
+    type("<C-c>")
+    eq(helpers.buffer(child), esc_text)
+    eq(helpers.cursor(child), esc_cursor)
+    eq(helpers.preedit(child), "")
+    eq(child.fn.mode(), "n")
+  end
+end
+
 T["the pre-edit follows the cursor in the middle of a line"] = function()
   child.api.nvim_buf_set_lines(0, 0, -1, false, { "abcdef" })
   child.api.nvim_win_set_cursor(0, { 1, 3 })

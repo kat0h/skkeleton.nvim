@@ -1,4 +1,5 @@
 -- SKK-JISYO.L の全候補が変換で出ることの確認。重いので make test には入れず、必要なときだけ流す。
+-- make jisyotest は、このあとに tests/jisyo/large.lua（SKK-JISYO.L を使う重いテスト）も流す。
 -- 使い方: make jisyotest ARGS="--sample 2000"
 --   nvim --headless -u NONE -i NONE -l tests/jisyo/run.lua [--dict PATH] [--sample N] [--seed S] [--jobs J] [--filter 読みの前方一致] [--max-fail N]
 -- 辞書が無ければ skip して終了コード 0 で終わる（CI では流さないが、手元で落ちないように）。

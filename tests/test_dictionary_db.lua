@@ -170,7 +170,9 @@ local COMPARE = [[
       end
       local all = d:get_prefix(kind, "", math.huge)
       local cnt = 0
-      for _ in pairs(mem.maps[kind]) do cnt = cnt + 1 end
+      for _ in pairs(mem.maps[kind]) do
+        cnt = cnt + 1
+      end
       assert(#all == cnt, ("%s: %d ~= %d"):format(kind, #all, cnt))
     end
     assert(vim.deep_equal(d:get_henkan_result("okurinasi", "ありえない読み"), {}))
@@ -449,6 +451,34 @@ T["db"]["uses the later line for duplicate headwords (#48)"] = function()
   )
 end
 
+T["db"]["removes old .tmp files for the same DB after rebuilding (#138)"] = function()
+  eq(
+    run([[
+      local src = write("s", ";; coding: utf-8\n;; okuri-nasi entries.\nあ /亜/\n")
+      local opts = { dir = TMP .. "/db" }
+      local dst = db.ensure(src, opts)
+      local old = dst .. ".111.1.tmp"
+      local new = dst .. ".222.1.tmp"
+      local other = opts.dir .. "/other.db.333.1.tmp"
+      for _, p in ipairs({ old, new, other }) do
+        local f = assert(io.open(p, "wb"))
+        f:write("x")
+        f:close()
+      end
+      local now = os.time()
+      vim.uv.fs_utime(old, now - 7200, now - 7200)
+      vim.uv.fs_utime(other, now - 7200, now - 7200)
+      db.ensure(src, vim.tbl_extend("force", opts, { force = true }))
+      return {
+        vim.uv.fs_stat(old) == nil,
+        vim.uv.fs_stat(new) ~= nil,
+        vim.uv.fs_stat(other) ~= nil,
+      }
+    ]]),
+    { true, true, true }
+  )
+end
+
 T["db"]["uses separate DBs for different encodings of the same file"] = function()
   eq(
     run([[
@@ -581,41 +611,6 @@ T["db"]["ensure_async reports an error"] = function()
       return { res[1], res[2]:find("cannot open", 1, true) ~= nil }
     ]]),
     { vim.NIL, true }
-  )
-end
-
-T["db"]["matches the memory dictionary for SKK-JISYO.L"] = function()
-  local path = "/usr/share/skk/SKK-JISYO.L"
-  if vim.uv.fs_stat(path) == nil then
-    MiniTest.skip(path .. " is not installed")
-  end
-  local n = run(COMPARE .. [[ return compare(...) ]], path)
-  eq(n > 100000, true)
-end
-
-T["db"]["prefix search matches a scan of the memory dictionary for SKK-JISYO.L"] = function()
-  local path = "/usr/share/skk/SKK-JISYO.L"
-  if vim.uv.fs_stat(path) == nil then
-    MiniTest.skip(path .. " is not installed")
-  end
-  eq(
-    run(
-      [[
-      local src = ...
-      local mem = skk.load_memory(src)
-      local d = db.open_dictionary(src, { dir = TMP .. "/db" })
-      local bad = 0
-      for _, p in ipairs({ "あ", "か", "かん", "かんじ", "さ", "ん", "ア", "a", "1", "#" }) do
-        for _, kind in ipairs(skk.KINDS) do
-          local a, b = d:get_prefix(kind, p, 100), mem:get_prefix(kind, p, 100)
-          if not vim.deep_equal(a, b) then bad = bad + 1 end
-        end
-      end
-      return bad
-    ]],
-      path
-    ),
-    0
   )
 end
 
