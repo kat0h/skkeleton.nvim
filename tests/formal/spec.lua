@@ -903,6 +903,11 @@ M.state["register: 登録の間も外側の pre-edit が見える"] = function(s
   if not b then
     return
   end
+  -- cmdline と terminal から始めた登録は、外側の pre-edit がバッファの extmark ではない
+  -- （cmdline はプロンプトの下、terminal は本物の文字）。regcmd の性質で見る
+  if b.cmdline ~= nil or b.buftype == "terminal" then
+    return
+  end
   -- 登録を開いたキーが <Space> のときだけ、登録の前の pre-edit と同じ文字列を期待する。
   -- Kanji のようなマクロや送り仮名の A は、開くキーが外側の状態も変える（HANDOVER の register の注意）
   local exact = hist.before_register_key == "<Space>" and b.ctx_text ~= ""
@@ -1485,7 +1490,16 @@ end
 -- normal・visual に移る道（<C-c> と <Esc>v）だけで比べる。<Insert> は置換モード、
 -- <C-o>l は移動した先がカーソルなので、<Esc> と同じ位置にはならない
 M.action["cursor: 確定したあとの行とカーソルは <Esc> と同じ"] = function(p, key, s, hist)
-  if not hist or not hist.esc_ref or hist.visual_insert or p.ctx_text == "" or s.buf ~= p.buf then
+  -- insert の pre-edit を確定する道だけ。terminal の <C-c> はジョブに ^C を送るので、Esc と比べない
+  if
+    not hist
+    or not hist.esc_ref
+    or hist.visual_insert
+    or not insert_mode(p)
+    or p.buftype == "terminal"
+    or p.ctx_text == ""
+    or s.buf ~= p.buf
+  then
     return
   end
   local visual = s.vim_mode:sub(1, 1):match("[vV\022sS\019]") ~= nil

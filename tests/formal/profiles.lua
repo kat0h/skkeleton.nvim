@@ -464,8 +464,8 @@ M.aliases["<ClickPopup>"] = mouse(on_float("true", click("p[1]", "p[2]")))
 M.aliases["<ClickIndicator>"] = mouse(on_float("false", click("p[1]", "p[2]")))
 M.aliases["<WheelPopup>"] = mouse(on_float("true", "m('wheel', 'down', '', p[1], p[2])"))
 -- 端末からの貼り付け（vim.paste を通る。bracketed paste と同じ道）。1 行と 2 行
-M.aliases["<Paste>"] = "<Cmd>lua vim.api.nvim_paste('貼り', false, -1)<CR>"
-M.aliases["<PasteLines>"] = "<Cmd>lua vim.api.nvim_paste('一\\n二', false, -1)<CR>"
+M.aliases["<Paste>"] = "<Cmd>lua vim.paste({ '貼り' }, -1)<CR>"
+M.aliases["<PasteLines>"] = "<Cmd>lua vim.paste({ '一', '二' }, -1)<CR>"
 M.aliases["<WheelUp>"] = "<Cmd>lua vim.api.nvim_input_mouse('wheel', 'up', '', 0, 1, 1)<CR>"
 M.aliases["<WheelDownMid>"] = "<Cmd>lua vim.api.nvim_input_mouse('wheel', 'down', '', 0, 1, 1)<CR>"
 M.aliases["<RightClickMid>"] = mouse(
@@ -938,6 +938,21 @@ M.unmapped = {
   dict = dict,
 }
 
+-- かなテーブルの登録とファイル読み込み。キー列では届かない API を setup で呼ぶ
+M.kana = {
+  doc = "かなテーブルの登録（register_kanatable）とファイル（register_kanatable_file）",
+  config = {},
+  setup = [[
+    local path = vim.fn.tempname()
+    vim.fn.writefile({ "z,‥", "x,×" }, path)
+    require("skkeleton").register_kanatable("rom", { ["q"] = { "く", "" } })
+    require("skkeleton").register_kanatable_file("rom", path, "utf-8", false)
+  ]],
+  alphabet = { "<C-j>", "q", "z", "x", "a", "<Space>", "<Esc>" },
+  inits = line_inits,
+  dict = dict,
+}
+
 -- インジケータを切ったもの（ちらつきなどの原因がインジケータかを切り分けるため）
 M.noindicator = {
   doc = "インジケータを切った既定の設定（原因の切り分け用）",
@@ -966,6 +981,7 @@ M.names = {
   "unmapped",
   "paste",
   "annot",
+  "kana",
 }
 
 return M

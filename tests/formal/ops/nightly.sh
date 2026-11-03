@@ -20,7 +20,7 @@ if [ ! -x "$NVIM_DIR/bin/nvim" ]; then
 fi
 export NVIM="$NVIM_DIR/bin/nvim"
 "$NVIM" --version | head -1
-for p in default modes config cmdline misc blink okuri steal terminal options macro undo block register regcmd unmapped paste annot wrap edge; do
+for p in default modes config cmdline misc blink okuri steal terminal options macro undo block register regcmd unmapped paste annot kana wrap edge; do
   timeout -k 10 180 "$O/run.sh" "nightly $p" --profile "$p" --depth "$depth" || echo "nightly $p が失敗した"
 done
 # 入力エンジンと辞書の速い検査
