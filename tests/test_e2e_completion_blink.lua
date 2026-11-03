@@ -167,6 +167,35 @@ T["hooks"]["completion.enabled = false never opens the menu"] = function()
   eq(menu_visible(), false)
 end
 
+T["hooks"]["the menu is placed at the cursor after Japanese text (#143)"] = function()
+  local align_to = child.lua_get("require('blink.cmp.config').completion.menu.draw.align_to")
+  child.api.nvim_buf_set_lines(
+    0,
+    0,
+    -1,
+    false,
+    { "局所関数から局所関数を内包する上位の関数の局所変数を参照できる" }
+  )
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.type_keys("A")
+  type("<Plug>(skkeleton-enable)")
+  type("Kanj")
+  eq(wait("require('blink.cmp').is_menu_visible()"), true)
+  local pos = child.lua_get([[(function()
+    local menu = require("blink.cmp.completion.windows.menu")
+    local cursor = vim.api.nvim_win_get_cursor(0)
+    return {
+      menu = vim.api.nvim_win_get_position(menu.win:get_win()),
+      cursor_screen = vim.fn.screenpos(0, cursor[1], cursor[2] + 1).col,
+    }
+  end)()]])
+  -- 行頭ではなく、カーソルの近くに出る
+  eq(pos.menu[2] >= pos.cursor_screen - 3, true)
+  type("<Esc>")
+  -- メニューを閉じたら blink の設定を元に戻す
+  eq(child.lua_get("require('blink.cmp.config').completion.menu.draw.align_to"), align_to)
+end
+
 T["hooks"]["enabling skkeleton closes any previously open completion menu (#24)"] = function()
   child.api.nvim_buf_set_lines(0, 0, -1, false, { "Kanji", "" })
   child.api.nvim_win_set_cursor(0, { 2, 0 })
