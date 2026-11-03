@@ -187,6 +187,26 @@ T["register"]["<C-g> cancels"] = function()
   eq(child.g["skkeleton#enabled"], true)
 end
 
+T["register"]["<C-g> keeps the outer pre-edit drawn when coming back (#170)"] = function()
+  enable()
+  type("Yomi<Space>")
+  eq(helpers.preedit(child), "▽よみ")
+  -- 戻ったときの redrawstatus より前の時点（enable-post）で、外側の pre-edit が残っているか
+  child.lua([[
+    _G.preedit_count_at_enable_post = nil
+    vim.api.nvim_create_autocmd("User", {
+      pattern = "skkeleton-enable-post",
+      callback = function()
+        local ns = vim.api.nvim_get_namespaces()["skkeleton-preedit"]
+        _G.preedit_count_at_enable_post = #vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, {})
+      end,
+    })
+  ]])
+  type("y<C-g>")
+  eq(child.lua_get("_G.preedit_count_at_enable_post"), 1)
+  eq(helpers.preedit(child), "▽よみ")
+end
+
 T["register"]["<C-c> cancels"] = function()
   enable()
   type("Yomi<Space>")

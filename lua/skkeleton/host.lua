@@ -204,7 +204,13 @@ function M.input(prompt)
     })
     return vim.fn.input(prompt)
   end)
-  render.unfreeze(frozen)
+  -- 取り消しで戻るときは、freeze した pre-edit をそのまま使う。
+  -- 消すと redrawstatus が空の画面を出してから描き直すので、ちらつく (#170)
+  if ok and (res == nil or res == "" or marker.contains_marker(res)) then
+    render.thaw(frozen)
+  else
+    render.unfreeze(frozen)
+  end
   marker.drop_marker_history("@")
 
   pop_input_frame(frame)
