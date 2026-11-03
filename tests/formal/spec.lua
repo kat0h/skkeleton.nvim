@@ -1712,14 +1712,6 @@ M.known = {
       return table.concat(keys, " "):find("<M-a>", 1, true) ~= nil
     end,
   },
-  -- #156: pre-edit の途中の <Insert> で、置換モードのカーソルが読みの先頭に来る
-  {
-    property = "cursor: 未マップ・貼り付けのカーソルは、確定して同じキーを押したときと同じ",
-    reason = "#156 <Insert> の置換モードのカーソルが読みの先頭に来る",
-    match = function(keys)
-      return table.concat(keys, " "):find("Kan <Insert>", 1, true) ~= nil
-    end,
-  },
 }
 
 -- #56 の別の現れ方。キーが先に通るので、pre-edit が残ったまま cmdline や terminal の文字がずれる、

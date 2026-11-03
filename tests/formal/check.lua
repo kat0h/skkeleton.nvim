@@ -826,6 +826,10 @@ if opts.keys then
         menu = s.menu,
         menu_pos = s.menu_pos,
         menu_size = s.menu_size,
+        preedit_marks = s.preedit_marks,
+        input_depth = s.input_depth,
+        handled = s.handled,
+        state = s.state,
       }, { newline = " ", indent = "" }))
     end
     hist.esc_ref = function(suffix)

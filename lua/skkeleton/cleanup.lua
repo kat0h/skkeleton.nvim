@@ -63,7 +63,7 @@ end
 -- insert から normal へ移ったとき、今の pre-edit を <Esc> と同じ文字列としてバッファに書く (#70)。
 -- <Esc> はマップされた escape が確定してから抜けるが、<C-c> はマップされていないのでここで確定する。
 -- move_cursor を真にすると、確定した文字の末尾へカーソルを移す（<Esc> と同じ位置にする。#142）
----@param move_cursor? boolean
+---@param move_cursor? "normal"|"insert"
 local function commit_preedit(move_cursor)
   local buf, row, col = render.preedit_position()
   if not buf then
@@ -76,7 +76,10 @@ local function commit_preedit(move_cursor)
   local text = ctx.preedit:take_kakutei()
   if text ~= "" then
     vim.api.nvim_buf_set_text(buf, row, col, row, col, { text })
-    if move_cursor then
+    if move_cursor == "insert" then
+      -- 置換・insert モードのカーソルは、確定した文字の後ろに置く (#156)
+      vim.api.nvim_win_set_cursor(0, { row + 1, col + #text })
+    elseif move_cursor then
       -- 最後の文字の先頭バイトへ移す（normal モードのカーソルは文字の上に置く）
       local last = vim.fn.byteidx(text, vim.fn.strchars(text) - 1)
       vim.api.nvim_win_set_cursor(0, { row + 1, col + last })
@@ -203,8 +206,9 @@ function M.setup()
       end
       if action == "reset" then
         if not host.is_in_input() then
-          -- insert から置換・visual・select へ移るときも、捨てずに <Esc> と同じく確定する (#111)
-          commit_preedit()
+          -- insert から置換・visual・select へ移るときも、捨てずに <Esc> と同じく確定する (#111)。
+          -- 置換モードでは、確定した文字の後ろへカーソルを移す (#156)
+          commit_preedit(new_mode:sub(1, 1) == "R" and "insert" or nil)
           reset()
           host.disable()
         end
@@ -235,7 +239,7 @@ function M.setup()
             then
               if commit then
                 -- <C-c> などで insert を抜けたとき、確定した文字の末尾へ移す (#142)
-                commit_preedit(true)
+                commit_preedit("normal")
               end
               reset()
               host.disable()

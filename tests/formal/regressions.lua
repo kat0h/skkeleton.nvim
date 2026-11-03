@@ -18,7 +18,7 @@ return {
   { issue = 27, keys = { "#mid", "<C-j>", "Kan", "<C-c>" } },
   { issue = 28, keys = { "#mid", "<Esc>", "v", "/", "<C-j>", "<Esc>", "c", "a", "K", "a", "n" } },
   { issue = 28, profile = "steal", keys = { "#mid", "<C-j>", "<ClickL2>", "/", "<ClickL2>" } },
-  { issue = 29, profile = "steal", keys = { "#eol", "<C-j>", "Kan<Insert>", "a", "<Space>", "k" } },
+  { issue = 29, profile = "steal", keys = { "#eol", "<C-j>", "Kan", "<Insert>", "a", "<Space>", "k" } },
   { issue = 30, profile = "steal", keys = { "#eol", "<C-x><C-e>" } },
   { issue = 32, profile = "steal", keys = { "#eol", "<C-j>", "<Esc>v", "<C-g>j", "a" } },
   { issue = 34, profile = "edge", keys = { "#corner", "<C-j>", "<BS>", "Kan", "A", "<Esc>", "<BS>" } },
@@ -41,7 +41,7 @@ return {
   { issue = 85, profile = "styles", keys = { "<Cmd>wincmd w<CR>", "<C-j>", "<Cmd>wincmd w<CR>" } },
   { issue = 86, profile = "misc", keys = { "<C-j>", "K", "<C-o>:<Esc>" } },
   { issue = 87, profile = "default", keys = { "<C-j>", "q", "<C-g>", "A", "q" } },
-  { issue = 111, profile = "steal", keys = { "#eol", "<C-j>", "Kan<Insert>", "a", "<Space>", "k" } },
+  { issue = 111, profile = "steal", keys = { "#eol", "<C-j>", "Kan", "<Insert>", "a", "<Space>", "k" } },
   {
     issue = 115,
     profile = "cmdline",
