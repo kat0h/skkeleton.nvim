@@ -77,7 +77,8 @@ gh run view <run の番号> -R kat0h/skkeleton.nvim --log-failed   # 落ちた C
 
 ## テスト
 
-- 直したら `make test` と `make lint` を通します。CI は Neovim の stable と nightly で `make test` を流します。
+- 直したら `make test` と `make lint` を通します。`make test` はファイルごとに nvim を並べて流します（並列数は `JOBS=`、既定はコア数 − 2）。CI は Neovim の stable と nightly で `make test` を流します。
+- `SKK-JISYO.L` を使う重いテストは `make jisyotest` で流します（`make test` には入れません）。
 - バグを直したら、そのバグの回帰テストを `tests/` に足します。足したテストは直す前のコードでは落ち、直したあとのコードでは通ることを確かめてください。
 - 動きを変えない作り直しで、既存のテストの期待値を変えないと通らないときは、動きが変わっているということです。そこで止めて、何がどう変わるかを issue に書いてください。
 - テストは `tests/test_<領域>.lua` に置きます。config やかなテーブルのようなモジュールの状態を変えるテストは、`require("helpers").child_set()` で子の nvim を使い、ケースごとに分けます。辞書のテストデータは `tests/testdata/` にあります。

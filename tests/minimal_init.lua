@@ -11,9 +11,10 @@ package.path = root .. "/tests/?.lua;" .. package.path
 vim.g.loaded_netrwPlugin = 1
 vim.o.swapfile = false
 vim.o.shada = ""
--- テストが書く辞書やキャッシュを手元の環境と分ける
-vim.env.XDG_CACHE_HOME = root .. "/.tests/cache"
-vim.env.XDG_STATE_HOME = root .. "/.tests/state"
+-- テストが書く辞書やキャッシュを手元の環境と分ける。
+-- 並列で流すときは、ファイルごとに別の場所を使う（tests/run.lua が渡す）
+vim.env.XDG_CACHE_HOME = vim.env.SKKELETON_TEST_CACHE or (root .. "/.tests/cache")
+vim.env.XDG_STATE_HOME = vim.env.SKKELETON_TEST_STATE or (root .. "/.tests/state")
 
 -- plugin/ 以下を読む（--noplugin でも -u のあとに明示すれば読める）
 vim.cmd("runtime! plugin/skkeleton.lua")

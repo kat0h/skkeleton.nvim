@@ -429,28 +429,6 @@ T["update_database"] = function()
   )
 end
 
-T["SKK-JISYO.L through Library"] = function()
-  local path = "/usr/share/skk/SKK-JISYO.L"
-  if vim.uv.fs_stat(path) == nil then
-    MiniTest.skip(path .. " is not installed")
-  end
-  eq(
-    run(
-      [[
-      config.set({
-        globalDictionaries = { ... },
-        userDictionary = TMP .. "/user",
-        databasePath = TMP .. "/db",
-      })
-      local lib = dictionary.load()
-      return { lib:get_henkan_result("okurinasi", "かんじ")[1], lib:get_henkan_result("okuriari", "わるs")[1] }
-    ]],
-      path
-    ),
-    { "漢字", "悪" }
-  )
-end
-
 -- 補完（Library:get_completion_result）。upstream には専用のテストが無いので、仕様を表にして書く
 -- 1 文字は完全一致だけ（feed は見ない）、2 文字以上は前方一致
 local COMPLETION_DICT = table.concat({
@@ -578,38 +556,6 @@ T["completion"]["the number of readings is limited"] = function()
     ]]),
     { 2, "かんじ", "かんぱい" }
   )
-end
-
-T["completion"]["SKK-JISYO.L returns quickly"] = function()
-  local path = "/usr/share/skk/SKK-JISYO.L"
-  if vim.uv.fs_stat(path) == nil then
-    MiniTest.skip(path .. " is not installed")
-  end
-  local r = run(
-    [[
-    config.set({
-      globalDictionaries = { ... },
-      userDictionary = TMP .. "/user",
-      databasePath = TMP .. "/db",
-    })
-    local lib = dictionary.load()
-    lib:get_completion_result("かん", "") -- 辞書を開く分の暖機
-    local t = vim.uv.hrtime()
-    local n = 20
-    local a, b, c
-    for _ = 1, n do
-      a = lib:get_completion_result("か", "")
-      b = lib:get_completion_result("かん", "")
-      c = lib:get_completion_result("かん", "k")
-    end
-    return { (vim.uv.hrtime() - t) / 1e6 / n / 3, #a, #b, #c }
-  ]],
-    path
-  )
-  eq(r[2], 1)
-  eq(r[3], 100)
-  eq(r[4] > 0, true)
-  eq(r[1] < 20, true) -- 1 回あたりの ms
 end
 
 T["skk.split_candidates"] = MiniTest.new_set()
