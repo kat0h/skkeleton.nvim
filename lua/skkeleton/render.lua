@@ -146,6 +146,23 @@ function M.unfreeze(frozen)
   end
 end
 
+-- freeze した pre-edit を、取り消しで戻ったときの描画に戻す。
+-- 消してから描き直すと、redrawstatus が空の画面を出してちらつく (#170)
+---@param frozen table[]?
+function M.thaw(frozen)
+  if not frozen or #frozen == 0 then
+    return
+  end
+  -- 入力中に別の pre-edit を描いていたら、古いほうだけ消す
+  if mark then
+    M.unfreeze(frozen)
+    return
+  end
+  mark = frozen[1]
+  pending = false
+  mark_bytes_changed = false
+end
+
 -- pre-edit を出している間、バッファの書き換えを on_bytes で受ける
 local function attach_buf(buf)
   if attached_buf == buf then
