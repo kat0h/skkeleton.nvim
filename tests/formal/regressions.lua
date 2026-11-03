@@ -68,6 +68,8 @@ return {
     keys = { "<C-j>", "<Esc>", ".", "<C-k>a:" },
   },
   { issue = 143, profile = "blink", keys = { "#eol", "<C-j>", "Kanji" } },
+  { issue = 153, profile = "whichkey", keys = { "#mid", "<C-j>", "Kan", "<C-o>z", "z" } },
+  { issue = 158, profile = "okuri", keys = { "#mid", "<C-j>", "<CR>", "x", "<C-c>" } },
   { issue = 144, profile = "register", keys = { "#mid", "<C-j>", "A", "<Space>", "k" } },
   -- DB の置き場の .tmp（#138）。db_check は dict.lua の最後に 1 回だけ流す
   { issue = 138, checker = "dict", args = { "--random", "1", "--length", "2" } },

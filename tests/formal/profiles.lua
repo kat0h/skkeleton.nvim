@@ -27,6 +27,8 @@ local dict = table.concat({
   -- 数値変換の検査（core.lua の M15）が使う。#N の型ごと、数字が 2 つ、#4（そのまま）
   "#がつ#にち /#1月#1日/#2月#3日/",
   "#ばん /#0番/#1番/#2番/#3番/#4番/#5番/#8番/#9番/",
+  -- '#' の前が英数字の候補（numeral.lua の split_pattern の「リテラルの #」の道）
+  "#しー /C#1/",
   "abc /ＡＢＣ/",
   -- 語の中の ; を (concat "\073") で書いた候補（SKK の辞書の形式。core.lua の M13 と同じ）
   [[てす /(concat "a\073b")/]],
@@ -116,7 +118,7 @@ M.modes = {
 
 -- 設定を変えたとき（eggLikeNewline、keepState、keepMode、マーカー、候補一覧を早く出す）
 M.config = {
-  doc = "eggLikeNewline・keepState・keepMode・別のマーカー・showCandidatesCount = 1",
+  doc = "eggLikeNewline・keepState・keepMode・別のマーカー・showCandidatesCount = 1・immediatelyCancel = false",
   config = {
     eggLikeNewline = true,
     keepState = true,
@@ -125,8 +127,13 @@ M.config = {
     markerHenkanSelect = "[]",
     showCandidatesCount = 1,
     popupBorder = "rounded",
+    -- <C-g> で状態だけ戻す道（common.cancel の input 側）を通す
+    immediatelyCancel = false,
   },
-  alphabet = with(base, { "q", "a", "x", "<Space>" }),
+  -- X（候補の削除）の確認に Yes と答える道も通す
+  setup = [[require("skkeleton.host").confirm = function() return true end]],
+  -- 変換中の取り消し（common.cancel の henkan 側）と、確定した候補の削除（lastCandidate 側）
+  alphabet = with(base, { "q", "a", "x", "<Space>", "X", "Kan<Space><C-g>", "Kan<Space><CR>X", "Kan<Space>X" }),
   inits = line_inits,
   dict = dict,
 }
@@ -245,8 +252,11 @@ M.misc = {
     "<C-g>",
     "<C-c>", -- insert・cmdline・辞書登録を <C-c> で抜ける（InsertLeave が来ない）
     "<Esc>",
+    "<C-o>",
     "<C-o>l",
     "<C-o>:<Esc>",
+    "z",
+    "g",
     "<C-r>=1<CR>",
     "<C-v>",
     "<C-n>",
@@ -258,6 +268,28 @@ M.misc = {
     "X",
     "<Tab>",
     "<C-x><C-n>",
+  },
+  inits = line_inits,
+  dict = dict,
+}
+
+-- 外部プラグイン（which-key など）が normal に作るトリガーマッピング。
+-- 依存を増やさないため、z に nowait の合成マッピングを張って which-key の trigger をまねる
+M.whichkey = {
+  doc = "normal の外部マッピング（z）が <C-o> の 1 コマンドを奪うか（#153）",
+  config = {},
+  setup = [[
+    vim.keymap.set("n", "z", function() end, { buffer = 0, nowait = true, desc = "which-key-trigger" })
+  ]],
+  alphabet = {
+    "<C-j>",
+    "Kan",
+    "<C-o>",
+    "<C-o>z",
+    "z",
+    "g",
+    "<Esc>",
+    "i",
   },
   inits = line_inits,
   dict = dict,
@@ -343,6 +375,9 @@ M.blink = {
     "<Esc>",
     "<Left>",
     "<C-w>",
+    "<C-o>",
+    "<C-o>z",
+    "z",
   },
   -- blink のメニューの位置は、利用者の 1 ウィンドウの画面でも見る（検査の下の "xy" ウィンドウを閉じる）
   inits = vim.tbl_extend("force", line_inits, {
@@ -398,6 +433,21 @@ M.okuri = {
     "bai",
     "#",
     "/abc",
+    -- 数値変換: ; で読みを数値混じりにして、候補を順にたどる（#0〜#9 の型）
+    ";1bai<Space><Space>",
+    ";3ban<Space><Space><Space><Space>",
+    -- 5 つ目で一覧が開く。6 つ目は #8（ローマ数字）
+    ";3ban<Space><Space><Space><Space><Space>",
+    -- 重複しない 2 桁の読みなら、一覧の 6・7 番目（#8・#9）まで選択キーで届く
+    ";34ban<Space><Space><Space><Space><Space>d",
+    -- #3（位取り）と #5（大字）の、0 と大きすぎる数
+    ";0ban<Space><Space><Space><Space>",
+    ";12345678901234567ban<Space><Space><Space><Space>",
+    ";3shi-",
+    -- 接頭辞（Kak> で ▷ になる）と接尾辞（変換のあと >）
+    "Kak>",
+    "Kak><Space>",
+    "Kan<Space>>",
     "<Space>",
     "x",
     "X",
@@ -469,6 +519,12 @@ M.aliases["<WheelPopup>"] = mouse(on_float("true", "m('wheel', 'down', '', p[1],
 -- 端末からの貼り付け（vim.paste を通る。bracketed paste と同じ道）。1 行と 2 行
 M.aliases["<Paste>"] = "<Cmd>lua vim.paste({ '貼り' }, -1)<CR>"
 M.aliases["<PasteLines>"] = "<Cmd>lua vim.paste({ '一', '二' }, -1)<CR>"
+M.aliases["<PasteMany>"] = "<Cmd>lua vim.paste({ '一', '二', '三' }, -1)<CR>"
+-- vim.paste の phase 1・2・3 に分けて流す（phase 2 では確定しない）
+M.aliases["<PastePhases>"] = "<Cmd>lua vim.paste({ '一' }, 1) vim.paste({ '二' }, 2) vim.paste({ '三' }, 3)<CR>"
+-- バッファローカルの 'undolevels'（-123456 でない）道を通す
+M.aliases["<LocalUndo>"] = "<Cmd>lua vim.bo.undolevels = 100<CR>"
+M.aliases["<PasteLocalUndo>"] = "<Cmd>lua vim.bo.undolevels = 100 vim.paste({ '一' }, -1)<CR>"
 M.aliases["<WheelUp>"] = "<Cmd>lua vim.api.nvim_input_mouse('wheel', 'up', '', 0, 1, 1)<CR>"
 M.aliases["<WheelDownMid>"] = "<Cmd>lua vim.api.nvim_input_mouse('wheel', 'down', '', 0, 1, 1)<CR>"
 M.aliases["<RightClickMid>"] = mouse(
@@ -723,6 +779,10 @@ M.paste = {
     "u",
     "<Paste>",
     "<PasteLines>",
+    "<PasteMany>",
+    "<PastePhases>",
+    "<LocalUndo>",
+    "<PasteLocalUndo>",
     ":",
   },
   inits = line_inits,
@@ -741,15 +801,30 @@ M.annot = {
     "a",
     "s",
     "d",
+    "Kaku<Space><Space>",
+    "Kaku<Space><Space><Space>",
+    "Kaku<Space><Space>s",
+    "Kaku<Space><Space>x",
+    "Kaku<Space>x",
     "<CR>",
     "<C-g>",
     "<Esc>",
     "i",
     ":",
   },
-  inits = line_inits,
+  inits = vim.tbl_extend("force", line_inits, {
+    -- 候補のウィンドウが右端・下端の近くに出る開始位置
+    ["#right"] = { lines = { ("x"):rep(74) }, cursor = { 1, 73 }, keys = "a" },
+    ["#corner"] = {
+      lines = vim.list_extend(vim.split(("l\n"):rep(29), "\n", { trimempty = true }), { ("y"):rep(74) }),
+      cursor = { 30, 73 },
+      keys = "a",
+      cmd = "normal! zb",
+    },
+  }),
   dict = dict
     .. table.concat({
+      -- 注釈の短い候補と長い候補を混ぜる（popup.lua の桁そろえ）
       "かく /書;かく/角;かど/各/核;かく/格;ひとしい/閣/確;たしか/画数の多い候補;注釈も長い/",
       "",
     }, "\n"),
@@ -985,6 +1060,7 @@ M.names = {
   "paste",
   "annot",
   "kana",
+  "whichkey",
 }
 
 return M

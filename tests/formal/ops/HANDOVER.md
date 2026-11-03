@@ -80,6 +80,10 @@ cd "$REPO/.claude/worktrees/formal-ui"
 
 - **#149（blink.cmp のメニュー位置）**: ヘッドレスの子で `is_menu_visible()` が true、`nvim_win_get_position()` が `(1,1)` だったため issue を立てましたが、`tui.lua` の本物の端末と利用者の設定の nvim では、メニューは pre-edit の近くに出て行頭ではありませんでした。ヘッドレスではウィンドウがあっても描かれていないことがあります。
 - 浮動ウィンドウの位置の違反は、ヘッドレスの観測だけで issue にしないでください。`tui.lua` の画面（できれば利用者の設定の nvim）で確かめてから issue にします。詳しくは main の `docs/MODEL_CHECKING.md` の「開いてから閉じた issue」に書きました。
+- #153（which-key の `z`）は、プラグイン側の不具合です。検査は `whichkey` プロファイルの合成マッピングで再現し、`M.known` に残しています。
+- 候補の削除 `X` は確認を開くので、`popup: 候補一覧は ▼ の 5 番目の候補から` では見ません（upstream の `purgeCandidate` も一覧を出し直さない）。
+- `<C-o>` のコマンド待ち（`niI` など）は insert の続きなので、pre-edit の extmark が残るのが正しい。カーソルは normal の規則で 1 文字ぶん左に寄ります。
+- #158（`<C-c>` の undo が `<Esc>` と違う）は `M.known` に残しています。直し方が 2 つ以上あるので、作者の返事待ちです。
 - #152（keepState）と #155（`<M-a>` の disable-post）も、検査の誤りとして閉じました。`.` は keepState の一度目を使い切る、`<M-a>` は `<Esc>`+`a` の 2 キー、という理由です。main の `docs/MODEL_CHECKING.md` に残しました。
 
 ## 仕分け
@@ -87,7 +91,7 @@ cd "$REPO/.claude/worktrees/formal-ui"
 1. **再現するか**
    - 再生のコマンド：`make verify ARGS="--profile <p> [--config '<設定>'] --keys '<キー列>'"`
    - 再現しなければ、タイミングの件として記録だけする。
-2. **本物の端末で確かめる**：`timeout 300 nvim --headless -u NONE -i NONE -l tests/formal/tui.lua --profile <p> --keys '<キー列>'`（tmux が要る）
+2. **本物の端末で確かめる**：`tests/formal/ops/confirm.sh --profile <p> --keys '<キー列>'`（tmux が要る）。終わった画面と、バッファ・カーソル・モード・`g:skkeleton#state`・`undo_seq`・浮動ウィンドウを出す。
 3. **既知のものかを見る**
    - `tests/formal/spec.lua` の `M.known`、`core.lua` と `dict.lua` の既知の絞り込みに、同じ issue があるかを見る。
    - その issue の状態は `gh issue view <番号> -R kat0h/skkeleton.nvim` で見る（読むだけ）。

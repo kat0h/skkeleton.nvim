@@ -85,6 +85,22 @@ function M.snapshot()
   local win = vim.api.nvim_get_current_win()
   local buf = vim.api.nvim_get_current_buf()
   local cur = vim.api.nvim_win_get_cursor(0)
+  -- terminal は job の出力が画面に届く前に観測することがある。決まった時間ではなく、
+  -- 行の中身が 2 回続けて同じになるまで待つ（#157）
+  if vim.bo[buf].buftype == "terminal" then
+    local last
+    local stable = 0
+    vim.wait(1000, function()
+      local now = table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n")
+      if now == last then
+        stable = stable + 1
+      else
+        stable = 0
+      end
+      last = now
+      return stable >= 2
+    end, 20)
+  end
   local wpos = vim.api.nvim_win_get_position(win)
   local textoff = vim.fn.getwininfo(win)[1].textoff
   local popup, indicator, other_floats = floats()
@@ -247,6 +263,7 @@ function M.snapshot()
       return ok and st and st.type == "input" and st.henkan_feed or nil
     end)(),
     textwidth = vim.bo[buf].textwidth,
+    undo_seq = vim.fn.undotree().seq_last,
     opt = {
       showCandidatesCount = options.showCandidatesCount,
       markerHenkan = options.markerHenkan,

@@ -54,9 +54,15 @@ M.state["preedit: extmark は全バッファで高々 1 つ"] = function(s)
   end
 end
 
+-- <C-o> のコマンド待ち（niI など）は insert の続きなので、pre-edit が残るのが正しい。
+-- そのときカーソルは normal の規則で 1 文字ぶん左に寄るので、位置もその分だけ許す
+local function pending_normal(s)
+  return s.vim_mode:sub(1, 2) == "ni"
+end
+
 M.state["preedit: extmark は insert モードの今のバッファのカーソル位置にある"] = function(s)
   for _, m in ipairs(vim.list_extend(vim.list_slice(s.preedit_marks), s.annot_marks)) do
-    if not insert_mode(s) and not registering(s) then
+    if not insert_mode(s) and not pending_normal(s) and not registering(s) then
       return ("mode %s で extmark %s が残っている"):format(s.vim_mode, short(m))
     end
     if m.buf ~= s.buf then
@@ -67,7 +73,13 @@ M.state["preedit: extmark は insert モードの今のバッファのカーソ�
     end
     -- 辞書登録のプロンプトの中でタイマーがカーソルを動かしても、pre-edit は元の位置に残す
     -- （host.input が終わったときにカーソルを戻す）。register プロファイルの <StealCursor>
-    if not registering(s) and (m.row ~= s.cursor[1] - 1 or m.col ~= s.cursor[2]) then
+    local shift = pending_normal(s) and 1 or 0
+    -- ni ではカーソルが挿入点より前（行頭なら同じ位置）に来る
+    local offset = s.cursor[2] - m.col
+    if
+      not registering(s)
+      and (m.row ~= s.cursor[1] - 1 or not (offset == 0 or (pending_normal(s) and offset == -shift)))
+    then
       return ("extmark (%d,%d) がカーソル (%d,%d) からずれている"):format(
         m.row,
         m.col,
@@ -271,6 +283,11 @@ M.state["indicator: 出ているのは insert・cmdline で pre-edit が無い�
 end
 
 M.state["popup: 候補一覧は ▼ の 5 番目の候補から"] = function(s)
+  -- X（候補の削除）は確認を開くので、一覧を閉じたままにする。upstream の purgeCandidate も
+  -- 出し直さないので、この遷移では見ない（#157 で upstream と TUI を確認）
+  if s.key == "X" then
+    return
+  end
   if #s.popup > 1 then
     return ("popup が %d 個"):format(#s.popup)
   end
@@ -289,6 +306,20 @@ M.state["popup: 変換していないなら候補のポップアップは無い"
   local converting = select_marker ~= "" and s.ctx_text:find(select_marker, 1, true) ~= nil
   if not converting then
     return ("変換していない（pre-edit %q）のに popup が %d 個"):format(s.ctx_text, #s.popup)
+  end
+end
+
+-- #153 の型。normal / insert-normal に戻ったら、候補のポップアップは残さない
+M.state["popup: normal に戻ったら候補のポップアップを残さない"] = function(s)
+  if #s.popup > 0 and (s.vim_mode == "n" or s.vim_mode:sub(1, 2) == "ni") then
+    return ("mode %s で popup が %d 個"):format(s.vim_mode, #s.popup)
+  end
+end
+
+-- #153 の型。normal に戻ったら blink のメニューを残さない
+M.state["blink: normal に戻ったらメニューを残さない"] = function(s)
+  if s.menu and (s.vim_mode == "n" or s.vim_mode:sub(1, 2) == "ni") then
+    return ("mode %s でメニューが出ている"):format(s.vim_mode)
   end
 end
 
@@ -1687,9 +1718,83 @@ M.action["cursor: 未マップ・貼り付けのカーソルは、確定して�
   end
 end
 
+-- 作者の指示: insert の中の <C-c> は <Esc> と同じように振る舞う。
+-- カーソルだけでなく、観測している状態全体を、最後のキーを <Esc> に替えた基準と比べる
+M.action["cursor: <C-c> と <Esc> は状態全体が同じ"] = function(p, key, s, hist)
+  if
+    key ~= "<C-c>"
+    or not insert_mode(p)
+    or p.buftype == "terminal"
+    or p.cmdline ~= nil
+    or registering(p)
+    or not hist
+    or not hist.esc_ref
+  then
+    return
+  end
+  local ref = hist.esc_ref()
+  if not ref or not ref.before or not ref.after or not same_state(p, ref.before) then
+    return
+  end
+  local a = ref.after
+  local differences = {}
+  local function diff(name, got, want)
+    if not vim.deep_equal(got, want) then
+      differences[#differences + 1] = ("%s=%s（<Esc> は %s）"):format(name, short(got), short(want))
+    end
+  end
+  diff("lines", s.lines, a.lines)
+  diff("cursor", s.cursor, a.cursor)
+  diff("mode", s.vim_mode, a.vim_mode)
+  diff("enabled", s.enabled, a.enabled)
+  diff("skk_mode", s.skk_mode, a.skk_mode)
+  diff("g_state", s.g_state, a.g_state)
+  diff("indicator", #s.indicator, #a.indicator)
+  diff("popup", #s.popup, #a.popup)
+  diff("menu", s.menu, a.menu)
+  diff("undo", s.undo_seq, a.undo_seq)
+  if #differences > 0 then
+    return ("<C-c> と <Esc> が違う: " .. table.concat(differences, " / "))
+  end
+end
+
+-- #153 の型。外部プラグインの normal マッピングが <C-o> のコマンドを奪わない。
+-- <C-o>z の時点では insert-normal のまま（ni）で、pre-edit も変わらない
+M.action["<C-o>z: normal の外部マッピングにコマンドを奪われない"] = function(p, key, s)
+  if key ~= "<C-o>z" or not insert_mode(p) or p.ctx_text == "" then
+    return
+  end
+  if s.vim_mode:sub(1, 2) ~= "ni" then
+    return ("<C-o>z のあと mode=%s（insert-normal ではなく、<C-o> のコマンドが終わっている）"):format(
+      s.vim_mode
+    )
+  end
+  if s.ctx_text ~= p.ctx_text then
+    return ("<C-o>z のあと pre-edit が %q から %q に変わった"):format(p.ctx_text, s.ctx_text)
+  end
+end
+
 -- 見つかったが、今は直さないもの。反例の性質の名前と、キー列で見分ける。
 -- 当てはまる違反は「既知」として出し、失敗にしない
-M.known = {}
+M.known = {
+  -- #158: <C-c> の確定が <Esc> と違う undo のまとまりになる（undo の違いだけを見る）
+  {
+    property = "cursor: <C-c> と <Esc> は状態全体が同じ",
+    reason = "#158 <C-c> の undo が <Esc> と違う",
+    match = function(_, msg)
+      return msg ~= nil and msg:find("undo=", 1, true) ~= nil
+    end,
+  },
+  -- #153: which-key などの normal のトリガーマッピングが <C-o>z を 1 コマンドで終わらせる。
+  -- プラグイン側では直さない（which-key の不具合）が、検査では既知として残す
+  {
+    property = "<C-o>z: normal の外部マッピングにコマンドを奪われない",
+    reason = "#153 which-key の normal マッピングが <C-o>z を奪う",
+    match = function(keys)
+      return table.concat(keys, " "):find("<C-o>z", 1, true) ~= nil
+    end,
+  },
+}
 
 -- #56 の別の現れ方。キーが先に通るので、pre-edit が残ったまま cmdline や terminal の文字がずれる、
 -- pre-edit が消えても cmdline にマーカーと読みが文字で残る

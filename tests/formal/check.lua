@@ -513,6 +513,7 @@ local function run(child, keys, mutation, every, config)
         return { steps = i, blocked = true, abstract = "blocked", seen = seen }
       end
       local s = snapshot(child)
+      s.key = key
       if every or i == #keys then
         hist.esc_ref = function(suffix)
           return esc_reference(sent, suffix)
@@ -834,6 +835,7 @@ if opts.keys then
         enabled = s.enabled,
       }, { newline = " ", indent = "" }))
     end
+    s.key = key
     hist.esc_ref = function(suffix)
       return esc_reference(sent, suffix)
     end

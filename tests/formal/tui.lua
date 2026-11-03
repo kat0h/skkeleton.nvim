@@ -37,6 +37,9 @@ do
       opts.config, i = assert(loadstring("return " .. v))(), i + 1
     elseif k == "--verbose" then
       opts.verbose = true
+    elseif k == "--confirm" then
+      -- TUI で流したあとの画面と観測を出す（headless の違反を issue にする前の確認）
+      opts.confirm = true
     end
     i = i + 1
   end
@@ -110,7 +113,9 @@ local counter = 0
 function Session.new()
   counter = counter + 1
   local name = ("skkformal%d_%d"):format(vim.uv.os_getpid(), counter)
-  local dir = vim.fn.tempname()
+  -- 長い socket のパスで動かないことがあるので、XDG_RUNTIME_DIR の下に置く
+  local base = vim.env.XDG_RUNTIME_DIR or vim.fn.tempname()
+  local dir = ("%s/skkformal-%d-%d"):format(base, vim.uv.os_getpid(), counter)
   vim.fn.mkdir(dir, "p")
   local sock = dir .. "/nvim.sock"
   local f = assert(io.open(dir .. "/dict", "w"))
@@ -535,6 +540,7 @@ local function run(keys, plain)
         end
         local term, screen = sess:terminal()
         local s = with_terminal(snapshot(sess), term, screen)
+        s.key = key
         if opts.flicker then
           -- フレームの数と、最後の位置と違うところでカーソルを出したフレーム（寄り道）
           local before_row, before_col = sess.cur_row, sess.cur_col
@@ -606,7 +612,7 @@ local function run(keys, plain)
           -- 普通のコマは 1.5 秒、違反が出たコマは 3 秒（最後のコマは agg の --last-frame-duration で 5 秒）
           rec:frame(sess, key, note, note and 3 or 1.5, init_name and i - 1 or i)
           result.violations = {}
-        elseif #result.violations > 0 and not opts.flicker then
+        elseif #result.violations > 0 and not opts.flicker and not opts.confirm then
           result.steps = i
           return
         end
@@ -614,6 +620,27 @@ local function run(keys, plain)
     end
     if rec then
       rec:write()
+    end
+    if opts.confirm then
+      local term, screen = sess:terminal()
+      local s = with_terminal(snapshot(sess), term, screen)
+      print("\n--- screen ---")
+      for _, line in ipairs(screen) do
+        print(line)
+      end
+      print("\n--- state ---")
+      print(vim.inspect({
+        lines = s.lines,
+        cursor = s.cursor,
+        vim_mode = s.vim_mode,
+        skk_mode = s.skk_mode,
+        enabled = s.enabled,
+        g_state = s.g_state,
+        indicator = #s.indicator,
+        popup = #s.popup,
+        menu = s.menu,
+        undo_seq = s.undo_seq,
+      }, { newline = " ", indent = "" }))
     end
   end)
   if not ok then
