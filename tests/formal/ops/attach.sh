@@ -3,7 +3,7 @@
 set -eu
 . "$(dirname "$0")/env.sh"
 n=$1; shift
-(cd "$W" && timeout 300 nvim --headless -u NONE -i NONE -l tests/formal/tui.lua "$@" --record "$R/issue-$n.cast" >/dev/null 2>&1 || true)
+(cd "$W" && timeout 300 "$NVIM" --headless -u NONE -i NONE -l tests/formal/tui.lua "$@" --record "$R/issue-$n.cast" >/dev/null 2>&1 || true)
 python3 "$O/retime.py" "$R/issue-$n.cast"
 agg --font-family "JetBrains Mono,Noto Sans Mono CJK JP" --font-size 16 --idle-time-limit 5 --last-frame-duration 5 "$R/issue-$n.cast" "$R/issue-$n.gif" >/dev/null 2>&1
 cd "$R"; git add "issue-$n.cast" "issue-$n.gif"

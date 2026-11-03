@@ -431,6 +431,130 @@ local function shrink(ops)
   return ops
 end
 
+-- DB（グローバル辞書のキャッシュ）の検査。普通に作り直したとき、rename の前で nvim を止めたとき、
+-- 1 時間より古い .tmp を消すときを見る。辞書の中身はメモリの辞書と比べる (#138)
+local function db_check()
+  local db = require("skkeleton.dictionary.db")
+  local skk = require("skkeleton.dictionary.skk")
+  local dir = vim.fn.tempname()
+  vim.fn.mkdir(dir, "p")
+  local function finish(msg)
+    vim.fn.delete(dir, "rf")
+    return msg
+  end
+  local text = table.concat({
+    ";; okuri-ari entries.",
+    "わるk /悪/",
+    ";; okuri-nasi entries.",
+    "かん /缶/感/",
+    "にほん /日本/",
+    "",
+  }, "\n")
+  local function write(src)
+    local f = assert(io.open(src, "wb"))
+    f:write(text)
+    f:close()
+  end
+  local function files(dbdir)
+    local out = {}
+    for _, p in ipairs(vim.fn.glob(dbdir .. "/*", false, true)) do
+      out[#out + 1] = vim.fs.basename(p)
+    end
+    table.sort(out)
+    return out
+  end
+  local function check_content(src, dbdir, where)
+    local mem = skk.load_memory(src)
+    local ok, disk = pcall(db.open_dictionary, src, { dir = dbdir })
+    if not ok then
+      return ("%s: DB を開けない: %s"):format(where, disk)
+    end
+    for _, w in ipairs({ "かん", "にほん" }) do
+      local a = mem:get_henkan_result("okurinasi", w)
+      local b = disk:get_henkan_result("okurinasi", w)
+      if not vim.deep_equal(a, b) then
+        return ("%s: %q の候補 %s、メモリ %s"):format(where, w, vim.inspect(b), vim.inspect(a))
+      end
+    end
+  end
+
+  -- 1. 普通に作り直す。置き場には .db だけが残る
+  local src, dbdir = dir .. "/dict", dir .. "/db"
+  write(src)
+  local dst = db.ensure(src, { dir = dbdir, force = true })
+  local fs = files(dbdir)
+  if #fs ~= 1 or not fs[1]:match("%.db$") then
+    return finish(("作り直したあとの DB の置き場に .db 以外がある: %s"):format(vim.inspect(fs)))
+  end
+  local msg = check_content(src, dbdir, "作り直したあと")
+  if msg then
+    return finish(msg)
+  end
+
+  -- 2. rename の前で nvim を kill する。.tmp が残り、DB はまだ無い。
+  -- そのあと開き直すと、DB を作り直してメモリの辞書と同じになる
+  local src2, dbdir2 = dir .. "/dict2", dir .. "/db2"
+  write(src2)
+  local dst2 = db.path_for(src2, dbdir2)
+  local script = dir .. "/kill.lua"
+  local f = assert(io.open(script, "wb"))
+  f:write(([[
+      vim.opt.rtp:prepend(%q)
+      local uv = vim.uv
+      local pid = uv.os_getpid()
+      local rename = uv.fs_rename
+      uv.fs_rename = function(...)
+        uv.kill(pid, "sigkill")
+        return rename(...)
+      end
+      require("skkeleton.dictionary.db").build(%q, %q)
+    ]]):format(root, src2, dst2))
+  f:close()
+  local r = vim
+    .system({ vim.v.progpath, "--headless", "-u", "NONE", "-i", "NONE", "-l", script }, { text = true })
+    :wait()
+  local killed_tmp
+  for _, name in ipairs(files(dbdir2)) do
+    if name:match("%.tmp$") then
+      killed_tmp = dbdir2 .. "/" .. name
+    end
+  end
+  if not killed_tmp then
+    return finish(
+      ("rename の前で止めたのに .tmp が残っていない（終了コード %s）: %s"):format(
+        tostring(r.code),
+        tostring(r.stderr or r.stdout or "")
+      )
+    )
+  end
+  if vim.uv.fs_stat(dst2) then
+    return finish("rename の前で止めたのに .db ができている")
+  end
+  db.ensure(src2, { dir = dbdir2 })
+  msg = check_content(src2, dbdir2, "止めたあとに開き直したとき")
+  if msg then
+    return finish(msg)
+  end
+  -- 新しい .tmp は、まだ 1 時間たっていないので残ってよい（#138）
+  if not vim.uv.fs_stat(killed_tmp) then
+    return finish("止めた直後の新しい .tmp が消えた")
+  end
+  -- 1 時間より古い .tmp は、次の作り直しで消える
+  local old = os.time() - 7200
+  vim.uv.fs_utime(killed_tmp, old, old)
+  db.ensure(src2, { dir = dbdir2, force = true })
+  if vim.uv.fs_stat(killed_tmp) then
+    return finish("1 時間より古い .tmp が残っている")
+  end
+  local rest = files(dbdir2)
+  for _, name in ipairs(rest) do
+    if name:match("%.tmp$") then
+      return finish("掃除のあとに .tmp が残っている: " .. vim.inspect(rest))
+    end
+  end
+  return finish()
+end
+
 math.randomseed(opts.seed)
 local found = {}
 local t0 = vim.uv.hrtime()
@@ -447,14 +571,18 @@ for _ = 1, opts.random do
   end
 end
 print(("dict: %d 本 × %d 操作、%.1f 秒"):format(opts.random, opts.length, (vim.uv.hrtime() - t0) / 1e9))
-if vim.tbl_isempty(found) then
+local db_msg = db_check()
+if db_msg then
+  print("\n✗ db: " .. db_msg)
+end
+if vim.tbl_isempty(found) and not db_msg then
   print("✓ 違反なし")
   vim.cmd("qall!")
 end
 -- 見つかったが、まだ直っていないもの（issue の番号と、反例の操作で見分ける）。
 -- #37・#49・#50・#53 は直った。新しい未修正の件はここに { issue = N, match = function(f) … end } で足す
 local KNOWN = {}
-local failed = false
+local failed = db_msg ~= nil
 for _, f in pairs(found) do
   local known
   for _, k in ipairs(KNOWN) do

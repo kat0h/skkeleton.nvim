@@ -69,6 +69,13 @@ cd /home/kat0h/ghq/github.com/kat0h/skkeleton.nvim/.claude/worktrees/formal-ui
 4. **反例を仕分ける**（`✗` や `△` が出たら、1 件ずつ下の「仕分け」をする）
 5. **報告を書く**（下の「報告」の形で）
 
+## nightly で流す（週に 1 回）
+
+- `tests/formal/ops/nightly.sh` を流します。nightly の nvim を `$W/.tests/nvim-nightly` にダウンロードし、全プロファイルを深さ 2 で短く流したあと、`core.lua`・`dict.lua`・`jisyo.lua` の速い検査も流します。`~/.local` などには入れません。
+- `NVIM_DIR=/path/to/nvim-dir` を指定すると、その `bin/nvim` を使います（stable で流し方を試すとき）。
+- `NVIM=/path/to/nvim` は `run.sh`・`make verify`・`rotate.sh`・`attach.sh` の nvim を切り替えます。`Makefile` の `NVIM` も同じです。
+- stable では出ずに nightly だけで出た違反は、Neovim の変更を探して issue に書きます（AGENTS.md の「テスト」の節）。
+
 ## 仕分け
 
 1. **再現するか**

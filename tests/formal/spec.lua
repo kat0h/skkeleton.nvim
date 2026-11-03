@@ -40,9 +40,10 @@ local function insert_mode(s)
 end
 
 -- 辞書登録の input() の中。元の行の pre-edit（▽っk など）は、登録が終わるまで元の位置に残してよい
--- （upstream ではバッファの文字なので、登録中も見えている）
+-- （upstream ではバッファの文字なので、登録中も見えている）。<C-f> の cmdline window の中も、
+-- input() は続いている（cmdtype は "@" でなくなる）ので、深さで見る
 local function registering(s)
-  return s.cmdtype == "@"
+  return s.cmdtype == "@" or (s.input_depth or 0) > 0
 end
 
 M.state = {}
@@ -59,7 +60,10 @@ M.state["preedit: extmark は insert モードの今のバッファのカーソ�
       return ("mode %s で extmark %s が残っている"):format(s.vim_mode, short(m))
     end
     if m.buf ~= s.buf then
-      return ("extmark が別のバッファ %d にある（今は %d）"):format(m.buf, s.buf)
+      -- 登録の間は、input() を始めたバッファに残した pre-edit を見てよい（#144）
+      if not (registering(s) and s.input_buf == m.buf) then
+        return ("extmark が別のバッファ %d にある（今は %d）"):format(m.buf, s.buf)
+      end
     end
     -- 辞書登録のプロンプトの中でタイマーがカーソルを動かしても、pre-edit は元の位置に残す
     -- （host.input が終わったときにカーソルを戻す）。register プロファイルの <StealCursor>
@@ -271,6 +275,18 @@ M.state["popup: 候補一覧は ▼ の 5 番目の候補から"] = function(s)
   end
 end
 
+-- db443cd の型。変換していない（▼ が無い）ときは、skkeleton の候補のポップアップを残さない
+M.state["popup: 変換していないなら候補のポップアップは無い"] = function(s)
+  if #s.popup == 0 then
+    return
+  end
+  local select_marker = s.opt.markerHenkanSelect
+  local converting = select_marker ~= "" and s.ctx_text:find(select_marker, 1, true) ~= nil
+  if not converting then
+    return ("変換していない（pre-edit %q）のに popup が %d 個"):format(s.ctx_text, #s.popup)
+  end
+end
+
 M.state["resource: ウィンドウとバッファが漏れない"] = function(s, base)
   -- 今のウィンドウが float（検査で開いたもの）のときは、その中でバッファが入れ替わることがあるので比べない
   if s.win_float then
@@ -389,6 +405,41 @@ M.state["blink: 有効なら、メニューは ▽ の入力中だけ"] = functi
       tostring(st.mode),
       st.henkan_feed,
       short(s.menu_items)
+    )
+  end
+end
+
+-- 0bcd11b の型。blink.cmp のメニューは、pre-edit の画面の位置の 1 行下に出す。
+-- pre-edit はバッファに無いので、バッファのカーソル（pre-edit の始まり）から、画面のカーソル
+-- （inline の virtual text のあと）までの列の間に出す。枠の分として 1 列までのずれを許す。
+-- メニューが上に出る（画面の下）ときは見ない
+M.state["blink: メニューは pre-edit の画面の位置の 1 行下"] = function(s)
+  if
+    not s.menu
+    or not s.menu_pos
+    or not s.enabled
+    or not insert_mode(s)
+    or not s.cursor_screen
+    or s.state.type ~= "input"
+    or s.state.henkan_feed == ""
+  then
+    return
+  end
+  local row = s.screen.row
+  if row <= 0 or s.screen.col <= 0 or s.cursor_screen.col <= 0 then
+    return
+  end
+  local pos = s.menu_pos
+  local left = s.cursor_screen.col - 1 -- 0 起点
+  local right = s.screen.col - 1 -- 0 起点（virtual text のあと）
+  if pos[1] < row - 1 or pos[1] > row + 1 or pos[2] < left - 1 or pos[2] > right + 1 then
+    return ("メニュー (%d,%d)、pre-edit の画面の位置 (%d,%d)〜(%d,%d) の 1 行下ではない"):format(
+      pos[1],
+      pos[2],
+      row - 1,
+      left,
+      row - 1,
+      right
     )
   end
 end
@@ -520,6 +571,13 @@ function M.observe(hist, prev, s)
   elseif prev and prev.vim_mode == "n" and insert_mode(s) then
     hist.left_insert = nil
   end
+  -- visual・select から insert に入った（矩形選択の I・A など）。<Esc> は選択した行に繰り返すが、
+  -- <C-o>l は insert-normal を経由するので繰り返さない。カーソルの基準には使わない
+  if prev and prev.vim_mode:sub(1, 1):match("[vV\022sS\019]") and insert_mode(s) then
+    hist.visual_insert = true
+  elseif not insert_mode(s) then
+    hist.visual_insert = nil
+  end
   -- 入れ子の登録の外側に戻れるよう、プロンプトに入る直前の観測を積む（register の性質）
   hist.reg_stack = hist.reg_stack or {}
   local pd, sd = prev and prev.input_depth or 0, s.input_depth or 0
@@ -541,9 +599,11 @@ function M.observe(hist, prev, s)
   if registering(s) then
     if prev and not registering(prev) then
       hist.before_register = prev
+      hist.before_register_key = s.key
     end
   else
     hist.before_register = nil
+    hist.before_register_key = nil
   end
 end
 
@@ -833,10 +893,46 @@ M.action["keepState: 同じバッファで insert に戻ると有効になる（
   end
 end
 
--- d5fc182 の型。辞書登録を <Esc> や <C-g> で取り消したら、登録に入る前の行・カーソル・pre-edit に戻る
+-- 登録の間も、外側のバッファの pre-edit（▼ や読み）が見えている (#144)。
+-- 登録の入力は別の Context なので、外側の pre-edit は input() を始めたバッファに残す
+M.state["register: 登録の間も外側の pre-edit が見える"] = function(s, _, hist)
+  if not registering(s) then
+    return
+  end
+  local b = hist and hist.before_register
+  if not b then
+    return
+  end
+  -- 登録を開いたキーが <Space> のときだけ、登録の前の pre-edit と同じ文字列を期待する。
+  -- Kanji のようなマクロや送り仮名の A は、開くキーが外側の状態も変える（HANDOVER の register の注意）
+  local exact = hist.before_register_key == "<Space>" and b.ctx_text ~= ""
+  local found
+  for _, m in ipairs(s.preedit_marks) do
+    if m.buf == s.input_buf or m.buf == s.buf then
+      if not exact or m.text == b.ctx_text then
+        found = m
+        break
+      end
+    end
+  end
+  if not found then
+    return ("登録の間の pre-edit %q が無い（extmarks %s）"):format(
+      exact and b.ctx_text or "(任意)",
+      short(s.preedit_marks)
+    )
+  end
+  -- 外側のバッファが今の画面に出ているときだけ、画面の行も見る（<C-f> の cmdline window では隠れる）
+  if s.cmdwin == "" and s.buf == (s.input_buf or s.buf) and not insert_mode(s) then
+    if not s.screen_line:find(found.text, 1, true) then
+      return ("登録の間の画面 %q に pre-edit %q が無い"):format(s.screen_line, found.text)
+    end
+  end
+end
+
+-- d5fc182 の型。辞書登録を <Esc>・<C-g>・<C-c> で取り消したら、登録に入る前の行・カーソル・pre-edit に戻る
 M.action["register: 取り消すと登録の前に戻る"] = function(p, key, s, hist)
   local b = hist and hist.before_register
-  if not (b and registering(p) and not registering(s) and (key == "<Esc>" or key == "<C-g>")) then
+  if not (b and registering(p) and not registering(s) and (key == "<Esc>" or key == "<C-g>" or key == "<C-c>")) then
     return
   end
   -- terminal のバッファの行とカーソルは、動いているプログラムが決めるので比べない
@@ -1335,7 +1431,8 @@ M.action["unmapped: 未マップの特殊キーのあと、pre-edit は元のま
     end
     return
   end
-  if #s.preedit_marks > 0 then
+  -- 辞書登録の間は、外側のバッファの pre-edit を残してよい（#144）
+  if not registering(s) and #s.preedit_marks > 0 then
     return ("%s のあと ctx は空なのに extmark %q が残っている"):format(key, mark_text(s))
   end
   if s.state.feed ~= "" or s.state.henkan_feed ~= "" then
@@ -1347,6 +1444,79 @@ M.action["unmapped: 未マップの特殊キーのあと、pre-edit は元のま
   end
   if #s.popup > 0 then
     return ("%s のあと pre-edit が無いのに popup が残っている"):format(key)
+  end
+end
+
+-- insert を抜ける（normal・visual・select に移る）モードか。<Esc> のあとの基準と比べてよい
+local function esc_like(mode)
+  return mode:sub(1, 1):match("[nvV\022sS\019]") ~= nil
+end
+
+-- <Esc> の基準を流した別の nvim が、比べる前の状態まで同じになったか。
+-- ならなかったときは、比べずに飛ばす（マクロやタイマーの入ったキー列は、別の nvim で同じ状態にならないことがある）
+local function same_state(a, b)
+  return a.buf == b.buf
+    and vim.deep_equal(a.cursor, b.cursor)
+    and table.concat(a.lines, "\n") == table.concat(b.lines, "\n")
+    and a.ctx_text == b.ctx_text
+    and a.vim_mode == b.vim_mode
+    and a.state.type == b.state.type
+    and a.state.mode == b.state.mode
+end
+
+-- キー自体は文字を足さず、pre-edit を確定するだけの道か。
+-- <C-o> は、カーソルを動かすコマンドのときだけ（<C-o>: や <C-o>zz は pre-edit を残す）
+local function commits_only(key)
+  if key == "<C-c>" or key == "<Insert>" then
+    return true
+  end
+  if key:match("^<C%-o>[hljk0%$wbe]") then
+    return true
+  end
+  if key:match("^<Esc>[vV]") or key == "<Esc><C-v>" then
+    return true
+  end
+  return false
+end
+
+-- #70・#142 の型。pre-edit を確定する道のあとの行とカーソルは、同じ状態から <Esc> で
+-- 確定したときと同じにする。文字は、キー自体が文字を足さない道（<C-c>・<Insert>・
+-- カーソルを動かす <C-o>・visual/select）で比べる。カーソルは、<Esc> と同じように
+-- normal・visual に移る道（<C-c> と <Esc>v）だけで比べる。<Insert> は置換モード、
+-- <C-o>l は移動した先がカーソルなので、<Esc> と同じ位置にはならない
+M.action["cursor: 確定したあとの行とカーソルは <Esc> と同じ"] = function(p, key, s, hist)
+  if not hist or not hist.esc_ref or hist.visual_insert or p.ctx_text == "" or s.buf ~= p.buf then
+    return
+  end
+  local visual = s.vim_mode:sub(1, 1):match("[vV\022sS\019]") ~= nil
+  if not (commits_only(key) or visual) then
+    return
+  end
+  local ref = hist.esc_ref()
+  if not ref or not ref.before or not ref.after or not same_state(p, ref.before) then
+    return
+  end
+  local after = ref.after
+  if after.buf ~= s.buf then
+    return
+  end
+  if table.concat(s.lines, "\n") ~= table.concat(after.lines, "\n") then
+    return ("%s のあとの行 %q、<Esc> なら %q（pre-edit %q）"):format(
+      key,
+      short(s.lines),
+      short(after.lines),
+      s.ctx_text
+    )
+  end
+  if (key == "<C-c>" or key:find("^<Esc>")) and esc_like(s.vim_mode) and esc_like(after.vim_mode) then
+    if s.cursor[1] ~= after.cursor[1] or s.cursor[2] ~= after.cursor[2] then
+      return ("%s のあとのカーソル %s、<Esc> なら %s（行 %q）"):format(
+        key,
+        short(s.cursor),
+        short(after.cursor),
+        cur_line(s)
+      )
+    end
   end
 end
 

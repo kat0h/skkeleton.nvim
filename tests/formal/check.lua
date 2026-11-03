@@ -204,6 +204,27 @@ local SETUP = [[
     indicator = {},
   }, extra))
   vim.keymap.set({ "i", "c" }, "<C-j>", "<Plug>(skkeleton-toggle)")
+  -- 辞書登録の input() を始めたバッファ。登録の間、外側の pre-edit はこのバッファに残る (#144)
+  do
+    local host = require("skkeleton.host")
+    local input = host.input
+    local depth = 0
+    host.input = function(...)
+      if depth == 0 then
+        _G.formal_input_buf = vim.api.nvim_get_current_buf()
+      end
+      depth = depth + 1
+      local ok, res = pcall(input, ...)
+      depth = depth - 1
+      if depth == 0 then
+        _G.formal_input_buf = nil
+      end
+      if not ok then
+        error(res, 0)
+      end
+      return res
+    end
+  end
   -- User イベントの回数（イベントの性質で使う）
   -- skkeleton がキーを処理して描き終えた回数（render.finish の終わりで数える。前は render.count）
   _G.formal_handled = 0
@@ -349,6 +370,40 @@ local function snapshot(child)
   return child.lua_get([[require("formal.observe").snapshot()]])
 end
 
+-- 同じキー列を <Esc> で確定した場合の観測を、別の nvim で取る。
+-- 性質（spec.lua の cursor:）が、確定したあとのカーソルを <Esc> と比べるために使う
+local function esc_reference_factory(mutation, init, config)
+  local child, cache = nil, {}
+  return function(prefix)
+    local cache_key = table.concat(prefix, "\0")
+    if cache[cache_key] ~= nil then
+      return cache[cache_key] or nil
+    end
+    child = child or new_child()
+    start(child, mutation, init, config)
+    if not settle(child) then
+      cache[cache_key] = false
+      return nil
+    end
+    for _, key in ipairs(prefix) do
+      pcall(child.type_keys, profiles.expand(key))
+      if not settle(child) then
+        cache[cache_key] = false
+        return nil
+      end
+    end
+    local before = snapshot(child)
+    pcall(child.type_keys, "<Esc>")
+    if not settle(child) then
+      cache[cache_key] = false
+      return nil
+    end
+    local s = { before = before, after = snapshot(child) }
+    cache[cache_key] = s
+    return s
+  end
+end
+
 -- 抽象化: 同じ値になる状態は 1 度しか広げない
 local function abstract(s)
   local col = s.cursor[2]
@@ -401,6 +456,8 @@ local function run(child, keys, mutation, every, config)
   settle(child)
   local base = snapshot(child)
   local hist = {}
+  local esc_reference = esc_reference_factory(mutation, init, config)
+  local sent = {}
   spec.observe(hist, nil, base)
   if every or #keys == 0 or (init and #keys == 1) then
     local v = check(base, nil, nil, base, hist)
@@ -425,6 +482,9 @@ local function run(child, keys, mutation, every, config)
       end
       local s = snapshot(child)
       if every or i == #keys then
+        hist.esc_ref = function()
+          return esc_reference(sent)
+        end
         local v = check(base, prev, key, s, hist)
         if #v > 0 then
           return { steps = i, violations = v, abstract = abstract(s), snapshot = s, prev = prev, seen = seen }
@@ -432,6 +492,7 @@ local function run(child, keys, mutation, every, config)
       end
       s.key = key
       spec.observe(hist, prev, s)
+      sent[#sent + 1] = key
       -- 辺（前の抽象状態・キー・次の抽象状態）を記録する
       seen[#seen + 1] = abstract(prev) .. " >" .. key .. "> " .. abstract(s)
       prev = s
@@ -700,6 +761,8 @@ if opts.keys then
   local base = snapshot(child)
   local prev = base
   local hist = {}
+  local esc_reference = esc_reference_factory(opts.mutate, init, opts.config)
+  local sent = {}
   spec.observe(hist, nil, base)
   for _, key in ipairs(opts.keys) do
     pcall(child.type_keys, profiles.expand(key))
@@ -731,6 +794,9 @@ if opts.keys then
           )
       )
     end
+    hist.esc_ref = function()
+      return esc_reference(sent)
+    end
     for _, v in ipairs(check(base, prev, key, s, hist)) do
       print("  ✗ " .. v.name .. ": " .. v.msg)
       local k = slot(v.name, opts.keys, v.msg)
@@ -738,6 +804,7 @@ if opts.keys then
     end
     s.key = key
     spec.observe(hist, prev, s)
+    sent[#sent + 1] = key
     prev = s
   end
   child.stop()

@@ -55,6 +55,13 @@ return {
   },
   { issue = 121, profile = "unmapped", keys = { "#term", "Kan", "<C-S-a>" } },
   { issue = 125, profile = "paste", keys = { "#mid", "<C-j>", "Kan", "<Paste>" } },
+  -- カーソルが確定した文字の後ろに来ない（#142）、辞書登録の間の外側の pre-edit（#144）、
+  -- blink のメニューの位置（#143）
+  { issue = 142, profile = "misc", keys = { "#mid", "<C-j>", "Kan", "<C-c>" } },
+  { issue = 143, profile = "blink", keys = { "#eol", "<C-j>", "Kanji" } },
+  { issue = 144, profile = "register", keys = { "#mid", "<C-j>", "A", "<Space>", "k" } },
+  -- DB の置き場の .tmp（#138）。db_check は dict.lua の最後に 1 回だけ流す
+  { issue = 138, checker = "dict", args = { "--random", "1", "--length", "2" } },
   -- 半角カタカナモードの ▽ で q: denops 版はひらがなで確定する（性質では見つからず、upstream.lua で見比べる）
   { issue = 51, keys = { "<C-j>", "<C-q>", "Te", "q" } },
   -- 辞書登録の欄の <C-f>（register プロファイル）

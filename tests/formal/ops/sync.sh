@@ -37,5 +37,5 @@ for f in tests/formal/core.lua tests/formal/dict.lua; do
   done
 done
 if [ "$n" != 0 ]; then
-  nvim --headless -u NONE -i NONE -l tests/formal/check.lua --regress 2>&1 | grep -E '^(✗|△|    |✓ 回帰|✗ 回帰)'
+  "$NVIM" --headless -u NONE -i NONE -l tests/formal/check.lua --regress 2>&1 | grep -E '^(✗|△|    |✓ 回帰|✗ 回帰)'
 fi

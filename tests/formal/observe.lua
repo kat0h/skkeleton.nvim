@@ -160,6 +160,11 @@ function M.snapshot()
     win_height = vim.api.nvim_win_get_height(win),
     topline = vim.fn.getwininfo(win)[1].topline,
     screen = { row = vim.fn.screenrow(), col = vim.fn.screencol() },
+    -- バッファのカーソル（pre-edit の始まり）の画面上の位置
+    cursor_screen = (function()
+      local p = vim.fn.screenpos(win, cur[1], cur[2] + 1)
+      return { row = p.row, col = p.col }
+    end)(),
     screen_row = vim.fn.screenpos(win, cur[1], 1).row,
     preedit_marks = marks(vim.api.nvim_create_namespace("skkeleton-preedit")),
     annot_marks = marks(vim.api.nvim_create_namespace("skkeleton-annotation")),
@@ -190,6 +195,21 @@ function M.snapshot()
     menu_items = package.loaded["blink.cmp"] and require("blink.cmp").is_menu_visible() and vim.tbl_map(function(i)
       return i.label
     end, require("blink.cmp").get_items()) or nil,
+    -- blink.cmp のメニューの左上（editor の 0 起点）。開いていなければ nil
+    menu_pos = (function()
+      if not package.loaded["blink.cmp"] or not require("blink.cmp").is_menu_visible() then
+        return nil
+      end
+      local ok, menu = pcall(require, "blink.cmp.completion.windows.menu")
+      if not ok or not menu.win then
+        return nil
+      end
+      local w = menu.win:get_win()
+      if not w or not vim.api.nvim_win_is_valid(w) then
+        return nil
+      end
+      return vim.api.nvim_win_get_position(w)
+    end)(),
     pum = vim.fn.pumvisible() == 1,
     -- 組み込みの補完のメニューの項目（word と menu = 読み）と、そのときの▽の読み
     pum_items = vim.api.nvim_get_mode().mode:sub(1, 2) == "ic" and vim.tbl_map(function(i)
@@ -240,6 +260,7 @@ function M.snapshot()
       end)
       return ok and d or 0
     end)(),
+    input_buf = _G.formal_input_buf,
     user_dict = (function()
       local ok, maps = pcall(function()
         return require("skkeleton.store").library().user_dict.maps

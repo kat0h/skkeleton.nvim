@@ -6,6 +6,8 @@ R=${FORMAL_REC:-$REPO/.claude/worktrees/formal-rec} # formal-recordings の work
 LOG=$W/.tests/formal-ops                            # 結果の記録（git には入らない）
 mkdir -p "$LOG"
 export MINI_PATH=${MINI_PATH:-$HOME/.local/share/nvim/lazy/mini.nvim}
+# 検査に使う nvim。NVIM=/path/to/nvim で stable と nightly を切り替える
+export NVIM=${NVIM:-nvim}
 # コミットの末尾に付ける行（例: FORMAL_TRAILER="Co-Authored-By: ..."）。空なら付けない
 TRAILER=${FORMAL_TRAILER:-}
 msg() { if [ -n "$TRAILER" ]; then printf '%s\n\n%s\n' "$1" "$TRAILER"; else printf '%s\n' "$1"; fi; }
