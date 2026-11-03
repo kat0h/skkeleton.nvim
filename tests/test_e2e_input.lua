@@ -444,6 +444,8 @@ T["<Insert> during pre-edit keeps the reading as text (#111)"] = function()
   eq(child.g["skkeleton#enabled"], false)
   eq(helpers.buffer(child), { "かん" })
   eq(helpers.preedit(child), "")
+  -- 置換モードのカーソルは、確定した読みの後ろ (#156)
+  eq(helpers.cursor(child), { 1, 6 })
 end
 
 T["<Insert> during henkan keeps the candidate as text (#111)"] = function()
