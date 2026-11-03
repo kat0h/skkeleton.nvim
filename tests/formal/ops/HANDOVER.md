@@ -80,6 +80,7 @@ cd /home/kat0h/ghq/github.com/kat0h/skkeleton.nvim/.claude/worktrees/formal-ui
 
 - **#149（blink.cmp のメニュー位置）**: ヘッドレスの子で `is_menu_visible()` が true、`nvim_win_get_position()` が `(1,1)` だったため issue を立てましたが、`tui.lua` の本物の端末と利用者の設定の nvim では、メニューは pre-edit の近くに出て行頭ではありませんでした。ヘッドレスではウィンドウがあっても描かれていないことがあります。
 - 浮動ウィンドウの位置の違反は、ヘッドレスの観測だけで issue にしないでください。`tui.lua` の画面（できれば利用者の設定の nvim）で確かめてから issue にします。詳しくは main の `docs/MODEL_CHECKING.md` の「開いてから閉じた issue」に書きました。
+- #152（keepState）と #155（`<M-a>` の disable-post）も、検査の誤りとして閉じました。`.` は keepState の一度目を使い切る、`<M-a>` は `<Esc>`+`a` の 2 キー、という理由です。main の `docs/MODEL_CHECKING.md` に残しました。
 
 ## 仕分け
 
