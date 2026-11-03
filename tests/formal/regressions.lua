@@ -61,8 +61,6 @@ return {
   { issue = 151, profile = "steal", keys = { "#eol", "<C-j>", "/", "<C-o>u" } },
   { issue = 154, profile = "default", keys = { "#mid", "<C-j>", "A", "Kan", "<C-c>", "<C-c>" } },
   { issue = 156, profile = "misc", keys = { "#mid", "<C-j>", "Kan", "<Insert>" } },
-    keys = { "<M-a>" },
-  },
   {
     issue = 152,
     profile = "steal",
