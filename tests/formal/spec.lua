@@ -73,13 +73,13 @@ M.state["preedit: extmark は insert モードの今のバッファのカーソ�
     end
     -- 辞書登録のプロンプトの中でタイマーがカーソルを動かしても、pre-edit は元の位置に残す
     -- （host.input が終わったときにカーソルを戻す）。register プロファイルの <StealCursor>
-    local shift = pending_normal(s) and 1 or 0
-    -- ni ではカーソルが挿入点より前（行頭なら同じ位置）に来る
-    local offset = s.cursor[2] - m.col
-    if
-      not registering(s)
-      and (m.row ~= s.cursor[1] - 1 or not (offset == 0 or (pending_normal(s) and offset == -shift)))
-    then
+    -- ni ではカーソルが挿入点の 1 文字前に来る（行頭なら同じ位置）。全角はバイト数が違う
+    local placed = m.col == s.cursor[2]
+    if not placed and pending_normal(s) and m.col > s.cursor[2] then
+      local text = s.lines[s.cursor[1]] or ""
+      placed = vim.fn.strchars(text:sub(s.cursor[2] + 1, m.col)) == 1
+    end
+    if not registering(s) and (m.row ~= s.cursor[1] - 1 or not placed) then
       return ("extmark (%d,%d) がカーソル (%d,%d) からずれている"):format(
         m.row,
         m.col,
@@ -583,6 +583,9 @@ function M.observe(hist, prev, s)
   if s.block_insert and key == "<BS>" then
     hist.block_bs = true
   end
+  if key:find("^<Paste") then
+    hist.pasted = true
+  end
   -- keepState は Esc のあとの最初の InsertEnter だけ。. は入力の繰り返しで、
   -- その一度を使うので、. のあとの <C-k>a: は keepState の対象にしない
   if key == "." and hist.left_insert then
@@ -831,6 +834,12 @@ end
 -- （入力の途中の、存在しなかった状態にはならない）
 M.action["undo: u と <C-r> は観測したことのある状態に戻る"] = function(p, key, s, hist)
   if (key ~= "u" and key ~= "<C-r>") or p.vim_mode ~= "n" or not hist or not hist.texts or hist.unseen then
+    return
+  end
+  -- 貼り付けは pre-edit の確定と貼り付けを別の undo のまとまりに分ける。確定した読みは画面に
+  -- 出ていないので、そのあと最初の u は「観測したことのある状態」に戻らない
+  if hist.pasted then
+    hist.pasted = nil
     return
   end
   local text = (s.buf or 0) .. ":" .. table.concat(s.lines, "\n")
@@ -1676,6 +1685,17 @@ M.action["cursor: カーソルを動かす <C-o> は pre-edit を確定する"] 
   end
 end
 
+-- pre-edit からマーカーを除いた、確定する読み
+local function reading_text(s)
+  local t = s.ctx_text or ""
+  for _, marker in ipairs({ s.opt.markerHenkanSelect or "", s.opt.markerHenkan or "" }) do
+    if marker ~= "" and t:sub(1, #marker) == marker then
+      t = t:sub(#marker + 1)
+    end
+  end
+  return t
+end
+
 -- 未マップの特殊キーや貼り付けでも、カーソルは「<Esc> で確定してから insert に戻り、
 -- 同じキーを押したとき」と同じにする。キー自体の移動・挿入も基準側で同じように起こす
 M.action["cursor: 未マップ・貼り付けのカーソルは、確定して同じキーを押したときと同じ"] = function(
@@ -1696,7 +1716,9 @@ M.action["cursor: 未マップ・貼り付けのカーソルは、確定して�
   then
     return
   end
-  local ref = hist.esc_ref({ "a", key })
+  -- 確定する読みが無く、カーソルが行頭にあるときは、<Esc> のあと i で戻る（a だと 1 文字進む）
+  local back = (reading_text(p) ~= "" or p.cursor[2] > 0) and "a" or "i"
+  local ref = hist.esc_ref({ back, key })
   if not ref or not ref.before or not ref.after or not same_state(p, ref.before) then
     return
   end
