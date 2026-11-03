@@ -497,7 +497,7 @@ T["C-f in dictionary input opens cmdline window without cancelling (#54)"] = fun
   eq(#child.api.nvim_tabpage_list_wins(0), 1)
 end
 
-T["dictionary input clears the state variable and the outer pre-edit (#54)"] = function()
+T["dictionary input clears the state variable and keeps the outer pre-edit (#54, #144)"] = function()
   enable()
   type("A")
   eq(helpers.preedit(child), "▽あ")
@@ -505,13 +505,21 @@ T["dictionary input clears the state variable and the outer pre-edit (#54)"] = f
   eq(child.fn.mode(), "c")
   -- 登録の Context は新しく作られるので、参照用の変数もその状態に合わせる
   eq(child.g["skkeleton#state"].henkanFeed, "")
-  -- 外側の pre-edit の extmark は残らない
-  eq(
-    child.lua_get([[#vim.api.nvim_buf_get_extmarks(0, vim.api.nvim_get_namespaces()["skkeleton-preedit"], 0, -1, {})]]),
-    0
-  )
+  -- 登録の間も、外側の pre-edit はそのまま見える (#144)
+  eq(helpers.preedit(child), "▽あ")
   child.type_keys("<Esc>")
   helpers.settle(child)
+  eq(helpers.preedit(child), "▽あ")
+end
+
+T["register"]["the last candidate stays visible while registering (#144)"] = function()
+  enable()
+  type("Kan" .. ("<Space>"):rep(6))
+  eq(child.fn.mode(), "c")
+  eq(helpers.preedit(child), "▼管")
+  child.type_keys("<Esc>")
+  helpers.settle(child)
+  eq(helpers.preedit(child), "▼管")
 end
 
 T["C-f in dictionary input keeps cmdline mode when cmdwin cannot open (#54)"] = function()

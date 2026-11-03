@@ -119,6 +119,33 @@ function M.clear()
   end
 end
 
+-- いま出している pre-edit を、clear() では消さずにそのまま見せる。
+-- 辞書登録の input() の間、外側のバッファに読みを残すため (#144)。返した印を unfreeze に渡す
+---@return table[]?
+function M.freeze()
+  if not mark then
+    return nil
+  end
+  local frozen = { mark }
+  mark = nil
+  pending = false
+  mark_bytes_changed = false
+  return frozen
+end
+
+-- freeze した pre-edit を消す
+---@param frozen table[]?
+function M.unfreeze(frozen)
+  for _, m in ipairs(frozen or {}) do
+    if vim.api.nvim_buf_is_valid(m.buf) then
+      pcall(vim.api.nvim_buf_del_extmark, m.buf, ns, m.id)
+      if m.annot_id then
+        pcall(vim.api.nvim_buf_del_extmark, m.buf, ns_annot, m.annot_id)
+      end
+    end
+  end
+end
+
 -- pre-edit を出している間、バッファの書き換えを on_bytes で受ける
 local function attach_buf(buf)
   if attached_buf == buf then
