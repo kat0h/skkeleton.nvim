@@ -196,6 +196,38 @@ T["hooks"]["the menu is placed at the cursor after Japanese text (#143)"] = func
   eq(child.lua_get("require('blink.cmp.config').completion.menu.draw.align_to"), align_to)
 end
 
+T["hooks"]["the menu does not move to the line head while it closes (#174)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "aaaaaa" })
+  child.api.nvim_win_set_cursor(0, { 1, 6 })
+  child.type_keys("A")
+  type("<Plug>(skkeleton-enable)")
+  type("Kanj")
+  eq(wait("require('blink.cmp').is_menu_visible()"), true)
+  -- 確定のキーでメニューが行頭に寄ってから消えないこと。位置が変わるたびに、
+  -- カーソルからのずれ（0 ならカーソルに揃っている）を見る
+  child.lua([[
+    _G.menu_offsets = {}
+    vim.api.nvim_create_autocmd("User", {
+      pattern = "BlinkCmpMenuPositionUpdate",
+      callback = function()
+        if not require("blink.cmp").is_menu_visible() then
+          return
+        end
+        local menu = require("blink.cmp.completion.windows.menu")
+        table.insert(_G.menu_offsets, vim.api.nvim_win_get_config(menu.win:get_win()).col)
+      end,
+    })
+  ]])
+  -- q は読みをカタカナにして確定する
+  type("q")
+  eq(helpers.buffer(child), { "aaaaaaカン" })
+  local offsets = child.lua_get("_G.menu_offsets")
+  eq(#offsets > 0, true)
+  for _, offset in ipairs(offsets) do
+    eq(offset >= 0, true)
+  end
+end
+
 T["hooks"]["enabling skkeleton closes any previously open completion menu (#24)"] = function()
   child.api.nvim_buf_set_lines(0, 0, -1, false, { "Kanji", "" })
   child.api.nvim_win_set_cursor(0, { 2, 0 })

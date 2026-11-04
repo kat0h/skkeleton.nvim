@@ -53,6 +53,9 @@ local shown = false
 -- blink のメニューは既定ではキーワードの開始位置に揃う。skkeleton の pre-edit は
 -- バッファに無いので、カーソルの前に日本語があるとメニューが行頭に寄る (#143)。
 -- メニューを出している間だけカーソルに揃え、閉じたら元の設定へ戻す。
+-- blink の開閉は次の tick に回ることがあるので、呼び出し側ではなくメニューの
+-- 開閉のイベントに合わせる。閉じる前に戻すと、その間にカーソルが動いたとき
+-- メニューが行頭に寄ってから消える (#174)
 local align_to_before ---@type string?
 
 local function config_draw()
@@ -88,7 +91,6 @@ local function restore_menu_align()
 end
 
 local function hide(force)
-  restore_menu_align()
   last_key = nil
   if not shown and not force then
     return
@@ -101,6 +103,9 @@ local function hide(force)
 end
 
 M.hide = hide
+
+-- ▽ の入力中か。setup() の autocmd から呼ぶので先に宣言する
+local is_pending
 
 -- 設定する。未知のキーや型が違う値があれば、何も反映せずにエラーにする
 ---@param opts? table
@@ -135,11 +140,27 @@ function M.setup(opts)
       hide(true)
     end,
   })
+  vim.api.nvim_create_autocmd("User", {
+    group = group,
+    pattern = "BlinkCmpMenuOpen",
+    callback = function()
+      if M.options.enabled and is_pending() then
+        align_menu_to_cursor()
+      end
+    end,
+  })
+  vim.api.nvim_create_autocmd("User", {
+    group = group,
+    pattern = "BlinkCmpMenuClose",
+    callback = function()
+      restore_menu_align()
+    end,
+  })
 end
 
 -- ▽ の入力中（送りなしで、読みが空でない）か
 ---@return boolean
-local function is_pending()
+function is_pending()
   if vim.api.nvim_get_mode().mode:sub(1, 1) ~= "i" then
     return false
   end
@@ -245,7 +266,6 @@ function M.refresh()
     return
   end
   last_key = key
-  align_menu_to_cursor()
   -- blink は設定していない状態や、自分の都合で失敗することがある。skkeleton の入力は止めない
   if pcall(blink.show, { providers = { id } }) then
     shown = true
