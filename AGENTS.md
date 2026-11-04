@@ -45,6 +45,7 @@
 - バグの本文には起きること、再現の手順とコマンド、原因の見当（ファイルと行）、直し方の案を書きます。モデル検査で見つけたものは、検査を再生するコマンドも書きます（[docs/MODEL_CHECKING.md](docs/MODEL_CHECKING.md)）。
 - 同じことが upstream でも起きると確かめられたときだけ、`upstream` ラベルを付けます。確かめていなければ、本文にそう書きます。
 - ラベル：バグは `bug`、改良は `enhancement`、作者に決めてほしいことは `question`。
+- issue を直すときは PR を出します。main に直接 push しません（「git」の節）。
 
 ## GitHub（gh コマンド）
 
@@ -99,7 +100,8 @@ gh run view <run の番号> -R kat0h/skkeleton.nvim --log-failed   # 落ちた C
 
 - コミットのメッセージは英語の Conventional Commits（`fix(input): ...`、`refactor(render): ...`、`test: ...`、`docs: ...`）で書きます。issue を閉じるなら本文に `Closes #番号`、関係するだけなら `Refs #番号` を書きます。
 - push は HTTPS で行います。force push はしません。
-- バグを直したら、テストを通したうえで main に直接 push してかまいません。大きな作り直しや、決めることを含む変更は PR にします。PR のマージは作者が行います。マージ済みのブランチは消します。
+- issue の対応（バグの修正、改良、テスト、文書）は、テストを通したうえで PR で出します。main には直接 push しません。
+- 大きな作り直しや、決めることを含む変更は PR にします。PR のマージは作者が行います。マージ済みのブランチは消します。
 
 ## 同時に作業するとき
 
@@ -114,12 +116,12 @@ gh run view <run の番号> -R kat0h/skkeleton.nvim --log-failed   # 落ちた C
 
   ブランチの名前は `<種類>/<内容>`（「ブランチ」の節）にします。同じブランチを 2 つの作業ツリーでチェックアウトすることはできないので、ブランチも人ごとに分けます。
 - **リポジトリの最上位（main の作業ツリー）では作業しない。** そこは `git pull` で最新にしておくだけの場所にします。ファイルを変えたり、ブランチを切り替えたりしないでください。
-- **issue は担当を決めてから直す。** 直す issue を決めたら、手を付ける前に、その issue に「担当します（<作業者の名前>）」とコメントします。エージェントはみな同じ GitHub のアカウントを使うので、assignee では区別できません。担当のコメントがあってまだ閉じていない issue と、すでに PR が出ている issue（`gh pr list -R kat0h/skkeleton.nvim --search "<番号>"`）は飛ばします。
+- **issue は担当を決めてから直す。** 直す issue を決めたら、手を付ける前に、その issue に「担当します（<作業者の名前>）」とコメントします。エージェントはみな同じ GitHub のアカウントを使うので、assignee では区別できません。担当のコメントがあってまだ閉じていない issue と、すでに PR が出ている issue（`gh pr list -R kat0h/skkeleton.nvim --search "<番号>"`）は飛ばします。直したら PR を出します（「git」の節）。
 - **PR は作った人の担当。** PR が閉じるまでは、作った人だけがそのブランチに push します。ほかの人は、直してほしい点をレビューのコメントで伝えます。
 - **`tests/formal/` と `poc/formal-ui` は手元だけで扱う。** モデル検査の道具は PR にしません（[docs/MODEL_CHECKING.md](docs/MODEL_CHECKING.md)）。issue を巡回するときも、これを直す issue は担当しません。
 - **ほかの人の作業ツリーに触らない。** ファイルを変える、checkout する、コミットする、のどれもしません。
 - **`git stash` を使わない。** stash の置き場所はすべての作業ツリーで共有なので、ほかの人の stash を取り出してしまいます。作業を一時的によけたいときは、作業用のコミットを作ります。
-- **push の前に main を取り込む。** main に push する前に `git pull --rebase origin main` をして、テストを流し直します。自分が書いていない変更がコミットに混ざっていないかを、`git status` と `git diff --cached` で確かめます。
+- **PR を出す前に main を取り込む。** `git pull --rebase origin main` をして、テストを流し直します。自分が書いていない変更がコミットに混ざっていないかを、`git status` と `git diff --cached` で確かめます。
 - **重い処理は全員で同時に 1 つまで。** 並列の上限（コア数 − 2）は 1 人ぶんの上限です。`make verify` や `make difftest` を流す前に、`ps -o args= -C nvim | grep -c -E 'tests/(formal|diff)'` が 0 であることを確かめます（「重い処理」の節）。
 - **終わったら片付ける。** `git worktree remove .claude/worktrees/<名前>` で作業ツリーを消し、マージ済みのブランチを消します。
 - `.tests/`（mini.nvim、テストのキャッシュ、検査の結果）は作業ツリーごとにできるので、ほかの人の結果は混ざりません。テストの辞書や tmux のセッションも、一時ディレクトリや PID で分かれています。
