@@ -32,3 +32,11 @@ gh pr create -R kat0h/skkeleton.nvim -B formal-semantics -H formal-semantics/tas
 
 - main を取り込むときは merge を使います。
 - テストと探索では、一時ディレクトリの辞書だけを使います。シェルの履歴は `HISTFILE=/dev/null` にします。
+
+## ブランチ名の付け方（注意）
+
+git は `formal-semantics` と `formal-semantics/...` を同じリポジトリに置けません（ref のディレクトリ衝突）。そのため、タスクのブランチは <code>formal-semantics-task-&lt;名前&gt;</code> にします。区切りの `/` を `-` にしただけです。
+
+```sh
+git worktree add -b formal-semantics-task-00-scaffold .claude/worktrees/<作業者>-00-scaffold origin/formal-semantics
+```
