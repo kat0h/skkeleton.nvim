@@ -18,7 +18,7 @@
 | N_OFF | Vim のモードが n。`g:skkeleton#enabled` が偽で、state は input:direct、pre-edit は無い |
 | N_WAIT | Vim のモードが n。`ModeChanged` が作った `SafeState` の one-shot がまだ残っている |
 | N_LOST | normal（または visual）へ移ったあと、state か pre-edit が残っている。今回の観測では見ていない（unknown） |
-| V_PRE | Vim のモードが v / s。pre-edit がまだ描かれている。`ModeChanged` の確定が走る前の一瞬だけ（観測では `ModeChanged` の時点で既に空だった） |
+| V_PRE | Vim のモードが v / s。pre-edit がまだ描かれている。`ModeChanged` の確定が走る前の一瞬。ダブルクリックでは 1 回目の押下の `CursorMovedI` が先に確定するので空になるが、ドラッグでは `ModeChanged` の時点で pre-edit が残っていた（O10） |
 | I_DIRECT | Vim のモードが i。state は input:direct（かなを直接書く。`▽` は無い） |
 | I_POINT | Vim のモードが i。state は input:okurinasi（`▽...`） |
 | I_SELECT | Vim のモードが i。state は henkan（`▼...`） |
@@ -36,7 +36,7 @@
 
 ## 登録される autocmd の全体
 
-コード上の `nvim_create_autocmd` の呼び出しは 14 か所です。`setup()`、有効化、インジケータ有効の状態で 33 個の autocmd が登録され、辞書登録の `input()` と `keepState` の経路で 3 個増えます（36 個）。
+コード上の `nvim_create_autocmd` の呼び出しは 14 か所です。`setup()`、有効化、インジケータ有効の状態で 33 個の autocmd が登録されます（`skkeleton-internal` 10、`skkeleton-completion` 5、`skkeleton-indicator` 18）。このほかに、動的に作られるものが 4 個あります（`SafeState`、`WinEnter`、`CmdlineEnter`、`InsertEnter`）。動的なものは一時的にしか存在しないので、同時に 37 個になるとは限りません。
 
 | # | グループ | イベント | 作る場所 | いつ作るか |
 |---|---|---|---|---|
@@ -65,7 +65,7 @@
 | 2 | `^i` | `^R` | `reset` | I_DIRECT / I_POINT / I_SELECT → R_MID | `host.is_in_input()` が偽なら、`commit_preedit("insert")`（カーソルを確定文字の後ろへ）、`reset_state`、`restore_mapping` | 183、207–214 行 | O3 |
 | 3 | `^ni` | `^i` | `stale` | NI → I_DIRECT / I_POINT | `reset_if_stale("i")`。カーソルだけがずれていれば `commit_preedit()`、それ以外はずれなら `drop`（読みは確定しない）、`clear_extmark`、`reset_state`、`render`。`restore_mapping` はしない（有効なまま） | 185、215–217 行 | O4、O5 |
 | 4 | `.*` | `^n` | `safe_reset` | すべて → N_OFF / N_WAIT | state が escape で `host.is_in_input()` が偽なら、その場で `reset_state`（218–221 行）。そうでなければ `SafeState` の one-shot を作る（225–248 行）。one-shot は、そのときのモードが i / c / t でなく、ni / nt でもなく、`host.is_in_input()` でもないときに、`old_mode` の先頭が `i` なら `commit_preedit("normal")` をして `reset_state`、`restore_mapping`（224、230–246 行） | 187、218–248 行 | timing |
-| 5 | `^c` | `^[^ictn]` | `safe_reset` | C_DIRECT / C_POINT / C_REPLACE → V_PRE / R / operator-pending | 規則 4 の `safe_reset` と同じ分岐（state が escape ならその場で `reset_state`、そうでなければ `SafeState` の one-shot。`commit` は偽） | 189、218–248 行 | timing、O11 |
+| 5 | `^c` | `^[^ictn]` | `safe_reset` | C_DIRECT / C_POINT / C_REPLACE → V_PRE / R（operator-pending の `no` は先に規則 4 が当たる） | 規則 4 の `safe_reset` と同じ分岐（state が escape ならその場で `reset_state`、そうでなければ `SafeState` の one-shot。`commit` は偽） | 189、218–248 行 | timing、O11 |
 
 補足:
 
@@ -128,7 +128,7 @@
 
 | 効く状態 | 何をするか | 根拠 | 印・観測 |
 |---|---|---|---|
-| すべて（ただし `host.is_in_input()` の間は除く） | cmdline なら `clean_cmdline`、`reset_state`、`restore_mapping`。読みは確定しない（`drop`） | `cleanup.lua:269-281` | O13（`new` で確かめた）。同じ形の報告が #169 |
+| すべて（ただし `host.is_in_input()` の間は除く） | cmdline なら `clean_cmdline`。そのあと `reset_state` を常にし、`restore_mapping` は有効なときだけ（`host.disable()` は無効ならすぐ返る）。読みは確定しない（`drop`）。バッファの文字は変えない | `cleanup.lua:269-281`、`host.lua:22-25` | O13（`new`、`enew` で確かめた）。同じ形の報告が #169 |
 
 ## VimLeavePre
 
@@ -154,7 +154,7 @@ API はすべて `M.handle(func, opts)` を通ります（146–184 行）。`ha
 
 ## 辞書登録（`host.input()`）の autocmd
 
-`host.input()` は、辞書登録のプロンプトの間だけ、次の 3 つの autocmd を作ります。
+`host.input()` は、辞書登録のプロンプトの間だけ `WinEnter` と `CmdlineEnter` を作ります。`InsertEnter` は `keepState` の経路（`function/disable.lua` の `escape`）で作られます。
 
 | autocmd | 効く状態 | 何をするか | 根拠 | 印・観測 |
 |---|---|---|---|---|
@@ -264,7 +264,7 @@ normal で `:`、cmdline で有効化、`;ka`、`<Esc>`。
 normal で `:`、cmdline で有効化、`;ka`、`<C-c>`。
 
 - 後: モード n、enabled=false、preedit=""、`: ` の履歴は空（マーカーを含む項目ごと消えた）。
-- `CmdlineLeave` が `clean_cmdline` と `reset_state` をし、`ModeChanged`（c→n）の規則 4 の one-shot が `reset_state` と `disable` をした。
+- `CmdlineLeave` が `clean_cmdline` と cmdline の記録の `reset` をし、`ModeChanged`（c→n）の規則 4 の one-shot が `reset_state` と `disable` をした。
 
 ### O10. insert からマウスで visual へ
 
@@ -272,7 +272,8 @@ normal で `:`、cmdline で有効化、`;ka`、`<C-c>`。
 
 - 前: モード i、preedit=▽かんじ。
 - 後: モード v、enabled=false、バッファは `hello worldかんじ`、preedit=""。
-- `ModeChanged`（i→v、規則 1）で `commit_preedit()`（カーソルは動かさない）、`reset_state`、`disable`。
+- 1 回目の押下でカーソルが動き、`CursorMovedI` の `reset_if_stale` が先に `commit_preedit()` をした（この時点ではまだ enabled=true）。そのあとの `ModeChanged`（i→v、規則 1）は、確定する pre-edit がもう無い状態で `reset_state` と `disable` をした。
+- 押下でカーソルが動かないときは、`ModeChanged`（i→v、規則 1）の時点で pre-edit が残っている。ドラッグ（押下・移動・離す）では、`ModeChanged` の `commit_preedit()`（カーソルは動かさない）が確定し、そのあと `reset_state` と `disable` をした（別の観測）。
 - pre-edit が無いときも同じダブルクリックで i→v になり、enabled=false になった。
 
 ### O11. visual から入った cmdline で有効化して `<Esc>`
@@ -320,6 +321,14 @@ insert で有効化、`;ka`、`qa!`。
 
 `nvim_create_autocmd` を包んで呼び出しを記録し、`setup()` と有効化のあとに `nvim_get_autocmds` で `skkeleton-*` のグループを読むと、33 個（`skkeleton-internal` 10、`skkeleton-completion` 5、`skkeleton-indicator` 18）だった。辞書登録の `input()` の間は `skkeleton-host-input` に `WinEnter` が 1 つ増え、`keepState` の `<Esc>` のあとは `skkeleton` に `InsertEnter` が 1 つ増えた。
 
+### O18. 検算（ダブルクリックとドラッグ、`<C-o>x`、`enew`）
+
+- ダブルクリック（`set mouse=a`、`hello world` の末尾で `;kanji`）: `CursorMovedI` のあとに `ModeChanged`（i→v）が来た。`CursorMovedI` の時点（skel の callback のあと）には pre-edit は空だった。確定は 1 回目の押下の `CursorMovedI` で起き、`ModeChanged` では確定する pre-edit がもう無い。
+- ドラッグ（押下・移動・離す）: skel の `ModeChanged` callback より前に読むと、i→v の時点で pre-edit がまだ `▽かんじ` だった。そのあと確定して disabled になった。
+- `<C-o>x`（`abc` の末尾で `Kan`、pre-edit は `▽かn`）: バッファは `ab`、preedit=""、enabled=true。読みは確定しない。
+- `enew`（`one` の行で `Kan`）: 元のバッファは `one` のまま。enabled=false、preedit=""。
+- `nvim_get_autocmds` で数えると、常設は 33 個（internal 10、completion 5、indicator 18）。`SafeState`、`WinEnter`、`CmdlineEnter`、`InsertEnter` は動的で、同時に 4 つそろうとは限らない。
+
 ## 今の振る舞いのまとめ
 
 - 読みが確定する道は、`<Esc>`（キーの処理）、`commit_preedit` を呼ぶ道（規則 1・2、規則 3 のカーソルだけのずれ、SafeState の one-shot で old が i のとき）、`disable` API です。
@@ -342,5 +351,5 @@ insert で有効化、`;ka`、`qa!`。
 
 - `IC`（補完のメニューが開いている状態）と、その中の `CompleteDone` / `TextChangedP` は blink.cmp が無いため観測していません。
 - `R_MID`（`<Insert>` による i→R の移り変わりの途中）と `N_LOST` は観測で作れませんでした。
-- `V_PRE` は `ModeChanged` の確定より前の一瞬で、観測では `ModeChanged` の時点で既に pre-edit が消えていました。
+- `V_PRE` は `ModeChanged` の確定より前の一瞬です。ダブルクリックでは 1 回目の押下の `CursorMovedI` が先に確定するため、`ModeChanged` の時点で pre-edit は空でした。ドラッグでは `ModeChanged` の時点で残っていました（O18）。
 - upstream（denops 版）との比較はしていません。この表は Lua 版のコードと観測だけです。
