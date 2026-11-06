@@ -120,6 +120,16 @@ local function validate()
       table.insert(errors, ("M.known の遷移が無い: %s"):format(k.transition))
     end
   end
+  -- gap は「今の振る舞いが性質を破っている」遷移だけ。破れを M.known に書いていなければ失敗にする
+  local known_transitions = {}
+  for _, k in ipairs(model.known or {}) do
+    known_transitions[k.transition] = true
+  end
+  for _, t in ipairs(model.transitions) do
+    if t.status == "gap" and not known_transitions[t.id] then
+      table.insert(errors, ("%s: gap だが M.known に無い（破っている性質と issue を書く）"):format(t.id))
+    end
+  end
   return errors
 end
 
@@ -645,6 +655,58 @@ local function replay_replays()
   return out
 end
 
+-- observed は「その遷移を通った観測」だけを指す。終わりのクラスが合っていても、
+-- 再生の経路がその遷移を通らなければ取り違えなので失敗にする（#204 のレビュー 1）。
+local function check_observed_paths()
+  local observations = {}
+  for _, obs in ipairs(model.observations) do
+    observations[obs.id] = obs
+  end
+  local bad = {}
+  for _, t in ipairs(model.transitions) do
+    for _, oid in ipairs(t.observed or {}) do
+      local obs = observations[oid]
+      if not obs then
+        table.insert(bad, { transition = t.id, observed = oid, why = "M.observations に無い" })
+      else
+        local config = copy(model.config)
+        for k, v in pairs(obs.config or {}) do
+          config[k] = v
+        end
+        local paths, bad_key = run_keys(obs.keys, config)
+        if not paths then
+          table.insert(bad, {
+            transition = t.id,
+            observed = oid,
+            why = ("キー %s を処理できない"):format(bad_key),
+          })
+        else
+          local hit = false
+          for _, path in ipairs(paths) do
+            for _, id in ipairs(path.trail) do
+              if id == t.id then
+                hit = true
+                break
+              end
+            end
+            if hit then
+              break
+            end
+          end
+          if not hit then
+            table.insert(bad, {
+              transition = t.id,
+              observed = oid,
+              why = "再生の経路がその遷移を通らない",
+            })
+          end
+        end
+      end
+    end
+  end
+  return bad
+end
+
 -- ---------------------------------------------------------------------------
 -- 表示
 
@@ -850,6 +912,9 @@ local function main(argv)
       loose,
       ng_count
     ))
+    for _, b in ipairs(check_observed_paths()) do
+      fail(("observed の取り違え %s ← %s: %s"):format(b.transition, b.observed, b.why))
+    end
   end
 
   -- NOTES の再現

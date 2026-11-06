@@ -23,6 +23,8 @@ N_OFF、N_WAIT、N_LOST、V_PRE、I_DIRECT、I_POINT、I_SELECT、I_ESCAPE、I_P
 
 粒度は観測で決めます。同じクラスで同じイベントなのに結果が割れたら、クラスを分けます。いつも同じ結果になるクラスはまとめます。
 
+`V_PRE` は、events.md では「visual / select で pre-edit がまだ描かれている、`ModeChanged` の確定が走る前の一瞬」です。ドラッグでは `ModeChanged` の時点で pre-edit が残っていました（O18）。一方、`<C-o>v` のあと visual の間ずっと pre-edit が残る状態も、観測の classify は `V_PRE` と呼びます。同じ `V_PRE` に 2 つの意味があるので、どちらに合わせるかは #179 で決めます。
+
 ## effects の語彙
 
 遷移の結果（効果）を書くときの動詞です。各タスクは、同じ語で同じ効果を表します。
@@ -44,9 +46,9 @@ N_OFF、N_WAIT、N_LOST、V_PRE、I_DIRECT、I_POINT、I_SELECT、I_ESCAPE、I_P
 
 モデルと観測を突き合わせたときの一致の度合いです。
 
-- `ok`：モデルどおり
-- `gap`：モデルに書いていない遷移が観測で見つかった
-- `unknown`：まだ観測できていない
+- `ok`：モデルが今の振る舞いに合っている（コード読解か観測で確かめた）
+- `gap`：今の振る舞いが性質（P1 など）を破っている（モデルの `M.known` に issue を書く）
+- `unknown`：まだ確かめていない
 - `impossible`：起こり得ない遷移
 
 ## 性質

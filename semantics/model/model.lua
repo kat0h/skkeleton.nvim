@@ -25,12 +25,13 @@
 -- effects は GLOSSARY の語彙だけを使う。語彙に無い効果は notes に書く。
 --
 -- status:
---   ok        モデルと観測が一致した
---   gap       モデルに書いたが、今の振る舞いが性質を破っている（issue がある）
---   unknown   まだ観測できていない（コード読解だけ）
+--   ok        モデルが今の振る舞いに合っている（コード読解か観測で確かめた）
+--   gap       今の振る舞いが性質を破っている（M.known に issue を書く）
+--   unknown   まだ確かめていない（コード読解だけ、または未観測）
 --   impossible 起こり得ない（BFS で到達しないことを確かめる対象）
 --
 -- observed: 根拠の観測。M.observations の id を書く。空なら未観測。
+--   その遷移を通った観測だけを書く（model_check が再生の経路で確かめる）。
 --
 -- 観測の取り方:
 --   子の nvim（tests/helpers.lua の e2e_set、一時ディレクトリの辞書、HISTFILE=/dev/null）に、
@@ -263,7 +264,9 @@ M.states = {
     reading = "point",
     preedit = "point",
     label = "visual（▽ 付き）",
-    refs = { "cleanup.lua:179-190", "#169" },
+    refs = { "cleanup.lua:179-190" },
+    notes = "events.md の V_PRE は ModeChanged の確定が走る前の一瞬（ドラッグでは O18 の時点で pre-edit が残る）。"
+      .. "ここは <C-o>v のあと visual の間ずっと pre-edit が残る安定した状態で、同じ V_PRE でも意味が違う（M.proposals 10）。",
   },
   V_PRE_SELECT = {
     class = "V_PRE",
@@ -274,7 +277,9 @@ M.states = {
     reading = "henkan",
     preedit = "henkan",
     label = "visual（▼ 付き）",
-    refs = { "cleanup.lua:179-190", "#169" },
+    refs = { "cleanup.lua:179-190" },
+    notes = "events.md の V_PRE は ModeChanged の確定が走る前の一瞬（ドラッグでは O18 の時点で pre-edit が残る）。"
+      .. "ここは <C-o>v のあと visual の間ずっと pre-edit が残る安定した状態で、同じ V_PRE でも意味が違う（M.proposals 10）。",
   },
   R_MID = {
     class = "R_MID",
@@ -456,7 +461,7 @@ M.events = {
     kind = "key",
     keys = { "<Esc>", "<C-[>" },
     modes = { "i", "n", "v", "R", "ic" },
-    refs = { "keymap.lua:31", "function/disable.lua:21-27", "cleanup.lua:192-251", "#86", "#169" },
+    refs = { "keymap.lua:31", "function/disable.lua:21-27", "cleanup.lua:192-251", "#86" },
     notes = "insert では keymap の escape。cmdline から visual へ戻るときなどは ModeChanged の規則 5。",
   },
   insert_key = {
@@ -556,20 +561,20 @@ M.events = {
     kind = "key",
     keys = { "<C-o>:", "<C-o>:<Esc>", "<C-o>:<CR>" },
     modes = { "i" },
-    refs = { "cleanup.lua:254-266", "#86", "#169" },
+    refs = { "cleanup.lua:254-266", "#86" },
     notes = "cmdline の中は #187（07a）。ここでは戻ったときの insert の状態だけを書く。",
   },
   ctrl_o_v = {
     kind = "key",
     keys = { "<C-o>v", "<C-o>V", "<C-o><C-v>" },
     modes = { "i" },
-    refs = { "cleanup.lua:179-190", "#169" },
+    refs = { "cleanup.lua:179-190" },
   },
   ctrl_o_R = {
     kind = "key",
     keys = { "<C-o>R" },
     modes = { "i" },
-    refs = { "cleanup.lua:179-190", "#169" },
+    refs = { "cleanup.lua:179-190" },
   },
   guard_special = {
     kind = "key",
@@ -588,13 +593,14 @@ M.events = {
     kind = "input",
     keys = { "<LeftMouse>", "<RightMouse>", "<DragRight>" },
     modes = { "i" },
-    refs = { "keys.md §5", "#56", "#169" },
+    refs = { "keys.md §5", "#56" },
   },
   mouse_select = {
     kind = "input",
     keys = { "<2-LeftMouse>", "<3-LeftMouse>" },
     modes = { "i" },
-    refs = { "cleanup.lua:179-190", "events.md O10", "#169" },
+    refs = { "cleanup.lua:179-190", "events.md O10", "events.md O18" },
+    notes = "ダブルクリックは 1 回目の押下の CursorMovedI が先に確定する。ドラッグでは ModeChanged の時点で pre-edit が残る（O18）。",
   },
   wheel = {
     kind = "input",
@@ -670,7 +676,7 @@ M.events = {
     kind = "api",
     keys = { ":stopinsert" },
     modes = { "i" },
-    refs = { "cleanup.lua:187,225-248", "#169" },
+    refs = { "cleanup.lua:187,225-248", "#70" },
   },
   insert_enter = {
     kind = "autocmd",
@@ -726,7 +732,8 @@ add({
   id = "t.N_OFF.toggle",
   from = "N_OFF", event = "toggle", to = "I_DIRECT",
   effects = { "reset_state" },
-  status = "ok", refs = { "main.lua:169-175" }, observed = { "O15" },
+  status = "unknown", refs = { "main.lua:169-175" },
+  notes = "events.md O15 は API の観測で、キー列では toggle を再生できない。",
 })
 add({
   id = "t.I_OFF.toggle",
@@ -762,7 +769,8 @@ add({
   id = "t.I_DIRECT.disable",
   from = "I_DIRECT", event = "disable", to = "I_OFF",
   effects = { "restore_mapping", "reset_state", "clear_extmark" },
-  status = "ok", refs = { "main.lua:129-139", "function/disable.lua:13-18" }, observed = { "O15" },
+  status = "unknown", refs = { "main.lua:129-139", "function/disable.lua:13-18" },
+  notes = "events.md O15 は API の観測で、キー列では disable を再生できない。",
 })
 add({
   id = "t.I_PENDING.disable",
@@ -774,7 +782,8 @@ add({
   id = "t.I_POINT.disable",
   from = "I_POINT", event = "disable", to = "I_OFF",
   effects = { "commit_reading", "restore_mapping", "reset_state", "clear_extmark" },
-  status = "ok", refs = { "main.lua:129-139", "function/disable.lua:13-18" }, observed = { "O15" },
+  status = "unknown", refs = { "main.lua:129-139", "function/disable.lua:13-18" },
+  notes = "events.md O15 は API の観測で、キー列では disable を再生できない。",
 })
 add({
   id = "t.I_SELECT.disable",
@@ -871,7 +880,8 @@ add({
   id = "t.I_OFF.esc",
   from = "I_OFF", event = "esc", to = "N_OFF",
   effects = { "pass_key" },
-  status = "ok", refs = { "Vim 本体" }, observed = { "O-esc-then-i" },
+  status = "unknown", refs = { "Vim 本体" },
+  notes = "insert で無効のときの <Esc>。今の観測では、i で入ったあとの <Esc> を取っていない。",
 })
 add({
   id = "t.R_OFF.esc",
@@ -895,7 +905,8 @@ add({
   id = "t.I_OFF.insert_key",
   from = "I_OFF", event = "insert_key", to = "R_OFF",
   effects = { "pass_key" },
-  status = "ok", refs = { "Vim 本体" }, observed = { "O-insert-twice" },
+  status = "unknown", refs = { "Vim 本体" },
+  notes = "O-insert-twice の 2 回目の <Insert> は R_OFF からで、I_OFF からは打っていない。",
 })
 add({
   id = "t.R_OFF.insert_key",
@@ -907,11 +918,14 @@ add({
 -- insert から normal へ（<C-c> / :stopinsert / マウスで選択 / WinLeave / BufLeave）
 for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
   local has_reading = from ~= "I_DIRECT"
+  -- O-ctrlc は I_SELECT に届かない。P1 の破れ（読みを捨てる）は読みを持つ状態だけ。
+  local leave_status = has_reading and "gap" or "unknown"
   add({
     id = "t." .. from .. ".ctrl_c",
     from = from, event = "ctrl_c", to = "N_WAIT",
     effects = {},
-    status = "ok", refs = { "cleanup.lua:187,225-248", "#70", "#142" }, observed = { "O-ctrlc" },
+    status = "ok", refs = { "cleanup.lua:187,225-248", "#70", "#142" },
+    observed = from ~= "I_SELECT" and { "O-ctrlc" } or {},
     notes = "ModeChanged が SafeState の one-shot を作るだけ。確定は safestate の遷移で起きる。",
   })
   add({
@@ -919,28 +933,30 @@ for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
     from = from, event = "stopinsert", to = "N_OFF",
     effects = has_reading and { "commit_reading", "reset_state", "restore_mapping", "clear_extmark" }
       or { "reset_state", "restore_mapping", "clear_extmark" },
-    status = "ok", refs = { "cleanup.lua:187,225-248", "#169" },
+    status = "ok", refs = { "cleanup.lua:187,225-248", "#70" },
   })
   add({
     id = "t." .. from .. ".mouse_select",
     from = from, event = "mouse_select", to = "N_OFF",
     effects = has_reading and { "commit_reading", "reset_state", "restore_mapping", "clear_extmark" }
       or { "reset_state", "restore_mapping", "clear_extmark" },
-    status = "ok", refs = { "cleanup.lua:179-190", "events.md O10", "#169" }, observed = { "O10" },
-    notes = "i から visual への直接の遷移（マウスで選択）。読みを確定してから無効化する。",
+    status = "unknown", refs = { "cleanup.lua:179-190", "events.md O10", "events.md O18" },
+    notes = "i から visual への直接の遷移（マウスで選択）。読みを確定してから無効化する。"
+      .. "ドラッグでは ModeChanged の時点で pre-edit が残る（O18）。04 の観測はマウスを使っていない。",
   })
   add({
     id = "t." .. from .. ".winleave",
     from = from, event = "winleave", to = "N_OFF",
     effects = { "drop", "reset_state", "restore_mapping", "clear_extmark" },
-    status = "gap", refs = { "cleanup.lua:269-281", "#169" }, observed = { "O13" },
-    notes = "読みを確定せずに捨てる。upstream は pre-edit が本物の文字なので残る。",
+    status = leave_status, refs = { "cleanup.lua:269-281", "#169", "events.md O13" },
+    notes = "読みを確定せずに捨てる。upstream は pre-edit が本物の文字なので残る。"
+      .. "events.md O13 の観測は WinLeave そのもの（キー列は記録に無い）。",
   })
   add({
     id = "t." .. from .. ".bufleave",
     from = from, event = "bufleave", to = "N_OFF",
     effects = { "drop", "reset_state", "restore_mapping", "clear_extmark" },
-    status = "gap", refs = { "cleanup.lua:269-281", "#169" },
+    status = leave_status, refs = { "cleanup.lua:269-281", "#169" },
   })
 end
 add({
@@ -958,8 +974,11 @@ for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
     from = from, event = "insert_key", to = "R_MID",
     effects = from == "I_SELECT" and { "commit_candidate", "clear_extmark" }
       or from ~= "I_DIRECT" and { "commit_reading", "clear_extmark" } or { "clear_extmark" },
-    status = "ok", refs = { "cleanup.lua:183,207-214", "#29", "#156" }, observed = { "O-insert" },
-    notes = "ModeChanged の規則 2。置換モードでは確定した文字の後ろへカーソルを移す。",
+    status = from ~= "I_SELECT" and "ok" or "unknown",
+    refs = { "cleanup.lua:183,207-214", "#29", "#156" },
+    observed = from ~= "I_SELECT" and { "O-insert" } or {},
+    notes = "ModeChanged の規則 2。置換モードでは確定した文字の後ろへカーソルを移す。"
+      .. "O-insert は ▽ から打っていて、▼ からは打っていない。",
   })
 end
 add({
@@ -1003,15 +1022,21 @@ for _, from in ipairs({ "NI_DIRECT", "NI_POINT", "NI_SELECT" }) do
     id = "t." .. from .. ".return_commit",
     from = from, event = "ni_return_commit", to = "I_DIRECT",
     effects = commit and { commit, "reset_state", "render" } or { "reset_state", "render" },
-    status = "ok", refs = { "cleanup.lua:120-147,215-217", "#117" }, observed = { "O4", "O-ctrl-o-l" },
-    notes = "カーソルだけがずれたとき。pre-edit の位置に確定する（カーソルは動かさない）。",
+    status = from ~= "NI_SELECT" and "ok" or "unknown",
+    refs = { "cleanup.lua:120-147,215-217", "#117" },
+    observed = from ~= "NI_SELECT" and { "O4" } or {},
+    notes = "カーソルだけがずれたとき。pre-edit の位置に確定する（カーソルは動かさない）。"
+      .. "O4 の <C-o>0 は niI から戻る。O-ctrl-o-l は keep の道を通るのでここでは使わない。",
   })
   add({
     id = "t." .. from .. ".return_drop",
     from = from, event = "ni_return_drop", to = "I_DIRECT",
     effects = { "drop", "reset_state", "clear_extmark", "render" },
-    status = "gap", refs = { "cleanup.lua:120-147,215-217", "#199" }, observed = { "O5", "O-ctrl-o-x" },
-    notes = "カーソル以外のずれ（バッファが変わった）。読みは確定せずに捨てる。",
+    status = from ~= "NI_DIRECT" and "gap" or "unknown",
+    refs = { "cleanup.lua:120-147,215-217", "#199" },
+    observed = from ~= "NI_SELECT" and { "O5", "O-ctrl-o-x" } or {},
+    notes = "カーソル以外のずれ（バッファが変わった）。読みは確定せずに捨てる。"
+      .. "O5 / O-ctrl-o-x は ▽ から打っていて、▼ からは打っていない。",
   })
 end
 add({
@@ -1037,21 +1062,24 @@ add({
   id = "t.NI_DIRECT.visual",
   from = "NI_DIRECT", event = "ctrl_o_v", to = "V_IDLE",
   effects = { "keep" },
-  status = "ok", refs = { "cleanup.lua:179-190", "#169" }, observed = { "O-ctrl-o-v-direct" },
-  notes = "<C-o>v を direct から。visual の間は pre-edit が無く、skk は有効のまま。",
+  status = "unknown", refs = { "cleanup.lua:179-190" },
+  notes = "<C-o>v を direct から。visual の間は pre-edit が無く、skk は有効のまま。"
+    .. "O-ctrl-o-v-direct は <C-o>v を 1 つのキーとして I_DIRECT から通るので、niI 経由は未観測。",
 })
 add({
   id = "t.NI_POINT.visual",
   from = "NI_POINT", event = "ctrl_o_v", to = "V_PRE_POINT",
   effects = { "keep", "render" },
-  status = "gap", refs = { "cleanup.lua:179-190", "#169" }, observed = { "O-ctrl-o-v" },
-  notes = "MODE_TRANSITIONS が niI からの移り先を見ていないので、visual の間も pre-edit が描かれたまま残る。",
+  status = "unknown", refs = { "cleanup.lua:179-190" },
+  notes = "MODE_TRANSITIONS が niI からの移り先を見ていないので、visual の間も pre-edit が描かれたまま残る。"
+    .. "P1 などは破らない（読みは残る）。niI 経由の観測は無い。",
 })
 add({
   id = "t.NI_SELECT.visual",
   from = "NI_SELECT", event = "ctrl_o_v", to = "V_PRE_SELECT",
   effects = { "keep", "render" },
-  status = "gap", refs = { "cleanup.lua:179-190", "#169" },
+  status = "unknown", refs = { "cleanup.lua:179-190" },
+  notes = "▼ から niI を経て visual へ。pre-edit は残るが、P1 などは破らない。観測は無い。",
 })
 add({
   id = "t.I_DIRECT.ctrl_o_v",
@@ -1064,26 +1092,30 @@ add({
   id = "t.I_POINT.ctrl_o_v",
   from = "I_POINT", event = "ctrl_o_v", to = "V_PRE_POINT",
   effects = { "keep", "render" },
-  status = "gap", refs = { "cleanup.lua:179-190", "#169" }, observed = { "O-ctrl-o-v" },
+  status = "ok", refs = { "cleanup.lua:179-190" }, observed = { "O-ctrl-o-v" },
+  notes = "pre-edit が残ったまま visual に入る。読みは捨てないので P1 は破らない。",
 })
 add({
   id = "t.I_SELECT.ctrl_o_v",
   from = "I_SELECT", event = "ctrl_o_v", to = "V_PRE_SELECT",
   effects = { "keep", "render" },
-  status = "gap", refs = { "cleanup.lua:179-190", "#169" },
+  status = "unknown", refs = { "cleanup.lua:179-190" },
+  notes = "▼ から <C-o>v。pre-edit は残るが、P1 などは破らない。観測は無い。",
 })
 add({
   id = "t.NI_DIRECT.replace",
   from = "NI_DIRECT", event = "ctrl_o_R", to = "R_OFF",
   effects = { "reset_state", "restore_mapping", "clear_extmark" },
-  status = "ok", refs = { "cleanup.lua:179-190", "#169" }, observed = { "O-ctrl-o-R" },
+  status = "unknown", refs = { "cleanup.lua:179-190" },
+  notes = "O-ctrl-o-R は <C-o>R を 1 つのキーとして I_POINT から通るので、niI 経由は未観測。",
 })
 add({
   id = "t.NI_POINT.replace",
   from = "NI_POINT", event = "ctrl_o_R", to = "R_OFF",
   effects = { "commit_reading", "reset_state", "restore_mapping", "clear_extmark" },
-  status = "ok", refs = { "cleanup.lua:179-190", "#169" }, observed = { "O-ctrl-o-R" },
-  notes = "観測では読みを確定して無効化した（data.js は pre-edit が残るとしていたが、再現しなかった）。",
+  status = "unknown", refs = { "cleanup.lua:179-190" },
+  notes = "O-ctrl-o-R は I_POINT から 1 キーで通る。niI 経由は未観測。"
+    .. "観測では読みを確定して無効化した（data.js は pre-edit が残るとしていたが、再現しなかった）。",
 })
 add({
   id = "t.NI_SELECT.replace",
@@ -1101,7 +1133,7 @@ add({
   id = "t.I_POINT.ctrl_o_R",
   from = "I_POINT", event = "ctrl_o_R", to = "R_OFF",
   effects = { "commit_reading", "reset_state", "restore_mapping", "clear_extmark" },
-  status = "ok", refs = { "cleanup.lua:179-190", "#169" }, observed = { "O-ctrl-o-R" },
+  status = "ok", refs = { "cleanup.lua:179-190" }, observed = { "O-ctrl-o-R" },
 })
 add({
   id = "t.I_SELECT.ctrl_o_R",
@@ -1125,7 +1157,8 @@ add({
   id = "t.NI_DIRECT.winleave",
   from = "NI_DIRECT", event = "winleave", to = "N_OFF",
   effects = { "reset_state", "restore_mapping", "clear_extmark" },
-  status = "gap", refs = { "cleanup.lua:269-281", "#169" },
+  status = "unknown", refs = { "cleanup.lua:269-281", "#169" },
+  notes = "読みが無いので drop は起きない。P1 は破らない。",
 })
 
 -- visual から戻る・抜ける
@@ -1133,14 +1166,14 @@ add({
   id = "t.V_IDLE.esc",
   from = "V_IDLE", event = "esc", to = "I_DIRECT",
   effects = { "keep" },
-  status = "ok", refs = { "cleanup.lua:192-251" }, observed = { "O-ctrl-o-v-direct" },
+  status = "ok", refs = { "cleanup.lua:192-251" }, observed = { "O-ctrl-o-v-direct-esc" },
   notes = "<C-o>v で入った visual を <Esc> で抜けると insert に戻る。skk は有効のまま。",
 })
 add({
   id = "t.V_PRE_POINT.esc",
   from = "V_PRE_POINT", event = "esc", to = "I_POINT",
   effects = { "keep", "render" },
-  status = "ok", refs = { "cleanup.lua:192-251", "#169" }, observed = { "O-ctrl-o-v" },
+  status = "ok", refs = { "cleanup.lua:192-251" }, observed = { "O-ctrl-o-v-esc" },
   notes = "観測では pre-edit を保ったまま insert に戻った（data.js の「抜けると確定」は再現しなかった）。",
 })
 add({
@@ -1165,7 +1198,8 @@ add({
   id = "t.V_IDLE.winleave",
   from = "V_IDLE", event = "winleave", to = "N_OFF",
   effects = { "reset_state", "restore_mapping", "clear_extmark" },
-  status = "gap", refs = { "cleanup.lua:269-281", "#169" },
+  status = "unknown", refs = { "cleanup.lua:269-281", "#169" },
+  notes = "読みが無いので drop は起きない。P1 は破らない。",
 })
 
 -- <C-o>: の戻り（cmdline の中は 07a）
@@ -1174,8 +1208,10 @@ for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
     id = "t." .. from .. ".ctrl_o_colon",
     from = from, event = "ctrl_o_colon", to = from,
     effects = { "keep", "clean_cmdline" },
-    status = "ok", refs = { "cleanup.lua:254-266", "#86" }, observed = { "O-ctrl-o-colon" },
-    notes = "<C-o>:<Esc> も <C-o>:<CR> も、戻ると pre-edit を保つ（観測）。cmdline の中は 07a。",
+    status = "ok", refs = { "cleanup.lua:254-266", "#86" },
+    observed = from == "I_SELECT" and { "O-ctrl-o-colon-cr-select" } or { "O-ctrl-o-colon" },
+    notes = "<C-o>:<Esc> も <C-o>:<CR> も、戻ると pre-edit を保つ（観測）。cmdline の中は 07a。"
+      .. "O-ctrl-o-colon は ▽ から、▼ からは O-ctrl-o-colon-cr-select で確かめた。",
   })
 end
 
@@ -1191,8 +1227,9 @@ add({
   id = "t.I_DIRECT.char.pending",
   from = "I_DIRECT", event = "char", to = "I_PENDING",
   effects = { "feed_key", "render" },
-  status = "ok", refs = { "function/input.lua:85-120" }, observed = { "O-k" },
-  notes = "ローマ字が続く（例: k）。打ちかけが pre-edit に出る。",
+  status = "unknown", refs = { "function/input.lua:85-120" },
+  notes = "ローマ字が続く（例: k）。打ちかけが pre-edit に出る。"
+    .. "O-k の K はシフト付き（char_shift）なので、小文字から始まる道は観測していない。",
 })
 add({
   id = "t.I_PENDING.char.keep",
@@ -1423,15 +1460,17 @@ add({
   id = "t.P_PROMPT.register_commit",
   from = "P_PROMPT", event = "register_commit", to = "I_DIRECT",
   effects = { "drop", "reset_state", "render" },
-  status = "ok", refs = { "host.lua:125-162", "events.md O12" }, observed = { "O12" },
-  notes = "語を登録して insert に戻る。読みはもう無い（登録した語は辞書に入る）。",
+  status = "unknown", refs = { "host.lua:125-162", "events.md O12" },
+  notes = "語を登録して insert に戻る。読みはもう無い（登録した語は辞書に入る）。"
+    .. "O12 はプロンプトに入るところまでで、<CR> の確定はキー列に無い。",
 })
 add({
   id = "t.P_PROMPT.register_cancel",
   from = "P_PROMPT", event = "register_cancel", to = "I_POINT",
   effects = { "keep", "render" },
-  status = "ok", refs = { "host.lua:166-169,197-204", "#116" }, observed = { "O12" },
-  notes = "取り消して、凍結していた外側の ▽ に戻る。▼ から入ったときは I_SELECT に戻る（未観測）。",
+  status = "unknown", refs = { "host.lua:166-169,197-204", "#116" },
+  notes = "取り消して、凍結していた外側の ▽ に戻る。▼ から入ったときは I_SELECT に戻る（未観測）。"
+    .. "O12 はプロンプトに入るところまでで、取り消しはキー列に無い。",
 })
 add({
   id = "t.P_PROMPT.winleave",
@@ -1572,7 +1611,8 @@ local function insert_control(id, event, refs, observed, notes)
       id = "t." .. from .. "." .. id,
       from = from, event = event, to = "I_DIRECT",
       effects = e, status = status,
-      refs = refs, observed = observed, notes = notes,
+      refs = refs, observed = from ~= "I_SELECT" and observed or {},
+      notes = notes,
     })
   end
 end
@@ -1602,8 +1642,11 @@ for _, from in ipairs({ "I_PENDING", "I_POINT", "I_SELECT" }) do
     id = "t." .. from .. ".ctrl_w.keep",
     from = from, event = "ctrl_w", to = from,
     effects = { "pass_key" },
-    status = "ok", refs = { "keys.md §6 補足" }, observed = { "O-ctrl-w-empty" },
-    notes = "バッファに消す文字が無いので、バッファも pre-edit も変わらない。",
+    status = from ~= "I_SELECT" and "ok" or "unknown",
+    refs = { "keys.md §6 補足" },
+    observed = from ~= "I_SELECT" and { "O-ctrl-w-empty" } or {},
+    notes = "バッファに消す文字が無いので、バッファも pre-edit も変わらない。"
+      .. "O-ctrl-w-empty は ▽ からで、▼ からは打っていない。",
   })
   add({
     id = "t." .. from .. ".ctrl_u.keep",
@@ -1619,8 +1662,10 @@ for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
     id = "t." .. from .. ".completion_accept",
     from = from, event = "completion_accept", to = from,
     effects = { "pass_key" },
-    status = "ok", refs = { "keys.md §6" }, observed = { "O-ctrl-y-e" },
-    notes = "補完のメニューが無いとき。pre-edit が残る（観測）。",
+    status = from ~= "I_SELECT" and "ok" or "unknown",
+    refs = { "keys.md §6" },
+    observed = from ~= "I_SELECT" and { "O-ctrl-y-e" } or {},
+    notes = "補完のメニューが無いとき。pre-edit が残る（観測）。O-ctrl-y-e は ▽ から。",
   })
 end
 
@@ -1680,14 +1725,15 @@ add({
   id = "t.IC.stale",
   from = "IC", event = "stale", to = "I_DIRECT",
   effects = { "reset_state" },
-  status = "ok", refs = { "cleanup.lua:283-286", "#190" }, observed = { "O16" },
-  notes = "CompleteDone / TextChangedP でずれを見る。",
+  status = "unknown", refs = { "cleanup.lua:283-286", "#190" },
+  notes = "CompleteDone / TextChangedP でずれを見る。O16 は 04 で取っていない。",
 })
 add({
   id = "t.IC.winleave",
   from = "IC", event = "winleave", to = "N_OFF",
   effects = { "drop", "reset_state", "restore_mapping", "clear_extmark" },
-  status = "gap", refs = { "cleanup.lua:269-281", "#169" },
+  status = "unknown", refs = { "cleanup.lua:269-281", "#169" },
+  notes = "読みが無い（IC）ので drop は起きない。P1 は破らない。",
 })
 
 -- guard が確定するキー・マウス・貼り付け
@@ -1703,8 +1749,10 @@ local function guard_event(event)
       id = "t." .. from .. "." .. event,
       from = from, event = event, to = "I_DIRECT",
       effects = e,
-      status = "ok", refs = { "guard.lua:50-85", "#56" }, observed = { "O-guard" },
-      notes = "pre-edit を確定してから、キーを insert のまま流す。",
+      status = from ~= "I_SELECT" and "ok" or "unknown",
+      refs = { "guard.lua:50-85", "#56" },
+      observed = from ~= "I_SELECT" and { "O-guard" } or {},
+      notes = "pre-edit を確定してから、キーを insert のまま流す。O-guard は ▽ からで、▼ からは打っていない。",
     })
   end
 end
@@ -1713,7 +1761,8 @@ add({
   id = "t.I_DIRECT.mouse_click",
   from = "I_DIRECT", event = "mouse_click", to = "I_DIRECT",
   effects = { "feed_key" },
-  status = "ok", refs = { "#56", "#169" }, observed = { "O-mouse" },
+  status = "unknown", refs = { "#56" },
+  notes = "同じウィンドウのクリック。04 の観測はマウスを使っていない。",
 })
 for _, from in ipairs({ "I_PENDING", "I_POINT", "I_SELECT" }) do
   add({
@@ -1721,8 +1770,8 @@ for _, from in ipairs({ "I_PENDING", "I_POINT", "I_SELECT" }) do
     from = from, event = "mouse_click", to = "I_DIRECT",
     effects = from == "I_SELECT" and { "commit_candidate", "reset_state", "feed_key", "clear_extmark" }
       or { "commit_reading", "reset_state", "feed_key", "clear_extmark" },
-    status = "ok", refs = { "#56", "#169" }, observed = { "O-mouse" },
-    notes = "同じウィンドウのクリックはカーソルが動くので、ずれの検出で確定する。",
+    status = "unknown", refs = { "#56" },
+    notes = "同じウィンドウのクリックはカーソルが動くので、ずれの検出で確定する。04 の観測はマウスを使っていない。",
   })
 end
 for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
@@ -1730,8 +1779,8 @@ for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
     id = "t." .. from .. ".wheel",
     from = from, event = "wheel", to = from,
     effects = { "pass_key" },
-    status = "ok", refs = { "guard.lua:59-61", "keys.md §5" }, observed = { "O-wheel" },
-    notes = "guard は確定しない。スクロールだけなので pre-edit が残る。",
+    status = "unknown", refs = { "guard.lua:59-61", "keys.md §5" },
+    notes = "guard は確定しない。スクロールだけなので pre-edit が残る。04 の観測は取っていない。",
   })
 end
 for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
@@ -1741,8 +1790,8 @@ for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
     effects = from == "I_SELECT" and { "commit_candidate", "reset_state", "clear_extmark" }
       or from ~= "I_DIRECT" and { "commit_reading", "reset_state", "clear_extmark" }
       or { "feed_key" },
-    status = "ok", refs = { "paste.lua:31-69", "#125" }, observed = { "O-paste" },
-    notes = "貼り付けの前に pre-edit を確定する（#125）。",
+    status = "unknown", refs = { "paste.lua:31-69", "#125" },
+    notes = "貼り付けの前に pre-edit を確定する（#125）。04 の観測は取っていない。",
   })
 end
 
@@ -1755,16 +1804,19 @@ for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
     effects = from == "I_SELECT" and { "commit_candidate", "reset_state", "render" }
       or from == "I_DIRECT" and { "render" }
       or { "commit_reading", "reset_state", "render" },
-    status = "ok", refs = { "cleanup.lua:120-147,283-286", "#117" }, observed = { "O4" },
-    notes = "カーソルだけがずれたとき（CursorMovedI）。pre-edit の位置に確定する。",
+    status = "unknown", refs = { "cleanup.lua:120-147,283-286", "#117" },
+    notes = "カーソルだけがずれたとき（CursorMovedI）。pre-edit の位置に確定する。"
+      .. "O4 の <C-o>0 は niI から戻る道で、CursorMovedI の観測ではない。",
   })
   add({
     id = "t." .. from .. ".stale.buffer",
     from = from, event = "stale", to = "I_DIRECT",
     guard = { { "reading", "in", { "romaji", "point", "henkan" } } },
     effects = { "drop", "reset_state", "clear_extmark", "render" },
-    status = "gap", refs = { "cleanup.lua:120-147,283-286", "#8", "#12", "#199" },
-    notes = "バッファが変わったとき（TextChangedI / on_bytes）。読みは確定せずに捨てる。",
+    status = from ~= "I_DIRECT" and "gap" or "unknown",
+    refs = { "cleanup.lua:120-147,283-286", "#8", "#12", "#199" },
+    notes = "バッファが変わったとき（TextChangedI / on_bytes）。読みは確定せずに捨てる。"
+      .. "I_DIRECT は読みが無いので P1 は破らない。",
   })
   add({
     id = "t." .. from .. ".stale.none",
@@ -2530,6 +2582,16 @@ M.proposals = {
     detail = "GLOSSARY には restore_mapping（戻す）しかない。有効化のときの「マッピングを張る」"
       .. "「元のマッピングを退避する」を effects に書けないので、今は reset_state だけにして notes に書いた。",
     affects = { "enable", "effects" },
+  },
+  {
+    id = 10,
+    title = "V_PRE の意味をどちらにするか",
+    detail = "events.md（#203 のあと）は V_PRE を「visual / select で pre-edit がまだ描かれている、"
+      .. "ModeChanged の確定が走る前の一瞬」とし、ドラッグでは ModeChanged の時点で残っていた（O18）としている。"
+      .. "モデルの V_PRE_POINT / V_PRE_SELECT は、<C-o>v のあと visual の間ずっと pre-edit が残る安定した状態で、"
+      .. "同じ V_PRE でも意味が違う。events.md に合わせるなら、<C-o>v の状態を V_POINT / V_SELECT のような別クラスにする。"
+      .. "今のモデルは観測の classify に合わせて V_PRE のままにし、違いを notes に書いた。",
+    affects = { "V_PRE_POINT", "V_PRE_SELECT", "V_IDLE" },
   },
 }
 
