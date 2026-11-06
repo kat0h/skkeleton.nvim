@@ -55,7 +55,7 @@ skkeleton.nvim が受けるキーと受けないキーを、キー 1 つごと�
 | キー | Vim のモード | 処理する場所 | 根拠 | 未確認 |
 |---|---|---|---|---|
 | 利用者が `g:skkeleton#mapped_keys` に足したキー（例 `<C-l>`） | i / c / t（有効化したモード） | map → keymap（`register_keymap` で割り当てた関数） | `lua/skkeleton/map.lua:27-30,123-137`、`lua/skkeleton/keymap.lua:94-112` | なし（実測: `<C-l>` を足すとマッピングが 103 個になり、`zenkaku` が動いた） |
-| 利用者が `<Plug>(skkeleton-xxx)` に割り当てたキー | i / c / t | map（`<Plug>` の rhs から関数名を引き継ぐ）→ keymap | `lua/skkeleton/map.lua:125-133` | コード読解のみ |
+| 利用者が `<Plug>(skkeleton-xxx)` に割り当てたキー | i / c / t | map（`<Plug>` の rhs から関数名を引き継ぐ）→ main（`enable` / `disable` / `toggle`。keymap は通らない） | `lua/skkeleton/map.lua:125-133`、`lua/skkeleton/main.lua:163-175`、`plugin/skkeleton.lua:20-24` | コード読解のみ |
 
 ## 3. `keymap.lua` の状態ごとの処理
 
@@ -108,17 +108,17 @@ guard は `vim.on_key` で、マッピングに消費されずに素通りして
 | K_SPECIAL（バイト） | Vim のモード | 処理する場所 | 根拠 | 未確認 |
 |---|---|---|---|---|
 | `0x80 0xfd 0x67`（KS_EXTRA の KE_LUA。skkeleton が置いた Lua callback マッピング） | i / c / t | guard は何もしない（マッピングが処理する） | `lua/skkeleton/guard.lua:43-45,140-142` | なし（実測: `<C-g>` などで pre-edit が残る） |
-| `<Insert>`（`0x80 0x6b 0x49`） | i | guard は何もしない。Neovim が置換モードに入る | `lua/skkeleton/guard.lua:15-16,143-145`、`lua/skkeleton/cleanup.lua:186` | なし（実測: `tests/test_e2e_guard.lua:82-89`） |
+| `<Insert>`（`0x80 0x6b 0x49`） | i | guard は何もしない。Neovim が置換モードに入り、後片付けが pre-edit を確定して無効にする | `lua/skkeleton/guard.lua:15-16,143-145`、`lua/skkeleton/cleanup.lua:182-183,207-214` | なし（実測: `tests/test_e2e_guard.lua:82-89`） |
 | `0x80 0xfe`（KS_SPECIAL。本文中の 0x80 のエスケープ） | i / c / t | guard は何もしない（キーではない） | `lua/skkeleton/guard.lua:55-58` | なし（実測: `tests/test_guard.lua:36-41`） |
 | `0x80 0xfd` で、`<S-Up>` `<S-Down>` `<S-Left>` `<S-Right>` `<C-Left>` `<C-Right>` `<S-F1>`〜`<S-F12>` | i / c / t | guard が確定してからキーを流し直す | `lua/skkeleton/guard.lua:22-37,59-61,165-188` | なし（実測: `<C-Left>` は `tests/test_e2e_guard.lua:42-48`） |
 | `0x80 0xfd` のその他（`<ScrollWheelUp>` `0x80 0xfd 0x4b`、`<ScrollWheelDown>` `0x80 0xfd 0x4c`、マウスの押下 `0x80 0xfd 0x2c`、離す `0x80 0xfd 0x2e` など） | i / c / t | guard は確定しない | `lua/skkeleton/guard.lua:59-61` | なし（実測: wheel で pre-edit が残り、クリックではカーソル移動の後片付けが確定する。§5） |
-| `0x80 0xfc`（KS_MODIFIER）で、Ctrl + 英数字（`<C-r>` `<C-v>` `<C-k>` `<C-t>` `<C-w>` `<C-u>` `<C-a>` `<C-n>` `<C-p>` `<C-x>` `<C-y>` `<C-e>` など）と Ctrl + 記号 `[` `\` `]` `^` `_` `@` `?` | i / c / t | guard は確定しない（Neovim に渡す） | `lua/skkeleton/guard.lua:66-84` | コード読解のみ（単バイトで届く `<C-r>` などは実測で false） |
+| `0x80 0xfc`（KS_MODIFIER）で、Ctrl + 英数字（`<C-r>` `<C-v>` `<C-k>` `<C-t>` `<C-w>` `<C-u>` `<C-a>` `<C-n>` `<C-p>` `<C-x>` `<C-y>` `<C-e>` など）と Ctrl + 記号 `[` `\` `]` `^` `_` `@` `?` | i / c（`t` は下の KS_MODIFIER の行） | guard は確定しない（Neovim に渡す） | `lua/skkeleton/guard.lua:66-84` | コード読解のみ（単バイトで届く `<C-r>` などは実測で false） |
 | `0x80 0xfc` で、上の条件に合わないもの（Ctrl + 記号の `<C-.>`、Ctrl + `<Space>`、Alt / Meta / Cmd 付き、base が文字でないもの、`<S-CR>`） | i / c / t | guard が確定してからキーを流し直す | `lua/skkeleton/guard.lua:66-84` | `<C-.>` は実測（`tests/test_e2e_guard.lua:26-32`）。`<S-CR>` はコード読解のみ（判定は `tests/test_guard.lua:13-17` の単体テストで確認、E2E は未確認） |
 | `0x80` のあとが `0xfc` `0xfd` `0xfe` 以外（termcap 系。`<Left>`、`<Right>`、`<Up>`、`<Down>`、`<Home>`、`<End>`、`<PageUp>`、`<PageDown>`、`<F5>`、`<S-Tab>` など） | i / c / t | guard が確定してからキーを流し直す | `lua/skkeleton/guard.lua:62-65` | なし（実測: `<Left>` `<F5>`） |
 | `0x80 0xff 0x58`（NUL のエスケープ。`<C-@>`） | i / c / t | guard が確定してからキーを流し直す（termcap 扱いの fallback に入る） | `lua/skkeleton/guard.lua:62-65` | なし（実測: `guard._is_physical_special` は true。UI から打つと確定のあと Neovim の `i_CTRL-@` が E29 で insert を抜ける） |
 | terminal の単バイト制御（`0x00`〜`0x1f`、`0x7f`）で、`0x07` `0x08` `0x09` `0x0a` `0x0d` `0x1b` 以外 | t | guard が確定してからキーを流し直す | `lua/skkeleton/guard.lua:89-96,103-112` | なし（実測: `<C-a>` は `tests/test_e2e_guard.lua:102-121`） |
 | terminal の単バイト `0x07`（`<C-g>`）`0x08`（`<BS>`）`0x09`（`<Tab>`）`0x0a`（`<NL>`）`0x0d`（`<CR>`）`0x1b`（`<Esc>`） | t | guard は確定しない（skkeleton 自身の書き直しと区別できないため） | `lua/skkeleton/guard.lua:89-96,107-110` | なし（コード読解。`<Tab>` は `tests/test_guard.lua:31-33`） |
-| terminal の `0x80 0xfc`（KS_MODIFIER。Ctrl + 文字） | t | guard が確定してからキーを流し直す | `lua/skkeleton/guard.lua:99-112` | コード読解のみ（実端末の Ctrl が KS_MODIFIER で届くかは端末しだい） |
+| terminal の `0x80 0xfc`（KS_MODIFIER。Ctrl + 文字） | t | guard が確定してからキーを流し直す | `lua/skkeleton/guard.lua:99-112,168-170` | コード読解のみ（実端末の Ctrl が KS_MODIFIER で届くかは端末しだい） |
 | terminal の `<C-\>`（`0x1c` か `0x80 0xfc ... 0x5c`）に続く `<C-n>`（`0x0e` か `0x80 0xfc ... 0x4e`/`0x6e`） | t | guard は確定しない（terminal-normal に抜ける） | `lua/skkeleton/guard.lua:114-124,154-163` | なし（実測: `tests/test_e2e_cmdline.lua:147-172`） |
 
 補足です。
