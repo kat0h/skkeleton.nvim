@@ -55,7 +55,7 @@ skkeleton.nvim が受けるキーと受けないキーを、キー 1 つごと�
 | キー | Vim のモード | 処理する場所 | 根拠 | 未確認 |
 |---|---|---|---|---|
 | 利用者が `g:skkeleton#mapped_keys` に足したキー（例 `<C-l>`） | i / c / t（有効化したモード） | map → keymap（`register_keymap` で割り当てた関数） | `lua/skkeleton/map.lua:27-30,123-137`、`lua/skkeleton/keymap.lua:94-112` | なし（実測: `<C-l>` を足すとマッピングが 103 個になり、`zenkaku` が動いた） |
-| 利用者が `<Plug>(skkeleton-xxx)` に割り当てたキー | i / c / t | map（`<Plug>` の rhs から関数名を引き継ぐ）→ main（`enable` / `disable` / `toggle`。keymap は通らない） | `lua/skkeleton/map.lua:125-133`、`lua/skkeleton/main.lua:163-175`、`plugin/skkeleton.lua:20-24` | コード読解のみ |
+| 利用者が `<Plug>(skkeleton-xxx)` に割り当てたキー | i / c / t | map（`<Plug>` の rhs から関数名を引き継ぐ）→ main（`enable` / `disable` / `toggle`。状態によっては keymap を通る） | `lua/skkeleton/map.lua:125-133`、`lua/skkeleton/main.lua:89-96,107-110,132-136,163-175`、`plugin/skkeleton.lua:20-24` | コード読解のみ |
 
 ## 3. `keymap.lua` の状態ごとの処理
 
