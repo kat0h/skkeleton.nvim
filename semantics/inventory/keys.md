@@ -30,16 +30,16 @@ skkeleton.nvim が受けるキーと受けないキーを、キー 1 つごと�
 | `a` `b` `c` `d` `e` `f` `g` `h` `i` `j` `k` `l` `m` `n` `o` `p` `q` `r` `s` `t` `u` `v` `w` `x` `y` `z` | i / c / t | map → keymap（状態で分岐。§3） | `lua/skkeleton/map.lua:14,21,123-137`、`lua/skkeleton/keymap.lua:23-59` | なし（実測: 102 個のマッピング） |
 | `A` `B` `C` `D` `E` `F` `G` `H` `I` `J` `K` `L` `M` `N` `O` `P` `Q` `R` `S` `T` `U` `V` `W` `X` `Y` `Z` | i / c / t | map → keymap（`L` は zenkaku、`X` は henkan で purgeCandidate、ほかは kana_input） | `lua/skkeleton/map.lua:15,123-137`、`lua/skkeleton/notation.lua:114-117,130-131`、`lua/skkeleton/keymap.lua:41,52` | なし（実測） |
 | `1` `2` `3` `4` `5` `6` `7` `8` `9` `0` | i / c / t | map → keymap | `lua/skkeleton/map.lua:16,123-137` | なし（実測） |
-| `!` `"` `#` `$` `%` `&` `'` `(` `)` `,` `.` `/` `;` `:` `]` `@` `[` `-` `^` `\` `>` `?` `_` `+` `*` `}` `` ` `` `{` `=` `~` | i / c / t | map → keymap（`/` は abbrev、`;` は henkanPoint、`>` は prefix / suffix） | `lua/skkeleton/map.lua:17-19,123-137`、`lua/skkeleton/keymap.lua:34,39-41,53` | なし（実測） |
+| `!` `"` `#` `$` `%` `&` `'` `(` `)` `,` `.` `/` `;` `:` `]` `@` `[` `-` `^` `\` `>` `?` `_` `+` `*` `}` `` ` `` `{` `=` `~` | i / c / t | map → keymap（`/` は abbrev、`;` は henkanPoint、`>` は prefix / suffix） | `lua/skkeleton/map.lua:17-19,123-137`、`lua/skkeleton/keymap.lua:34,39-40,53` | なし（実測） |
 | `<lt>`（`<`） | i / c / t | map → keymap | `lua/skkeleton/map.lua:21,123-137` | なし（実測） |
 | `<Bar>`（`\|`） | i / c / t | map → keymap | `lua/skkeleton/map.lua:21,123-137` | なし（実測） |
 | `<BS>` | i / c / t | map → keymap（input で deleteChar） | `lua/skkeleton/map.lua:21,123-137`、`lua/skkeleton/keymap.lua:27` | なし（実測） |
 | `<C-h>` | i / c / t | map → keymap（`<bs>` に正規化されて deleteChar） | `lua/skkeleton/map.lua:21`、`lua/skkeleton/notation.lua:130-136`、`lua/skkeleton/keymap.lua:29` | なし（実測: 正規化すると `<bs>` になり、`keymap.lua:29` の `<c-h>` の行は引かれない） |
-| `<CR>` | i / c / t | map → keymap（input / henkan で newline） | `lua/skkeleton/map.lua:21,123-137`、`lua/skkeleton/keymap.lua:30,47` | なし（実測） |
-| `<Space>` | i / c / t | map → keymap（input で henkanFirst、henkan で henkanForward） | `lua/skkeleton/map.lua:21,123-137`、`lua/skkeleton/keymap.lua:34,49` | なし（実測） |
+| `<CR>` | i / c / t | map → keymap（input / henkan で newline） | `lua/skkeleton/map.lua:21,123-137`、`lua/skkeleton/keymap.lua:30,48` | なし（実測） |
+| `<Space>` | i / c / t | map → keymap（input で henkanFirst、henkan で henkanForward） | `lua/skkeleton/map.lua:21,123-137`、`lua/skkeleton/keymap.lua:35,50` | なし（実測） |
 | `<C-q>` | i / c / t | map → keymap（input で hankatakana） | `lua/skkeleton/map.lua:21,123-137`、`lua/skkeleton/keymap.lua:33` | なし（実測） |
-| `<C-j>`（`<nl>`） | i / c / t | map → keymap（input / henkan で kakutei） | `lua/skkeleton/map.lua:21`、`lua/skkeleton/notation.lua:130-136`、`lua/skkeleton/keymap.lua:32,48` | なし（実測） |
-| `<C-g>` | i / c / t | map → keymap（input / henkan で cancel） | `lua/skkeleton/map.lua:21,123-137`、`lua/skkeleton/keymap.lua:28,46` | なし（実測） |
+| `<C-j>`（`<nl>`） | i / c / t | map → keymap（input / henkan で kakutei） | `lua/skkeleton/map.lua:21`、`lua/skkeleton/notation.lua:130-136`、`lua/skkeleton/keymap.lua:32,49` | なし（実測） |
+| `<C-g>` | i / c / t | map → keymap（input / henkan で cancel） | `lua/skkeleton/map.lua:21,123-137`、`lua/skkeleton/keymap.lua:28,47` | なし（実測） |
 | `<Esc>` | i / c / t | map → keymap（input で escape。henkan では default 経由） | `lua/skkeleton/map.lua:21,123-137`、`lua/skkeleton/keymap.lua:31,86` | なし（実測） |
 
 補足です。
@@ -61,7 +61,7 @@ skkeleton.nvim が受けるキーと受けないキーを、キー 1 つごと�
 
 `keymap.handle_key` は `ctx.state.type`（`input` / `henkan`）で表を選び、正規化したキーで関数を引きます。引けなければ default を使います（`lua/skkeleton/keymap.lua:64-88`）。`input` では、打ちかけの feed とキーがかなテーブルにあれば、キーマップよりかなテーブルを先に使います（`lua/skkeleton/keymap.lua:79-85`）。この表のキーは、§1 のマッピングが置かれている Vim モード（`i` / `c` / `t`）で効きます。
 
-### input 状態（`I_DIRECT` / `I_POINT` / `I_SELECT` など）
+### input 状態（`type = "input"`）
 
 | キー | Vim のモード | 処理する場所 | 根拠 | 未確認 |
 |---|---|---|---|---|
@@ -80,19 +80,19 @@ skkeleton.nvim が受けるキーと受けないキーを、キー 1 つごと�
 | `L` | i / c / t | keymap: zenkaku（同上） | `lua/skkeleton/keymap.lua:41`、`lua/skkeleton/function/input.lua:122-145` | コード読解のみ |
 | 上のどれでもない、§1・§2 で奪ったキー | i / c / t | keymap: default（kana_input） | `lua/skkeleton/keymap.lua:25,86`、`lua/skkeleton/function/input.lua:85-120` | なし（実測: `z` で `▽かんz`） |
 
-### henkan 状態（`I_POINT` のあと）
+### henkan 状態（`type = "henkan"`、▼）
 
 henkan 状態の表にないキーは default の `henkanInput` に渡り、選択中の候補を確定してから、同じキーを input 状態として処理し直します（`lua/skkeleton/function/henkan.lua:160-161`）。そのため `<Esc>` や `<BS>` なども input の処理に落ちます。
 
 | キー | Vim のモード | 処理する場所 | 根拠 | 未確認 |
 |---|---|---|---|---|
-| `<c-g>` | i / c / t | keymap: cancel | `lua/skkeleton/keymap.lua:46` | コード読解のみ |
-| `<cr>` | i / c / t | keymap: newline | `lua/skkeleton/keymap.lua:47` | コード読解のみ |
-| `<nl>`（`<C-j>`） | i / c / t | keymap: kakutei | `lua/skkeleton/keymap.lua:48` | コード読解のみ |
-| `<space>` | i / c / t | keymap: henkanForward | `lua/skkeleton/keymap.lua:49` | なし（実測: 候補が進む） |
-| `x` | i / c / t | keymap: henkanBackward | `lua/skkeleton/keymap.lua:50` | コード読解のみ |
-| `X` | i / c / t | keymap: purgeCandidate | `lua/skkeleton/keymap.lua:51` | コード読解のみ |
-| `>` | i / c / t | keymap: suffix | `lua/skkeleton/keymap.lua:52` | コード読解のみ |
+| `<c-g>` | i / c / t | keymap: cancel | `lua/skkeleton/keymap.lua:47` | コード読解のみ |
+| `<cr>` | i / c / t | keymap: newline | `lua/skkeleton/keymap.lua:48` | コード読解のみ |
+| `<nl>`（`<C-j>`） | i / c / t | keymap: kakutei | `lua/skkeleton/keymap.lua:49` | コード読解のみ |
+| `<space>` | i / c / t | keymap: henkanForward | `lua/skkeleton/keymap.lua:50` | なし（実測: 候補が進む） |
+| `x` | i / c / t | keymap: henkanBackward | `lua/skkeleton/keymap.lua:51` | コード読解のみ |
+| `X` | i / c / t | keymap: purgeCandidate | `lua/skkeleton/keymap.lua:52` | コード読解のみ |
+| `>` | i / c / t | keymap: suffix | `lua/skkeleton/keymap.lua:53` | コード読解のみ |
 | `a` `s` `d` `f` `j` `k` `l` | i / c / t | keymap に無い → default（henkanInput）で候補を選ぶ。候補の popup が出ているときだけ（`candidate_index >= showCandidatesCount`） | `lua/skkeleton/keymap.lua:44-55,86`、`lua/skkeleton/function/henkan.lua:137-158`、`lua/skkeleton/config.lua:29,32` | コード読解のみ |
 | ほかの §1・§2 のキー（`<Esc>`、`<BS>`、文字など） | i / c / t | default（henkanInput）: 候補を確定してから input で処理し直す | `lua/skkeleton/keymap.lua:86`、`lua/skkeleton/function/henkan.lua:160-161` | なし（実測: `<Esc>` で確定して抜ける） |
 
@@ -113,7 +113,7 @@ guard は `vim.on_key` で、マッピングに消費されずに素通りして
 | `0x80 0xfd` で、`<S-Up>` `<S-Down>` `<S-Left>` `<S-Right>` `<C-Left>` `<C-Right>` `<S-F1>`〜`<S-F12>` | i / c / t | guard が確定してからキーを流し直す | `lua/skkeleton/guard.lua:22-37,59-61,165-188` | なし（実測: `<C-Left>` は `tests/test_e2e_guard.lua:42-48`） |
 | `0x80 0xfd` のその他（`<ScrollWheelUp>` `0x80 0xfd 0x4b`、`<ScrollWheelDown>` `0x80 0xfd 0x4c`、マウスの押下 `0x80 0xfd 0x2c`、離す `0x80 0xfd 0x2e` など） | i / c / t | guard は確定しない | `lua/skkeleton/guard.lua:59-61` | なし（実測: wheel で pre-edit が残り、クリックではカーソル移動の後片付けが確定する。§5） |
 | `0x80 0xfc`（KS_MODIFIER）で、Ctrl + 英数字（`<C-r>` `<C-v>` `<C-k>` `<C-t>` `<C-w>` `<C-u>` `<C-a>` `<C-n>` `<C-p>` `<C-x>` `<C-y>` `<C-e>` など）と Ctrl + 記号 `[` `\` `]` `^` `_` `@` `?` | i / c / t | guard は確定しない（Neovim に渡す） | `lua/skkeleton/guard.lua:66-84` | コード読解のみ（単バイトで届く `<C-r>` などは実測で false） |
-| `0x80 0xfc` で、上の条件に合わないもの（Ctrl + 記号の `<C-.>`、Ctrl + `<Space>`、Alt / Meta / Cmd 付き、base が文字でないもの、`<S-CR>`） | i / c / t | guard が確定してからキーを流し直す | `lua/skkeleton/guard.lua:66-84` | なし（実測: `<C-.>` `<S-CR>` は `tests/test_e2e_guard.lua:26-32`） |
+| `0x80 0xfc` で、上の条件に合わないもの（Ctrl + 記号の `<C-.>`、Ctrl + `<Space>`、Alt / Meta / Cmd 付き、base が文字でないもの、`<S-CR>`） | i / c / t | guard が確定してからキーを流し直す | `lua/skkeleton/guard.lua:66-84` | `<C-.>` は実測（`tests/test_e2e_guard.lua:26-32`）。`<S-CR>` はコード読解のみ（判定は `tests/test_guard.lua:13-17` の単体テストで確認、E2E は未確認） |
 | `0x80` のあとが `0xfc` `0xfd` `0xfe` 以外（termcap 系。`<Left>`、`<Right>`、`<Up>`、`<Down>`、`<Home>`、`<End>`、`<PageUp>`、`<PageDown>`、`<F5>`、`<S-Tab>` など） | i / c / t | guard が確定してからキーを流し直す | `lua/skkeleton/guard.lua:62-65` | なし（実測: `<Left>` `<F5>`） |
 | `0x80 0xff 0x58`（NUL のエスケープ。`<C-@>`） | i / c / t | guard が確定してからキーを流し直す（termcap 扱いの fallback に入る） | `lua/skkeleton/guard.lua:62-65` | なし（実測: `guard._is_physical_special` は true。UI から打つと確定のあと Neovim の `i_CTRL-@` が E29 で insert を抜ける） |
 | terminal の単バイト制御（`0x00`〜`0x1f`、`0x7f`）で、`0x07` `0x08` `0x09` `0x0a` `0x0d` `0x1b` 以外 | t | guard が確定してからキーを流し直す | `lua/skkeleton/guard.lua:89-96,103-112` | なし（実測: `<C-a>` は `tests/test_e2e_guard.lua:102-121`） |
@@ -149,7 +149,7 @@ guard は `vim.on_key` で、マッピングに消費されずに素通りして
 | `<C-y>` `<C-e>` | i | Neovim | `lua/skkeleton/map.lua:13-23` | なし（実測: pre-edit が残る） |
 | `<CR>`（blink のメニューで項目を選んでいるとき） | i | skkeleton が blink に回す（`eggLikeNewline` が真のとき） | `lua/skkeleton/main.lua:84-87`、`lua/skkeleton/completion/init.lua:278-310`、`doc/skkeleton.txt:516-518` | 未確認（blink.cmp が要る） |
 | マウスの押下・離す・ドラッグ（`<LeftMouse>` など。実イベントは `0x80 0xfd 0x2c` / `0x2e`） | i | Neovim。guard は確定しない。カーソルが動けば後片付けが確定し、visual に入れば確定して無効化する | `lua/skkeleton/guard.lua:59-61`、`lua/skkeleton/cleanup.lua:120-160,179-222` | なし（実測: 1 回クリックで確定、ダブルクリックは `tests/test_e2e_mode.lua:319-338`） |
-| `<ScrollWheelUp>` `<ScrollWheelDown>`（`0x80 0xfd 0x4b` / `0x4c`） | i | Neovim（スクロール）。guard は確定しない | `lua/skkeleton/guard.lua:59-61`、`lua/skkeleton/render.lua:333` | なし（実測: pre-edit が残る） |
+| `<ScrollWheelUp>` `<ScrollWheelDown>`（`0x80 0xfd 0x4b` / `0x4c`） | i | Neovim（スクロール）。guard は確定しない | `lua/skkeleton/guard.lua:59-61` | なし（実測: pre-edit が残る） |
 | `<Plug>(skkeleton-enable)` `<Plug>(skkeleton-disable)` `<Plug>(skkeleton-toggle)` | i / c / t | plugin が置く入口。利用者が好きなキーに割り当てる | `plugin/skkeleton.lua:21-25`、`doc/skkeleton.txt:192-206` | なし（実測: `e2e_set` の子で enable に使える） |
 
 補足です。
