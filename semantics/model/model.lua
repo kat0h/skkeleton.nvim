@@ -2489,6 +2489,7 @@ M.proposals = {
     title = "NI / V_PRE / P_PROMPT を、抱えている読みで分けるか",
     detail = "モデルでは NI_DIRECT / NI_POINT / NI_SELECT、V_PRE_POINT / V_PRE_SELECT に分けた。"
       .. "1 つのクラスにまとめると、戻った先が I_DIRECT か I_POINT かをモデルが決められない。"
+      .. "P_PROMPT は外側の読みを凍結して持つので分けていない。"
       .. "GLOSSARY の 1 クラスのまま、読みを持ち越す状態として書く方法もある。",
     affects = { "NI", "V_PRE", "P_PROMPT" },
   },

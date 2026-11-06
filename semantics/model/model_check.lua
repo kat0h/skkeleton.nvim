@@ -243,11 +243,7 @@ local function run_keys(keys, config, start)
       for _, path in ipairs(paths) do
         table.insert(states, path.state)
       end
-      local detail = {}
-      for _, st in ipairs(states) do
-        table.insert(detail, ("%s:%d"):format(st, #transitions_for_key(st, key, config)))
-      end
-      return nil, ("%s（状態 %s）"):format(key, table.concat(detail, "/"))
+      return nil, ("%s（状態 %s）"):format(key, table.concat(states, "/"))
     end
     paths = settle(next_paths, config)
   end
@@ -677,6 +673,16 @@ local function main(argv)
     elseif arg == "--only" then
       i = i + 1
       only = argv[i]
+      local allowed = {
+        properties = true,
+        coverage = true,
+        observations = true,
+        replays = true,
+        reachability = true,
+      }
+      if not allowed[only] then
+        error("--only は properties / coverage / observations / replays / reachability のどれかです", 0)
+      end
     elseif arg == "--config" then
       i = i + 1
       local k, v = (argv[i] or ""):match("^([%w_]+)=(.*)$")
@@ -838,7 +844,12 @@ local function main(argv)
         end
       end
     end
-    say(("観測 %d 件: ✓ %d / ? %d / ✗ %d"):format(#model.observations, ok_count, loose, ng_count))
+    say(("観測 %d 件: 一致 %d（うち未確定 %d）/ 不一致 %d"):format(
+      #model.observations,
+      ok_count,
+      loose,
+      ng_count
+    ))
   end
 
   -- NOTES の再現
