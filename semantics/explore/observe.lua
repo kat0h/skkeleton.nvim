@@ -237,6 +237,7 @@ function M.classify(obs)
 
   -- insert
   if mode == "i" then
+    -- 無効な insert は I_DIRECT と結果が違うので分ける（作者の判断 1）
     if not enabled then
       return "I_OFF"
     end
@@ -250,6 +251,7 @@ function M.classify(obs)
       if state.henkan_feed ~= "" then
         return "I_POINT"
       end
+      -- ローマ字の打ちかけ（state.feed）だけの状態（作者の判断 6）
       return "I_ROMAJI"
     end
     return "I_DIRECT"
