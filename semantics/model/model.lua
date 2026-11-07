@@ -2100,20 +2100,6 @@ local function cmdline_edit_drop(from, to, observed_map)
   end
 end
 
-local function cmdline_edit_keep(from, event, observed)
-  add({
-    id = "t." .. from .. "." .. event,
-    from = from,
-    event = event,
-    to = from,
-    effects = { "pass_key" },
-    status = "ok",
-    refs = { "keys.md §6" },
-    observed = observed and { observed } or {},
-    notes = "cmdline の文字が変わらないので、pre-edit が残る。",
-  })
-end
-
 -- cmdline に入る
 add({
   id = "t.N_OFF.cmdline_open",
