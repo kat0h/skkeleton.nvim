@@ -2174,9 +2174,7 @@ add({
   effects = { "render" },
   status = "ok", refs = { "host.lua:175-213", "function/input.lua", "#189" },
   observed = { "O-register-char" },
-  notes = "直接入力の文字は、そのまま欄に入る（▽ は出ない）。"
-    .. "X は purgeCandidate の確認ダイアログで、辞書登録には入らない"
-    .. "（06 の観測も同じ。semantics/compare/README.md）。",
+  notes = "直接入力の文字は、そのまま欄に入る（▽ は出ない）。",
 })
 
 add({
@@ -6310,7 +6308,8 @@ M.out_of_scope = {
     id = "oos.register_purge_confirm",
     what = "▼ の X（purgeCandidate）の確認ダイアログ",
     why = "07c（#189）の対象外。X は辞書登録ではなく、host.confirm の確認ダイアログを開く（#129）。"
-      .. "確認のあとの状態は、辞書の purge の層で扱う。",
+      .. "06 の観測でも、候補の最後で X を打っても辞書登録には入らなかった"
+      .. "（semantics/compare/README.md）。確認のあとの状態は、辞書の purge の層で扱う。",
     refs = { "#129", "#189" },
     keys = { "X" },
   },
