@@ -49,15 +49,17 @@ local M = {}
 
 M.issue = 184
 M.parent = 179
-M.scope = "insert / normal / visual / replace / terminal（Vim のモード i / n / v・s / R / t・nt）"
+M.scope = "insert / normal / visual / replace / terminal（Vim のモード i / n / v・s / R / t・nt）と、"
+  .. "貼り付け・マウス・ホイール・WinLeave / BufLeave・skkeleton が奪わないキー（#191）"
 M.sources = {
   "semantics/GLOSSARY.md",
   "semantics/inventory/keys.md（#181）",
   "semantics/inventory/events.md（#182）",
   "semantics/issues.md（#183）",
-  "lua/skkeleton/map.lua、keymap.lua、guard.lua、cleanup.lua、function/",
+  "lua/skkeleton/map.lua、keymap.lua、guard.lua、cleanup.lua、paste.lua、function/",
   "lua/skkeleton/render.lua、render/cmdline.lua、preedit.lua（terminal の pre-edit、#188）",
   "semantics/explore/explore.lua の terminal プロファイル（#188 の観測）",
+  "semantics/explore/observations/misc.jsonl（#191）",
   "状態遷移図の下書き（作者の手元の data.js。18 状態・49 遷移）",
 }
 
@@ -742,34 +744,48 @@ M.events = {
   },
   mouse_click = {
     kind = "input",
-    keys = { "<LeftMouse>", "<RightMouse>", "<DragRight>" },
+    keys = { "<LeftMouse>", "<RightMouse>" },
     modes = { "i" },
-    refs = { "keys.md §5", "#56" },
+    refs = { "cleanup.lua:120-160,269-281", "keys.md §5", "#56", "#191" },
+    notes = "同じウィンドウのクリック。カーソルが動いたときだけ CursorMovedI が読みを確定する。"
+      .. "別のウィンドウのクリックは mouse_click_other。",
+  },
+  mouse_click_other = {
+    kind = "input",
+    keys = { "<LeftMouse>", "<RightMouse>" },
+    modes = { "i", "v" },
+    refs = { "cleanup.lua:269-281", "#169", "#191" },
+    notes = "別のウィンドウへのクリック。WinLeave が走り、読みを確定せずに捨てる（#169）。",
   },
   mouse_select = {
     kind = "input",
-    keys = { "<2-LeftMouse>", "<3-LeftMouse>" },
+    keys = { "<2-LeftMouse>", "<3-LeftMouse>", "<DragRight>" },
     modes = { "i" },
-    refs = { "cleanup.lua:179-190", "events.md O10", "events.md O18" },
-    notes = "ダブルクリックは 1 回目の押下の CursorMovedI が先に確定する。ドラッグでは ModeChanged の時点で pre-edit が残る（O18）。",
+    refs = { "cleanup.lua:179-190,207-214", "events.md O10", "events.md O18", "#47", "#191" },
+    notes = "ダブルクリック・ドラッグで visual / select に入る。"
+      .. "ダブルクリックは 1 回目の押下の CursorMovedI が先に確定する。"
+      .. "ドラッグでは ModeChanged の時点で pre-edit が残る（O18）。",
   },
   wheel = {
     kind = "input",
     keys = { "<ScrollWheelUp>", "<ScrollWheelDown>" },
     modes = { "i" },
-    refs = { "guard.lua:59-61", "keys.md §5" },
+    refs = { "guard.lua:59-61", "keys.md §5", "#191" },
+    notes = "スクロールはカーソルを動かさないので、guard もずれの検出も確定しない。",
   },
   winleave = {
     kind = "autocmd",
     keys = {},
     modes = { "i", "n", "v", "R" },
-    refs = { "cleanup.lua:269-281", "events.md", "#169" },
+    refs = { "cleanup.lua:269-281", "events.md", "#46", "#169", "#191" },
+    notes = "読みを確定せずに捨てる。insert のまま無効になる（I_OFF）。",
   },
   bufleave = {
     kind = "autocmd",
     keys = {},
     modes = { "i", "n", "v", "R" },
-    refs = { "cleanup.lua:269-281", "events.md", "#169" },
+    refs = { "cleanup.lua:269-281", "events.md", "#169", "#191" },
+    notes = "読みを確定せずに捨てる。insert のまま無効になる（I_OFF）。",
   },
   safestate = {
     kind = "internal",
@@ -821,7 +837,9 @@ M.events = {
     kind = "input",
     keys = { "<Paste>" },
     modes = { "i" },
-    refs = { "paste.lua:31-69", "#125", "#191" },
+    refs = { "paste.lua:31-69", "#57", "#125", "#191" },
+    notes = "vim.paste。最初のチャンク（phase が -1 / 1 / nil）でだけ pre-edit を確定し、"
+      .. "そのあと元の vim.paste に渡す。2 つ目以降のチャンクでは確定しない（観測）。",
   },
   stopinsert = {
     kind = "api",
@@ -1123,29 +1141,38 @@ for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT" }) do
       or { "reset_state", "restore_mapping", "clear_extmark" },
     status = "ok", refs = { "cleanup.lua:187,225-248", "#70" },
   })
+  local select_status = from == "I_ROMAJI" and "unknown" or "ok"
   add({
     id = "t." .. from .. ".mouse_select",
     from = from, event = "mouse_select", to = "N_OFF",
-    effects = has_reading and { "commit_reading", "reset_state", "restore_mapping", "clear_extmark" }
+    effects = from == "I_SELECT" and { "commit_candidate", "reset_state", "restore_mapping", "clear_extmark" }
+      or has_reading and { "commit_reading", "reset_state", "restore_mapping", "clear_extmark" }
       or { "reset_state", "restore_mapping", "clear_extmark" },
-    status = "unknown", refs = { "cleanup.lua:179-190", "events.md O10", "events.md O18" },
-    notes = "i から visual への直接の遷移（マウスで選択）。読みを確定してから無効化する。"
-      .. "ドラッグでは ModeChanged の確定より前に一瞬 pre-edit が残る（O18）が、"
-      .. "それは遷移の途中なので状態クラスにしない（作者の判断 10）。04 の観測はマウスを使っていない。",
+    status = select_status,
+    refs = { "cleanup.lua:179-190,207-214", "events.md O10", "events.md O18", "#47", "#191" },
+    notes = "i から visual / select への直接の遷移（ダブルクリック・ドラッグ）。"
+      .. "読みを確定してから無効化する。ドラッグでは ModeChanged の確定より前に一瞬 pre-edit が残る（O18）が、"
+      .. "それは遷移の途中なので状態クラスにしない（作者の判断 10）。"
+      .. "観測は semantics/explore/observations/misc.jsonl（I_DIRECT / I_POINT / I_SELECT は実測、I_ROMAJI は未観測）。",
   })
   add({
     id = "t." .. from .. ".winleave",
-    from = from, event = "winleave", to = "N_OFF",
-    effects = { "drop", "reset_state", "restore_mapping", "clear_extmark" },
-    status = leave_status, refs = { "cleanup.lua:269-281", "#169", "events.md O13" },
-    notes = "読みを確定せずに捨てる。upstream は pre-edit が本物の文字なので残る。"
-      .. "events.md O13 の観測は WinLeave そのもの（キー列は記録に無い）。",
+    from = from, event = "winleave", to = "I_OFF",
+    effects = has_reading and { "drop", "reset_state", "restore_mapping", "clear_extmark" }
+      or { "reset_state", "restore_mapping", "clear_extmark" },
+    status = leave_status, refs = { "cleanup.lua:269-281", "#169", "#191", "events.md O13" },
+    notes = "読みを確定せずに捨てる。insert に戻ったまま無効になる（I_OFF）。"
+      .. "観測: 別ウィンドウのクリック（misc.jsonl の mouse.otherwin.point）、`:new`、`:wincmd w`。"
+      .. "upstream は pre-edit が本物の文字なので残る。",
   })
   add({
     id = "t." .. from .. ".bufleave",
-    from = from, event = "bufleave", to = "N_OFF",
-    effects = { "drop", "reset_state", "restore_mapping", "clear_extmark" },
-    status = leave_status, refs = { "cleanup.lua:269-281", "#169" },
+    from = from, event = "bufleave", to = "I_OFF",
+    effects = has_reading and { "drop", "reset_state", "restore_mapping", "clear_extmark" }
+      or { "reset_state", "restore_mapping", "clear_extmark" },
+    status = leave_status, refs = { "cleanup.lua:269-281", "#169", "#191" },
+    notes = "読みを確定せずに捨てる。insert に戻ったまま無効になる（I_OFF）。"
+      .. "観測: 別のバッファへ `:buffer`（misc.jsonl の bufleave.point）。",
   })
 end
 add({
@@ -1389,6 +1416,51 @@ add({
   effects = { "reset_state", "restore_mapping", "clear_extmark" },
   status = "unknown", refs = { "cleanup.lua:269-281", "#169" },
   notes = "読みが無いので drop は起きない。P1 は破らない。",
+})
+add({
+  id = "t.V_IDLE.bufleave",
+  from = "V_IDLE", event = "bufleave", to = "N_OFF",
+  effects = { "reset_state", "restore_mapping", "clear_extmark" },
+  status = "unknown", refs = { "cleanup.lua:269-281", "#169" },
+})
+for _, from in ipairs({ "V_PRE_POINT", "V_PRE_SELECT" }) do
+  add({
+    id = "t." .. from .. ".bufleave",
+    from = from, event = "bufleave", to = "N_OFF",
+    effects = { "drop", "reset_state", "restore_mapping", "clear_extmark" },
+    status = "gap", refs = { "cleanup.lua:269-281", "#169", "#191" },
+    notes = "読みを確定せずに捨てる。観測では切り替え後に mode が niI で無効になった（NI_OFF はモデルに無い）。",
+  })
+end
+for _, from in ipairs({ "NI_DIRECT", "NI_POINT", "NI_SELECT" }) do
+  add({
+    id = "t." .. from .. ".bufleave",
+    from = from, event = "bufleave", to = "N_OFF",
+    effects = from == "NI_DIRECT" and { "reset_state", "restore_mapping", "clear_extmark" }
+      or { "drop", "reset_state", "restore_mapping", "clear_extmark" },
+    status = from == "NI_DIRECT" and "unknown" or "gap",
+    refs = { "cleanup.lua:269-281", "#169", "#191" },
+    notes = "観測では切り替え後に mode が niI で無効になった（NI_OFF はモデルに無い）。",
+  })
+end
+add({
+  id = "t.I_OFF.winleave",
+  from = "I_OFF", event = "winleave", to = "I_OFF",
+  effects = { "pass_key" },
+  status = "ok", refs = { "cleanup.lua:269-281", "#191" },
+  notes = "無効な insert では状態を変えない。",
+})
+add({
+  id = "t.I_OFF.bufleave",
+  from = "I_OFF", event = "bufleave", to = "I_OFF",
+  effects = { "pass_key" },
+  status = "ok", refs = { "cleanup.lua:269-281", "#191" },
+})
+add({
+  id = "t.IC.bufleave",
+  from = "IC", event = "bufleave", to = "N_OFF",
+  effects = { "reset_state", "restore_mapping", "clear_extmark" },
+  status = "unknown", refs = { "cleanup.lua:269-281", "#169" },
 })
 
 -- <C-o>: の戻り（cmdline の中は 07a）
@@ -1842,9 +1914,49 @@ insert_control("ctrl_w", "ctrl_w", { "keys.md §5,§6", "#8", "#12" }, { "O-ctrl
 insert_control("ctrl_u", "ctrl_u", { "keys.md §5,§6", "#8", "#12" }, { "O-ctrl-u" },
   "<C-w> と同じ。")
 insert_control("ctrl_a", "ctrl_a", { "keys.md §6", "NOTES.md 未考慮 7" }, { "O-ctrl-a" },
-  "E29: No inserted text yet になる（観測）。insert を抜けるかどうかは未確定。")
-insert_control("ctrl_at", "ctrl_at", { "keys.md §4,§6", "#56" }, { "O-ctrl-at" },
-  "guard が確定してから i_CTRL-@。確定した読みはバッファに入り、E29 で insert を抜ける（keys.md §4）。")
+  "前に挿入した文字があれば、その文字が入り、TextChangedI が読みを捨てる。"
+  .. "無ければ E29 で何も起きない（下の ctrl_a.e29）。")
+
+-- 前に挿入した文字が無いときの <C-a>。E29 で何も変わらず、読みが残る（観測）
+for _, from in ipairs({ "I_ROMAJI", "I_POINT" }) do
+  add({
+    id = "t." .. from .. ".ctrl_a.e29",
+    from = from, event = "ctrl_a", to = from,
+    effects = { "pass_key" },
+    status = from == "I_POINT" and "ok" or "unknown",
+    refs = { "keys.md §6", "#191" },
+    observed = from == "I_POINT" and { "O-ctrl-a-e29" } or {},
+    notes = "E29: No inserted text yet。バッファも pre-edit も変わらない（観測: misc.jsonl の ctrl-a.empty）。"
+      .. "E29 の扱いは #179 の「ここでは決めないこと」。",
+  })
+end
+
+-- <C-@>。guard が読みを確定してから i_CTRL-@ に渡り、E29 で insert を抜ける（keys.md §4）
+local ctrl_at_observed = {
+  I_DIRECT = { "O-ctrl-at-direct" },
+  I_ROMAJI = { "O-ctrl-at-romaji" },
+  I_POINT = { "O-ctrl-at-point" },
+  I_SELECT = { "O-ctrl-at-select" },
+  I_OFF = { "O-ctrl-at-off" },
+}
+for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT", "I_OFF" }) do
+  local commit = from == "I_SELECT" and "commit_candidate"
+    or from ~= "I_DIRECT" and from ~= "I_OFF" and "commit_reading"
+    or nil
+  local effects = { "reset_state", "restore_mapping", "clear_extmark", "feed_key" }
+  if commit then
+    table.insert(effects, 1, commit)
+  end
+  add({
+    id = "t." .. from .. ".ctrl_at",
+    from = from, event = "ctrl_at", to = "N_OFF",
+    effects = effects,
+    status = "ok", refs = { "keys.md §4,§6", "#56", "#191" },
+    observed = ctrl_at_observed[from],
+    notes = "guard が pre-edit を確定してから i_CTRL-@ に渡り、E29 で insert を抜けて無効になる。"
+      .. "読みが無いときも insert を抜ける。E29 の扱いは #179 の「ここでは決めないこと」。",
+  })
+end
 
 -- <C-w> / <C-u> で消す文字が無いときは pre-edit が残る（同じ from からの別の遷移）
 for _, from in ipairs({ "I_ROMAJI", "I_POINT", "I_SELECT" }) do
@@ -1946,8 +2058,17 @@ add({
   notes = "読みが無い（IC）ので drop は起きない。P1 は破らない。",
 })
 
--- guard が確定するキー・マウス・貼り付け
+-- guard が確定するキー・マウス・ホイール・貼り付け（#56、#125、#169、#191）
 local function guard_event(event)
+  local guard_observed = {
+    I_DIRECT = { "O-guard-direct" },
+    I_ROMAJI = { "O-guard-romaji" },
+    I_POINT = {
+      "O-guard-cdot", "O-guard-f5", "O-guard-s-cr", "O-guard-left", "O-guard-c-left",
+      "O-guard-s-up", "O-guard-s-f1",
+    },
+    I_SELECT = { "O-guard-select" },
+  }
   for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT" }) do
     local e = { "feed_key" }
     if from == "I_SELECT" then
@@ -1959,51 +2080,159 @@ local function guard_event(event)
       id = "t." .. from .. "." .. event,
       from = from, event = event, to = "I_DIRECT",
       effects = e,
-      status = from ~= "I_SELECT" and "ok" or "unknown",
-      refs = { "guard.lua:50-85", "#56" },
-      observed = from ~= "I_SELECT" and { "O-guard" } or {},
-      notes = "pre-edit を確定してから、キーを insert のまま流す。O-guard は ▽ からで、▼ からは打っていない。",
+      status = "ok",
+      refs = { "guard.lua:50-85,174-188", "#56", "#191" },
+      observed = guard_observed[from],
+      notes = "pre-edit があるときは、確定してからキーを insert のまま流す。"
+        .. "pre-edit が無い（I_DIRECT）ときは何もせずに流す。"
+        .. "観測: <C-.> / <F5> / <S-CR> / <Left> / <C-Left> / <S-Up> / <S-F1>（misc.jsonl）。",
     })
   end
 end
 guard_event("guard_special")
 add({
+  id = "t.I_OFF.guard_special",
+  from = "I_OFF", event = "guard_special", to = "I_OFF",
+  effects = { "pass_key" },
+  status = "ok", refs = { "guard.lua:174-188", "#191" },
+  notes = "無効な insert では guard は何もせず、キーはそのまま Neovim に渡る。",
+})
+
+-- 同じウィンドウのクリック。カーソルが動いたときだけ確定する
+add({
   id = "t.I_DIRECT.mouse_click",
   from = "I_DIRECT", event = "mouse_click", to = "I_DIRECT",
   effects = { "feed_key" },
-  status = "unknown", refs = { "#56" },
-  notes = "同じウィンドウのクリック。04 の観測はマウスを使っていない。",
+  status = "ok", refs = { "cleanup.lua:120-160", "#56", "#191" },
+  notes = "読みが無いので、カーソルが動いても何も確定しない。",
+})
+add({
+  id = "t.I_OFF.mouse_click",
+  from = "I_OFF", event = "mouse_click", to = "I_OFF",
+  effects = { "pass_key" },
+  status = "ok", refs = { "#191" },
+  notes = "無効な insert ではクリックは Neovim のカーソル移動だけ。",
+})
+add({
+  id = "t.N_OFF.mouse_click",
+  from = "N_OFF", event = "mouse_click", to = "N_OFF",
+  effects = { "pass_key" },
+  status = "ok", refs = { "Vim 本体", "#47", "#191" },
+  notes = "normal のクリックは Neovim のカーソル移動だけ。#47 の再現の最後のクリック。",
 })
 for _, from in ipairs({ "I_ROMAJI", "I_POINT", "I_SELECT" }) do
+  local commit = from == "I_SELECT" and "commit_candidate" or "commit_reading"
   add({
     id = "t." .. from .. ".mouse_click",
     from = from, event = "mouse_click", to = "I_DIRECT",
-    effects = from == "I_SELECT" and { "commit_candidate", "reset_state", "feed_key", "clear_extmark" }
-      or { "commit_reading", "reset_state", "feed_key", "clear_extmark" },
-    status = "unknown", refs = { "#56" },
-    notes = "同じウィンドウのクリックはカーソルが動くので、ずれの検出で確定する。04 の観測はマウスを使っていない。",
+    effects = { commit, "reset_state", "feed_key", "clear_extmark" },
+    status = "ok", refs = { "cleanup.lua:120-160", "#56", "#191" },
+    notes = "同じウィンドウのクリックでカーソルが動くと、CursorMovedI のずれの検出が読みを確定する。"
+      .. "観測: misc.jsonl の mouse.click.left.*。",
+  })
+  add({
+    id = "t." .. from .. ".mouse_click.keep",
+    from = from, event = "mouse_click", to = from,
+    effects = { "pass_key" },
+    status = "ok", refs = { "cleanup.lua:120-160", "#191" },
+    notes = "同じ位置のクリックではカーソルが動かず、ずれの検出が走らないので pre-edit が残る。"
+      .. "観測: misc.jsonl の mouse.click.end（I_POINT）。",
   })
 end
+
+-- 別のウィンドウのクリック（WinLeave）
+for _, from in ipairs({ "I_ROMAJI", "I_POINT", "I_SELECT" }) do
+  add({
+    id = "t." .. from .. ".mouse_click_other",
+    from = from, event = "mouse_click_other", to = "I_OFF",
+    effects = { "drop", "reset_state", "restore_mapping", "clear_extmark" },
+    status = "gap", refs = { "cleanup.lua:269-281", "#169", "#191" },
+    notes = "別のウィンドウをクリックすると WinLeave が走り、読みを確定せずに捨てる（#169）。"
+      .. "insert に戻ったまま無効になる。観測: misc.jsonl の mouse.otherwin.*。",
+  })
+end
+add({
+  id = "t.I_DIRECT.mouse_click_other",
+  from = "I_DIRECT", event = "mouse_click_other", to = "I_OFF",
+  effects = { "reset_state", "restore_mapping", "clear_extmark" },
+  status = "ok", refs = { "cleanup.lua:269-281", "#191" },
+  notes = "読みが無いので drop は起きない。insert に戻ったまま無効になる。",
+})
+add({
+  id = "t.I_OFF.mouse_click_other",
+  from = "I_OFF", event = "mouse_click_other", to = "I_OFF",
+  effects = { "pass_key" },
+  status = "ok", refs = { "#191" },
+})
+for _, from in ipairs({ "V_PRE_POINT", "V_PRE_SELECT" }) do
+  add({
+    id = "t." .. from .. ".mouse_click_other",
+    from = from, event = "mouse_click_other", to = "I_OFF",
+    effects = { "drop", "reset_state", "restore_mapping", "clear_extmark" },
+    status = "gap", refs = { "cleanup.lua:269-281", "#47", "#169", "#191" },
+    notes = "visual のときに別のウィンドウをクリックすると、WinLeave が読みを捨てて無効にする。"
+      .. "観測: misc.jsonl の winleave.visual.mouse。",
+  })
+end
+
+-- ダブルクリック・ドラッグ（visual / select へ）
+add({
+  id = "t.I_OFF.mouse_select",
+  from = "I_OFF", event = "mouse_select", to = "N_OFF",
+  effects = { "reset_state", "restore_mapping", "clear_extmark" },
+  status = "ok", refs = { "cleanup.lua:179-190,207-214", "#191" },
+  notes = "無効な insert からでも、マウスで選択すると visual に入り、無効のまま。"
+    .. "観測: misc.jsonl の mouse.dclick.off。",
+})
+
+-- ホイール。スクロールだけなので確定しない
+local wheel_observed = { I_POINT = { "O-wheel-point" } }
 for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT" }) do
   add({
     id = "t." .. from .. ".wheel",
     from = from, event = "wheel", to = from,
     effects = { "pass_key" },
-    status = "unknown", refs = { "guard.lua:59-61", "keys.md §5" },
-    notes = "guard は確定しない。スクロールだけなので pre-edit が残る。04 の観測は取っていない。",
+    status = "ok", refs = { "guard.lua:59-61", "keys.md §5", "#191" },
+    observed = wheel_observed[from],
+    notes = "guard は確定しない。スクロールはカーソルを動かさないので、pre-edit が残る。"
+      .. "観測: misc.jsonl の mouse.wheel.*。",
   })
 end
+add({
+  id = "t.I_OFF.wheel",
+  from = "I_OFF", event = "wheel", to = "I_OFF",
+  effects = { "pass_key" },
+  status = "ok", refs = { "guard.lua:59-61", "#191" },
+})
+
+-- 貼り付け。最初のチャンクでだけ確定する（#125）
+local paste_observed = {
+  I_DIRECT = { "O-paste-direct" },
+  I_ROMAJI = { "O-paste-romaji" },
+  I_POINT = { "O-paste-point" },
+  I_SELECT = { "O-paste-select" },
+}
 for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT" }) do
   add({
     id = "t." .. from .. ".paste",
     from = from, event = "paste", to = "I_DIRECT",
-    effects = from == "I_SELECT" and { "commit_candidate", "reset_state", "clear_extmark" }
-      or from ~= "I_DIRECT" and { "commit_reading", "reset_state", "clear_extmark" }
+    effects = from == "I_SELECT" and { "commit_candidate", "reset_state", "clear_extmark", "feed_key" }
+      or from ~= "I_DIRECT" and { "commit_reading", "reset_state", "clear_extmark", "feed_key" }
       or { "feed_key" },
-    status = "unknown", refs = { "paste.lua:31-69", "#125" },
-    notes = "貼り付けの前に pre-edit を確定する（#125）。04 の観測は取っていない。",
+    status = "ok", refs = { "paste.lua:31-69", "#57", "#125", "#191" },
+    observed = paste_observed[from],
+    notes = "最初のチャンクで pre-edit を確定してから、元の vim.paste に渡す（#125）。"
+      .. "2 つ目以降のチャンクでは確定しない（観測: paste.chunks）。"
+      .. "読みがローマ字の打ちかけだけのときは、そのままの文字（k など）を確定する。",
   })
 end
+add({
+  id = "t.I_OFF.paste",
+  from = "I_OFF", event = "paste", to = "I_OFF",
+  effects = { "feed_key" },
+  status = "ok", refs = { "paste.lua:31-69", "#191" },
+  notes = "無効な insert では、貼り付けはバッファを書き換えるだけ。",
+})
 
 -- ずれの検出（autocmd）
 for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT" }) do
@@ -2947,13 +3176,6 @@ M.observations = {
     uncertain = true,
   },
   {
-    id = "O-ctrl-at",
-    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-@>" },
-    expect = { "I_DIRECT" },
-    note = "E29。keys.md §4 では「確定してから E29 で insert を抜ける」。04 の観測では insert のまま観測できず、クラスは推定。",
-    uncertain = true,
-  },
-  {
     id = "O-ctrl-y-e",
     keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-y>" },
     expect = { "I_POINT" },
@@ -3671,6 +3893,135 @@ M.observations = {
     expect = { "T_DIRECT" },
     note = "候補 缶 を確定する。",
   },
+  -- 貼り付け（#57、#125）。実際の観測は semantics/explore/observations/misc.jsonl
+  {
+    id = "O-paste-direct",
+    keys = { "<Plug>(skkeleton-enable)", "<Paste>" },
+    expect = { "I_DIRECT" },
+    note = "読みが無いので、貼り付けはそのままバッファに入る（PASTED）。",
+  },
+  {
+    id = "O-paste-romaji",
+    keys = { "<Plug>(skkeleton-enable)", "K", "<Paste>" },
+    expect = { "I_DIRECT" },
+    note = "▽k（ローマ字の打ちかけ）を k として確定してから PASTED を貼る。",
+  },
+  {
+    id = "O-paste-point",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<Paste>" },
+    expect = { "I_DIRECT" },
+    note = "▽かn を かん として確定してから PASTED を貼る（#125）。",
+  },
+  {
+    id = "O-paste-select",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Paste>" },
+    expect = { "I_DIRECT" },
+    note = "▼缶 の候補 缶 を確定してから PASTED を貼る。",
+  },
+  {
+    id = "O-ctrl-at-direct",
+    keys = { "<Plug>(skkeleton-enable)", "<C-@>" },
+    expect = { "N_OFF" },
+    note = "読みが無いときも、E29 で insert を抜けて無効になる。",
+  },
+  {
+    id = "O-ctrl-at-romaji",
+    keys = { "<Plug>(skkeleton-enable)", "K", "<C-@>" },
+    expect = { "N_OFF" },
+    note = "▽k を k として確定してから、E29 で insert を抜ける。",
+  },
+  {
+    id = "O-ctrl-at-point",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-@>" },
+    expect = { "N_OFF" },
+    note = "▽かn を かん として確定してから、E29 で insert を抜ける。",
+  },
+  {
+    id = "O-ctrl-at-select",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-@>" },
+    expect = { "N_OFF" },
+    note = "▼缶 の候補 缶 を確定してから、E29 で insert を抜ける。",
+  },
+  {
+    id = "O-ctrl-at-off",
+    keys = { "i", "<C-@>" },
+    expect = { "N_OFF" },
+    config = { keepState = false },
+    note = "無効な insert でも、E29 で insert を抜ける。",
+  },
+  {
+    id = "O-ctrl-a-e29",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-a>" },
+    expect = { "I_POINT" },
+    note = "前に挿入した文字が無いときの <C-a> は E29 で、pre-edit が残る。",
+  },
+  -- guard が確定するキー（#56）
+  {
+    id = "O-guard-direct",
+    keys = { "<Plug>(skkeleton-enable)", "<C-.>" },
+    expect = { "I_DIRECT" },
+    note = "pre-edit が無いので、guard は何もせずに . を入れる。",
+  },
+  {
+    id = "O-guard-romaji",
+    keys = { "<Plug>(skkeleton-enable)", "K", "<C-.>" },
+    expect = { "I_DIRECT" },
+    note = "▽k を k として確定してから . を入れる。",
+  },
+  {
+    id = "O-guard-cdot",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-.>" },
+    expect = { "I_DIRECT" },
+    note = "▽かn を かん として確定してから . を入れる。",
+  },
+  {
+    id = "O-guard-f5",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<F5>" },
+    expect = { "I_DIRECT" },
+    note = "確定してから <F5> を流す。",
+  },
+  {
+    id = "O-guard-s-cr",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<S-CR>" },
+    expect = { "I_DIRECT" },
+    note = "確定してから <S-CR> を流す。",
+  },
+  {
+    id = "O-guard-left",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<Left>" },
+    expect = { "I_DIRECT" },
+    note = "確定してからカーソルを動かす。",
+  },
+  {
+    id = "O-guard-c-left",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-Left>" },
+    expect = { "I_DIRECT" },
+    note = "確定してからカーソルを動かす。",
+  },
+  {
+    id = "O-guard-s-up",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<S-Up>" },
+    expect = { "I_DIRECT" },
+    note = "確定してからカーソルを動かす。",
+  },
+  {
+    id = "O-guard-s-f1",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<S-F1>" },
+    expect = { "I_DIRECT" },
+    note = "確定してから <S-F1> を流す。",
+  },
+  {
+    id = "O-guard-select",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Left>" },
+    expect = { "I_DIRECT" },
+    note = "▼缶 の候補 缶 を確定してからカーソルを動かす。",
+  },
+  {
+    id = "O-wheel-point",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<ScrollWheelUp>" },
+    expect = { "I_POINT" },
+    note = "スクロールは確定せず、pre-edit が残る。",
+  },
 }
 
 -- NOTES（作者の手元の data.js）の再現キー列を、モデルで再生する。
@@ -3789,6 +4140,48 @@ M.replays = {
     expect = { "T_DIRECT" },
     note = "打ちかけ k を確定してから ^A を渡す。",
   },
+  {
+    id = "replay.paste.point",
+    title = "Kan → <Paste>（#125）",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<Paste>" },
+    expect = { "I_DIRECT" },
+    note = "貼る前に かん を確定し、かんPASTED になる。",
+  },
+  {
+    id = "replay.paste.select",
+    title = "Kan<Space> → <Paste>（#125）",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Paste>" },
+    expect = { "I_DIRECT" },
+    note = "貼る前に 缶 を確定し、缶PASTED になる。",
+  },
+  {
+    id = "replay.paste.57",
+    title = "kakiku → <Paste> → ka → <Esc>（#57）",
+    keys = { "<Plug>(skkeleton-enable)", "k", "a", "k", "i", "k", "u", "<Paste>", "k", "a", "<Esc>" },
+    expect = { "N_OFF" },
+    note = "undo のまとまりはモデルの性質の外。観測では u 1 回で貼り付け以降だけが戻る。",
+  },
+  {
+    id = "replay.mouse.otherwin",
+    title = "Kan → 別のウィンドウをクリック（#169）",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<LeftMouse>" },
+    expect = { "I_OFF" },
+    note = "WinLeave が読みを捨てる（gap）。同じウィンドウのクリックの道もモデルにはある。",
+  },
+  {
+    id = "replay.mouse.select",
+    title = "Kan → ダブルクリック（#47）",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<2-LeftMouse>" },
+    expect = { "N_OFF" },
+    note = "visual に入って無効になる。インジケータの位置は表示の層（対象外）。",
+  },
+  {
+    id = "replay.mouse.47",
+    title = "別ウィンドウのクリック → ドラッグ → クリック（#47）",
+    keys = { "<Plug>(skkeleton-enable)", "<LeftMouse>", "<DragRight>", "<LeftMouse>" },
+    expect = { "N_OFF" },
+    note = "マウスの遷移だけを再生する。インジケータの位置は表示の層なので対象外。",
+  },
 }
 
 -- 対象外のもの（このモデルでは遷移にしない。理由と、扱うタスクを書く）
@@ -3875,11 +4268,35 @@ M.out_of_scope = {
     keys = {},
   },
   {
-    id = "oos.other",
-    what = "貼り付け・マウス・ホイール・`.` 以外のその他の入力",
-    why = "07e（#191）。貼り付けとマウスは、insert に戻る境界だけこのモデルに書いた。",
-    refs = { "#191" },
-    keys = {},
+    id = "oos.cmdline_winleave",
+    what = "#46 の cmdline 中の WinLeave",
+    why = "cmdline（c / cr）の状態は 07a（#187）。このモデルは insert / normal / visual / replace だけを書いている。",
+    refs = { "#46", "#187" },
+    keys = { "<Cmd>wincmd w<CR>" },
+  },
+  {
+    id = "oos.mouse_position",
+    what = "#47 のインジケータの位置（visual から insert に戻ったとき）",
+    why = "表示（インジケータ）の位置は P2 / P15 の層で、このモデルの状態クラスには持っていない。"
+      .. "マウスの遷移そのものは mouse_click / mouse_select に書いた。",
+    refs = { "#47" },
+    keys = { "<ClickOtherWin>", "<DragRight>", "<ClickLine3>" },
+  },
+  {
+    id = "oos.paste_undo",
+    what = "#57 の貼り付けの undo のまとまり",
+    why = "undo の区切りは P1–P15 の外。貼り付けの遷移と、貼る前の確定は paste に書いた。"
+      .. "観測では u 1 回で貼り付け以降だけが戻り、打った読みは残る。",
+    refs = { "#57" },
+    keys = { "<Paste>" },
+  },
+  {
+    id = "oos.mouse_coords",
+    what = "マウスの座標（どの列をクリックしたか）と、確定した文字の置き場所",
+    why = "ダブルクリックでは、確定した読みがクリックした位置に入る（観測）。"
+      .. "文字の位置は状態クラスに持っていない（P2 の層）。",
+    refs = { "#47", "#191" },
+    keys = { "<2-LeftMouse>" },
   },
   {
     id = "oos.mapped_keys",
@@ -4018,7 +4435,6 @@ M.known = {
   { property = "P1", transition = "t.I_ROMAJI.bufleave", refs = { "#169" } },
   { property = "P1", transition = "t.I_ROMAJI.completion_open", refs = { "#18", "#19", "#190" } },
   { property = "P1", transition = "t.I_ROMAJI.ctrl_a", refs = { "keys.md §6" } },
-  { property = "P1", transition = "t.I_ROMAJI.ctrl_at", refs = { "#56", "keys.md §6" } },
   { property = "P1", transition = "t.I_ROMAJI.ctrl_k", refs = { "#8", "#12" } },
   { property = "P1", transition = "t.I_ROMAJI.ctrl_r", refs = { "#8", "#12", "#20" } },
   { property = "P1", transition = "t.I_ROMAJI.ctrl_t", refs = { "keys.md §6" } },
@@ -4028,9 +4444,9 @@ M.known = {
   { property = "P1", transition = "t.I_ROMAJI.stale.buffer", refs = { "#8", "#12" } },
   { property = "P1", transition = "t.I_ROMAJI.tab", refs = { "#8", "#12" } },
   { property = "P1", transition = "t.I_ROMAJI.winleave", refs = { "#169" } },
+  { property = "P1", transition = "t.I_ROMAJI.mouse_click_other", refs = { "#169" } },
   { property = "P1", transition = "t.I_POINT.bufleave", refs = { "#169" } },
   { property = "P1", transition = "t.I_POINT.ctrl_a", refs = { "keys.md §6" } },
-  { property = "P1", transition = "t.I_POINT.ctrl_at", refs = { "#56", "keys.md §6" } },
   { property = "P1", transition = "t.I_POINT.ctrl_k", refs = { "#8", "#12" } },
   { property = "P1", transition = "t.I_POINT.ctrl_r", refs = { "#8", "#12", "#20" } },
   { property = "P1", transition = "t.I_POINT.ctrl_t", refs = { "keys.md §6" } },
@@ -4040,17 +4456,25 @@ M.known = {
   { property = "P1", transition = "t.I_POINT.stale.buffer", refs = { "#8", "#12" } },
   { property = "P1", transition = "t.I_POINT.tab", refs = { "#8", "#12" } },
   { property = "P1", transition = "t.I_POINT.winleave", refs = { "#169" } },
+  { property = "P1", transition = "t.I_POINT.mouse_click_other", refs = { "#169" } },
   { property = "P1", transition = "t.I_SELECT.bufleave", refs = { "#169" } },
   { property = "P1", transition = "t.I_SELECT.completion_open", refs = { "#18", "#19", "#190" } },
   { property = "P1", transition = "t.I_POINT.completion_open", refs = { "#18", "#19", "#190" } },
   { property = "P1", transition = "t.I_SELECT.stale.buffer", refs = { "#8", "#12" } },
   { property = "P1", transition = "t.I_SELECT.winleave", refs = { "#169" } },
+  { property = "P1", transition = "t.I_SELECT.mouse_click_other", refs = { "#169" } },
   { property = "P1", transition = "t.NI_POINT.return_drop", refs = { "#199" } },
   { property = "P1", transition = "t.NI_POINT.winleave", refs = { "#169" } },
   { property = "P1", transition = "t.NI_SELECT.return_drop", refs = { "#199" } },
   { property = "P1", transition = "t.NI_SELECT.winleave", refs = { "#169" } },
   { property = "P1", transition = "t.V_PRE_POINT.winleave", refs = { "#169" } },
+  { property = "P1", transition = "t.V_PRE_POINT.mouse_click_other", refs = { "#47", "#169" } },
   { property = "P1", transition = "t.V_PRE_SELECT.winleave", refs = { "#169" } },
+  { property = "P1", transition = "t.V_PRE_SELECT.mouse_click_other", refs = { "#47", "#169" } },
+  { property = "P1", transition = "t.NI_POINT.bufleave", refs = { "#169" } },
+  { property = "P1", transition = "t.NI_SELECT.bufleave", refs = { "#169" } },
+  { property = "P1", transition = "t.V_PRE_POINT.bufleave", refs = { "#169" } },
+  { property = "P1", transition = "t.V_PRE_SELECT.bufleave", refs = { "#169" } },
 }
 
 -- 作者の判断（10 点）と、このモデルでの反映先（#204 の 2026-11-06 のコメント）
