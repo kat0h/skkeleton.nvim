@@ -74,6 +74,7 @@ flock /tmp/heavy.lock timeout 600 nvim --headless -u NONE -i NONE \
 - 状態: `N_REC`（記録中）と `N_KEEP`（keepState の one-shot 待ち）。どちらも人の読むクラスは N_OFF で、内部だけ分けています。記録中かどうかは状態クラスに出ず、one-shot 待ちは次の insert の結果で分かれます。
 - イベント: `macro_record_start`（`qa`）、`macro_record_stop`（`q`）、`macro_replay`（`@a`、`3@a`）、`dot_repeat`（`.`）、`normal_motion`（`j` など）。
 - 遷移: 上のイベントの N_OFF / N_REC / N_KEEP の組。`I_*.esc.keepstate` の戻り先を N_OFF から N_KEEP に変え、`N_OFF.insert_enter.keepstate` を `N_KEEP.insert_enter.keepstate` に移しました。
+- フォローアップ（#215 のレビュー 2）で、`N_KEEP` にも `N_OFF` が持つ normal の遷移（`<Insert>`、`R`、マウス、terminal、enable / toggle、blink の非表示、cmdline、visual）を足しました。`<Insert>` と `i` / `a` などの insert_enter は one-shot を使い切るので `I_DIRECT` になります（`N_OFF` からの `I_OFF` とは違う）。
 - 観測: `O-macro-record`、`O-macro-normal`、`O36`、`O-macro-count`、`O-dot`、`O-dot-henkan`、`O-dot-keepstate`、`O-macro-replay-off`、`O-macro-replay-keepstate`、`O-macro-keepstate`。
 - 再現: `replay.macro`、`replay.dot`、`replay.dot.keepstate`、`replay.macro.keepstate`。
 - 対象外: `oos.macro_register`、`oos.repeat_undo`、`oos.macro_nested`。07e の `oos.macro` は消しました。
@@ -85,3 +86,4 @@ flock /tmp/heavy.lock timeout 600 nvim --headless -u NONE -i NONE \
 - terminal で記録したマクロの再生は、端末のジョブを開き直す必要があり、まだ試していません。レジスタの混入だけを #214 に書きました。
 - `.` が繰り返す「直前の変更」の中身（insert か delete か）は状態クラスに持っていません。insert の `.` だけを観測しました。
 - マクロの再生中の guard（#216）は、状態クラスでは typed と同じに見えるので遷移にしていません。`repeat.jsonl` の `guard` と issue に残しました。
+- keepState の one-shot 待ちの最中に `qa` で記録を始める組合せ（N_KEEP と N_REC が同時に成り立つ）は、2 つを別の状態にしているのでモデルで表せません。`M.out_of_scope` の `oos.keepstate_macro_record` に書きました。one-shot は記録では使われないので、記録を止めたあとの insert では有効になります。
