@@ -116,6 +116,40 @@ local function token(name)
   return { name = name, keys = name }
 end
 
+-- blink.cmp の置き場所。観測のためだけに使い、リポジトリには入れない。
+-- BLINK_PATH を設定すれば、そこを使う（テストの .tests/mini.nvim と同じ扱い）
+local BLINK_PATH = os.getenv("BLINK_PATH") or (root .. "/.tests/blink.cmp")
+
+-- blink.cmp を子に読み込ませる。sources.default は README の静的な一覧ではなく、
+-- #24 の再現用に有効・無効で切り替える関数にする
+---@param child table
+local function setup_blink(child)
+  if not vim.uv.fs_stat(BLINK_PATH) then
+    error(("blink.cmp がありません（%s）"):format(BLINK_PATH))
+  end
+  child.lua(
+    [[
+    vim.opt.rtp:append(...)
+    vim.cmd("runtime plugin/blink-cmp.lua")
+    require("blink.cmp").setup({
+      keymap = { preset = "super-tab", ["<Space>"] = {} },
+      completion = { list = { selection = { preselect = true, auto_insert = true } } },
+      sources = {
+        default = function()
+          if require("skkeleton").is_enabled() then
+            return { "skkeleton" }
+          end
+          return { "buffer" }
+        end,
+        providers = { skkeleton = { name = "skkeleton", module = "skkeleton.completion.blink" } },
+      },
+      fuzzy = { implementation = "lua" },
+    })
+  ]],
+    { BLINK_PATH }
+  )
+end
+
 -- プロファイルごとの、子を作ったあとに流す準備と、アルファベット
 local PROFILES = {
   none = {
@@ -253,11 +287,78 @@ local PROFILES = {
       "a",
       "<C-n>",
       "<C-p>",
-      "<C-e>",
+      "<C-x>",
+      "<C-x><C-n>",
       "<C-y>",
+      "<C-e>",
+      "<CR>",
+      "<Tab>",
+      "<BS>",
+      "<C-g>",
       "<Esc>",
       "<C-c>",
       "Kan",
+    },
+  },
+  blink = {
+    -- blink.cmp を子に読み込ませたうえで、送りなしの読みを打てる行から始める
+    wait_ms = 100,
+    setup = function(child)
+      child.api.nvim_buf_set_lines(0, 0, -1, false, { "あいうえお", "" })
+      child.api.nvim_win_set_cursor(0, { 2, 0 })
+      setup_blink(child)
+      helpers.type(child, "i<Plug>(skkeleton-enable)")
+    end,
+    alphabet = {
+      "K",
+      "a",
+      "n",
+      "j",
+      "Kanj",
+      "Kanji",
+      "<Tab>",
+      "<S-Tab>",
+      "<C-n>",
+      "<C-p>",
+      "<CR>",
+      "<C-e>",
+      "<Space>",
+      "<BS>",
+      "<C-g>",
+      "<C-w>",
+      "<Esc>",
+      "<C-c>",
+    },
+  },
+  -- #143 / #174 の再現。文字のある行の行末で、pre-edit の近くにメニューが出るかを見る
+  blink_line = {
+    wait_ms = 100,
+    setup = function(child)
+      child.api.nvim_buf_set_lines(0, 0, -1, false, { "ab cd" })
+      child.api.nvim_win_set_cursor(0, { 1, 5 })
+      setup_blink(child)
+      helpers.type(child, "i<Plug>(skkeleton-enable)")
+    end,
+    alphabet = { "Kanji", "Henkan", "q", "<Space>", "<C-j>", "<CR>", "<Tab>", "<C-e>" },
+  },
+  -- #24 の再現。無効のあいだは buffer の補完が出て、<C-j> で有効にする
+  blink_buffer = {
+    wait_ms = 100,
+    setup = function(child)
+      child.api.nvim_buf_set_lines(0, 0, -1, false, { "Kanji", "" })
+      child.api.nvim_win_set_cursor(0, { 2, 0 })
+      setup_blink(child)
+      child.lua([[vim.keymap.set("i", "<C-j>", "<Plug>(skkeleton-enable)")]])
+      helpers.type(child, "i")
+    end,
+    alphabet = {
+      "Kanji",
+      "<CR>",
+      "Kan",
+      "<C-j>",
+      "<C-n>",
+      "<C-p>",
+      "<Esc>",
     },
   },
 }
@@ -294,6 +395,7 @@ function M.state_key(obs)
     obs.cmdline.line,
     obs.terminal.tail,
     obs.popup.shown and "1" or "0",
+    obs.completion and obs.completion.menu and "1" or "0",
     tostring(obs.register_depth),
     tostring(obs.mappings.skk),
     tostring(#lines),
@@ -398,6 +500,12 @@ end
 ---@return boolean ok, string? err
 function Runner:feed(key)
   local ok, err = pcall(helpers.type, self.child, key)
+  -- blink.cmp のメニューはタイマーで開くので、少し待ってから観測する
+  if ok and self.profile.wait_ms then
+    vim.wait(self.profile.wait_ms, function()
+      return false
+    end)
+  end
   return ok, ok and nil or tostring(err)
 end
 
@@ -1103,7 +1211,8 @@ local function usage()
   --fuzz <n>             ランダムなキー列の本数
   --length <n>           ファジングの 1 本の長さ（遷移の数。既定 20）
   --seed <n>             ファジングの種（既定 1）
-  --profile <名前>         none / insert / normal / cmdline / terminal / register / expr / mouse / completion
+  --profile <名前>         none / insert / normal / cmdline / terminal / register / expr / mouse /
+                         completion / blink / blink_line / blink_buffer（blink は .tests/blink.cmp か BLINK_PATH が要る）
   --alphabet <名前,..>    使う遷移の名前をコンマで指定する（既定はプロファイルの表）
   --max-sequences <n>    幅優先で広げる遷移の上限（既定 1000）
   --out <path>           JSONL の出力先（既定は .tests/explore/ の下）

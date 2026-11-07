@@ -145,8 +145,8 @@ guard は `vim.on_key` で、マッピングに消費されずに素通りして
 | `<C-@>` | i | guard が確定してから Neovim（`i_CTRL-@`） | §4 の `0x80 0xff 0x58` の行 | なし（実測: 読みを確定してから E29 で insert を抜ける） |
 | `<C-c>` | i / c | Neovim（insert / cmdline を抜ける）。insert を抜けたあとに後片付けが確定する | `lua/skkeleton/cleanup.lua:179-222,225-250`、`lua/skkeleton/cleanup.lua:63-67` | なし（実測: `tests/test_e2e_mode.lua:303-310`） |
 | `<C-o>` | i | Neovim（insert-normal）。戻ったときにずれていれば確定する | `lua/skkeleton/cleanup.lua:179-187,120-131`、`tests/test_e2e_input.lua:399-411` | なし（実測: `<C-o>l` で確定） |
-| `<C-n>` `<C-p>` `<C-x>` | i | Neovim の補完（`ic`）。blink.cmp が入っていれば blink のキー | `lua/skkeleton/map.lua:13-23`、`lua/skkeleton/cleanup.lua:283-286` | なし（実測: pre-edit が残る）。blink の既定キーは未確認 |
-| `<C-y>` `<C-e>` | i | Neovim | `lua/skkeleton/map.lua:13-23` | なし（実測: pre-edit が残る） |
+| `<C-n>` `<C-p>` `<C-x>` | i | Neovim の補完（`ic`）。blink.cmp が入っていれば blink のキー | `lua/skkeleton/map.lua:13-23`、`lua/skkeleton/cleanup.lua:283-286` | なし（実測: `<C-n>` `<C-p>` `<C-x><C-n>` で `ic` に入り pre-edit が消える。`<C-x>` だけなら `ix` で pre-edit が残る）。blink の既定キーは #190 で実測 |
+| `<C-y>` `<C-e>` | i | Neovim（補完のメニューが無いとき）。メニューがあれば補完の確定・取消 | `lua/skkeleton/map.lua:13-23` | なし（実測: メニューが無ければ pre-edit が残る。メニューがあれば `ic` から `i` に戻る） |
 | `<CR>`（blink のメニューで項目を選んでいるとき） | i | skkeleton が blink に回す（`eggLikeNewline` が真のとき） | `lua/skkeleton/main.lua:84-87`、`lua/skkeleton/completion/init.lua:278-310`、`doc/skkeleton.txt:516-518` | 未確認（blink.cmp が要る） |
 | マウスの押下・離す・ドラッグ（`<LeftMouse>` など。実イベントは `0x80 0xfd 0x2c` / `0x2e`） | i | Neovim。guard は確定しない。カーソルが動けば後片付けが確定し、visual に入れば確定して無効化する | `lua/skkeleton/guard.lua:59-61`、`lua/skkeleton/cleanup.lua:120-160,179-222` | なし（実測: 1 回クリックで確定、ダブルクリックは `tests/test_e2e_mode.lua:319-338`） |
 | `<ScrollWheelUp>` `<ScrollWheelDown>`（`0x80 0xfd 0x4b` / `0x4c`） | i | Neovim（スクロール）。guard は確定しない | `lua/skkeleton/guard.lua:59-61` | なし（実測: pre-edit が残る） |
@@ -174,8 +174,9 @@ guard は `vim.on_key` で、マッピングに消費されずに素通りして
 | `<C-u>` | i | `▽かn` | バッファが空、読みは捨てられる | なし（実測） |
 | `<C-a>` | i | `▽かn` | バッファ `abcPQ`（直前に入れた文字列）、読みは捨てられる | なし（実測） |
 | `<C-@>` | i | `▽かn` | バッファ `abcかん`（読みを確定）→ E29。insert を抜けて無効になる | なし（実測） |
-| `<C-n>` `<C-p>` `<C-x><C-n>` | i | `▽かn` | pre-edit が残る（補完のモードに入る） | なし（実測） |
-| `<C-e>` `<C-y>` | i | `▽かn` | pre-edit が残る | なし（実測） |
+| `<C-n>` `<C-p>` `<C-x><C-n>` | i | `▽かn` | pre-edit が消える（`ic` に入る。読みは確定しない） | なし（実測: #190） |
+| `<C-x>` | i | `▽かn` | pre-edit が残る（`ix` のキー待ち） | なし（実測: #190） |
+| `<C-e>` `<C-y>` | i | `▽かn` | 補完のメニューが無ければ pre-edit が残る | なし（実測） |
 | `<C-o>l` | i | `▽かn` | バッファ `abcかん`、pre-edit が消える（カーソル移動で確定） | なし（実測） |
 | マウスの左クリック（1 回） | i | `▽かn` | バッファ `hello worldかん`、pre-edit が消える（カーソル移動で確定）。insert のまま | なし（実測） |
 | ホイール上 | i | `▽かn` | pre-edit が残る | なし（実測） |
