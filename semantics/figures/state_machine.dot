@@ -1,0 +1,25 @@
+digraph {
+  rankdir=LR; splines=true; nodesep=0.45; ranksep=0.8;
+  node [shape=box, style="rounded,filled", fillcolor="#ffffff", fontname="Noto Sans CJK JP", fontsize=11];
+  edge [fontname="Noto Sans CJK JP", fontsize=9];
+  "C_DIRECT" [color="#12857d"];
+  "C_POINT" [color="#12857d"];
+  "C_REPLACE" [color="#12857d"];
+  "IC" [color="#6b7280"];
+  "I_DIRECT" [color="#2f6feb"];
+  "I_ESCAPE" [color="#2f6feb"];
+  "I_OFF" [color="#2f6feb"];
+  "I_POINT" [color="#2f6feb"];
+  "I_ROMAJI" [color="#2f6feb"];
+  "I_SELECT" [color="#2f6feb"];
+  "NI" [color="#6b7280"];
+  "N_OFF" [color="#5b6472"];
+  "N_WAIT" [color="#5b6472"];
+  "P_PROMPT" [color="#9a6400"];
+  "R_OFF" [color="#b3261e"];
+  "T_DIRECT" [color="#6b46c1"];
+  "T_NORMAL" [color="#6b46c1"];
+  "T_POINT" [color="#6b46c1"];
+  "V_IDLE" [color="#5b6472"];
+  "V_PRE" [color="#5b6472"];
+}

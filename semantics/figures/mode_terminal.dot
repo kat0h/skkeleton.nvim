@@ -1,0 +1,8 @@
+digraph {
+  rankdir=LR; splines=true; nodesep=0.45; ranksep=0.8;
+  node [shape=box, style="rounded,filled", fillcolor="#ffffff", fontname="Noto Sans CJK JP", fontsize=11];
+  edge [fontname="Noto Sans CJK JP", fontsize=9];
+  "T_DIRECT" [color="#6b46c1"];
+  "T_NORMAL" [color="#6b46c1"];
+  "T_POINT" [color="#6b46c1"];
+}
