@@ -1,0 +1,11 @@
+digraph {
+  rankdir=LR; splines=true; nodesep=0.45; ranksep=0.8;
+  node [shape=box, style="rounded,filled", fillcolor="#ffffff", fontname="Noto Sans CJK JP", fontsize=11];
+  edge [fontname="Noto Sans CJK JP", fontsize=9];
+  "I_DIRECT" [color="#2f6feb"];
+  "I_ESCAPE" [color="#2f6feb"];
+  "I_OFF" [color="#2f6feb"];
+  "I_POINT" [color="#2f6feb"];
+  "I_ROMAJI" [color="#2f6feb"];
+  "I_SELECT" [color="#2f6feb"];
+}
