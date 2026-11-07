@@ -15,24 +15,26 @@
 
 | クラス | 見分け方 |
 |---|---|
-| N_OFF | Vim のモードが n。`g:skkeleton#enabled` が偽で、state は input:direct、pre-edit は無い |
+| N_OFF | Vim のモードが n。`g:skkeleton#enabled` が偽で、state は input:direct、pre-edit は無い。`keepState` の one-shot 待ちもこのクラスのまま、遷移の guard（`config.keepState`）で表す |
 | N_WAIT | Vim のモードが n。`ModeChanged` が作った `SafeState` の one-shot がまだ残っている |
-| N_LOST | normal（または visual）へ移ったあと、state か pre-edit が残っている。今回の観測では見ていない（unknown） |
-| V_PRE | Vim のモードが v / s。pre-edit がまだ描かれている。`ModeChanged` の確定が走る前の一瞬。ダブルクリックでは 1 回目の押下の `CursorMovedI` が先に確定するので空になるが、ドラッグでは `ModeChanged` の時点で pre-edit が残っていた（O10） |
+| V_PRE | Vim のモードが v / s。`<C-o>v` で visual / select に入ったあと、pre-edit が描かれたまま残り続ける。抱えている相（point / select）は属性で持つ |
+| V_IDLE | Vim のモードが v / s。skkeleton は有効で pre-edit は無い（direct から `<C-o>v`） |
+| I_OFF | Vim のモードが i。skkeleton は無効（`<Esc>` のあと `i`、`<Insert>` を 2 回、`l` キー） |
 | I_DIRECT | Vim のモードが i。state は input:direct（かなを直接書く。`▽` は無い） |
 | I_POINT | Vim のモードが i。state は input:okurinasi（`▽...`） |
 | I_SELECT | Vim のモードが i。state は henkan（`▼...`） |
 | I_ESCAPE | state.type が escape。マップされた `<Esc>` のあと、`ModeChanged` か `SafeState` の片付けが終わるまで（insert に戻ったあとに残る場合も含む） |
-| I_PENDING | `render.is_pending()` が真。確定文字列を流して `finish()` を待っている（ローマ字の打ちかけ `state.feed` とは別） |
-| NI | Vim のモードが ni（`<C-o>` の insert-normal） |
+| I_ROMAJI | ローマ字の打ちかけ（`state.feed`）がある。`pending` は `render.is_pending()` の意味だけに使う |
+| NI | Vim のモードが ni（`<C-o>` の insert-normal）。抱えている相（direct / point / select）は属性で持つ |
 | IC | insert の補完（モード `ic`、blink.cmp のメニュー）。blink.cmp が無い環境では観測していない（unknown） |
 | R_OFF | Vim のモードが R で、skkeleton は無効 |
-| R_MID | `<Insert>` による insert と replace の移り変わりの途中。`ModeChanged` の規則 2 が確定と片付けをする。今回の観測では移り変わりの途中を別に観測していない（unknown） |
 | C_DIRECT | Vim のモードが c。cmdline に pre-edit は無い |
 | C_POINT | Vim のモードが c。cmdline に pre-edit（`▽` / `▼`）が本物の文字として書かれ、`cmdline.remember()` が覚えている |
 | C_REPLACE | Vim のモードが c。書いた pre-edit と今の cmdline がずれている（`cmdline.is_stale()` が真）。`CmdlineChanged` の掃除の対象 |
-| P_PROMPT | `host.is_in_input()` が真。辞書登録の `input()` のプロンプトの中 |
+| P_PROMPT | `host.is_in_input()` が真。辞書登録の `input()` のプロンプトの中。外側の相（point / select）は属性で持つ |
 | T_DIRECT / T_POINT / T_NORMAL | terminal（t / nt）。今回の観測の外（#188） |
+
+`R_MID` はクラスにしない。`<Insert>` による insert と replace の移り変わりの途中の状態（transient）としてだけ扱う。マウスのドラッグで `ModeChanged` の確定より前に一瞬 pre-edit が残るもの（O18）も、状態ではなく遷移の途中として扱う。
 
 ## 登録される autocmd の全体
 
@@ -61,11 +63,11 @@
 
 | # | from（`old_mode`） | to（`new_mode`） | action | 効く状態 | 何をするか | 根拠 | 印・観測 |
 |---|---|---|---|---|---|---|---|
-| 1 | `^i` | `^[vV\022sS\019]` | `reset` | I_DIRECT / I_POINT / I_SELECT / IC → V_PRE | `host.is_in_input()` が偽なら、`commit_preedit()`（カーソルは動かさない）、`reset_state`、`restore_mapping`（`host.disable()`。中で `clear_extmark`、popup close、completion hide もする）。pre-edit が無くても `reset_state` と `restore_mapping` はする | 181、207–214 行 | O10 |
+| 1 | `^i` | `^[vV\022sS\019]` | `reset` | I_DIRECT / I_POINT / I_SELECT / IC → N_OFF（visual は途中） | `host.is_in_input()` が偽なら、`commit_preedit()`（カーソルは動かさない）、`reset_state`、`restore_mapping`（`host.disable()`。中で `clear_extmark`、popup close、completion hide もする）。pre-edit が無くても `reset_state` と `restore_mapping` はする | 181、207–214 行 | O10 |
 | 2 | `^i` | `^R` | `reset` | I_DIRECT / I_POINT / I_SELECT → R_MID | `host.is_in_input()` が偽なら、`commit_preedit("insert")`（カーソルを確定文字の後ろへ）、`reset_state`、`restore_mapping` | 183、207–214 行 | O3 |
 | 3 | `^ni` | `^i` | `stale` | NI → I_DIRECT / I_POINT | `reset_if_stale("i")`。カーソルだけがずれていれば `commit_preedit()`、それ以外はずれなら `drop`（読みは確定しない）、`clear_extmark`、`reset_state`、`render`。`restore_mapping` はしない（有効なまま） | 185、215–217 行 | O4、O5 |
 | 4 | `.*` | `^n` | `safe_reset` | すべて → N_OFF / N_WAIT | state が escape で `host.is_in_input()` が偽なら、その場で `reset_state`（218–221 行）。そうでなければ `SafeState` の one-shot を作る（225–248 行）。one-shot は、そのときのモードが i / c / t でなく、ni / nt でもなく、`host.is_in_input()` でもないときに、`old_mode` の先頭が `i` なら `commit_preedit("normal")` をして `reset_state`、`restore_mapping`（224、230–246 行） | 187、218–248 行 | timing |
-| 5 | `^c` | `^[^ictn]` | `safe_reset` | C_DIRECT / C_POINT / C_REPLACE → V_PRE / R（operator-pending の `no` は先に規則 4 が当たる） | 規則 4 の `safe_reset` と同じ分岐（state が escape ならその場で `reset_state`、そうでなければ `SafeState` の one-shot。`commit` は偽） | 189、218–248 行 | timing、O11 |
+| 5 | `^c` | `^[^ictn]` | `safe_reset` | C_DIRECT / C_POINT / C_REPLACE → N_OFF / R_OFF（visual / R は途中。operator-pending の `no` は先に規則 4 が当たる） | 規則 4 の `safe_reset` と同じ分岐（state が escape ならその場で `reset_state`、そうでなければ `SafeState` の one-shot。`commit` は偽） | 189、218–248 行 | timing、O11 |
 
 補足:
 
@@ -110,7 +112,7 @@
 | バッファの `on_bytes`（pre-edit の行が書き換わったとき） | I_DIRECT / I_POINT / I_SELECT | pre-edit の行が変わると `mark_bytes_changed` を立て、`vim.schedule` で `check_stale()` を呼ぶ。カーソルだけのずれではないので、読みは `drop` される | `render.lua:172-199`、`cleanup.lua:150-165` | timing、O6 |
 | `vim.on_key`（`guard.attach`） | I_DIRECT / I_POINT / I_SELECT、C_DIRECT / C_POINT、T_DIRECT / T_POINT | マップされずに素通りした物理の特殊キーで、pre-edit を確定してからキーを流す。キーの棚卸しは #181 | `guard.lua:139-194`、`cleanup.lua:295` | キーの表（#181） |
 | `vim.paste` の包み | I_DIRECT / I_POINT / I_SELECT | 貼り付けの前に pre-edit を確定して流す（#125）。バッファの文字を直接書く | `paste.lua:31-69` | イベントではない（#191） |
-| `render.finish()` の `User skkeleton-handled` | I_PENDING | 確定文字列を流したあとの描画を終える | `render.lua:388-406` | timing（`feed_key` のあと） |
+| `render.finish()` の `User skkeleton-handled` | 確定待ち（`render.is_pending()`。クラスではない） | 確定文字列を流したあとの描画を終える | `render.lua:388-406` | timing（`feed_key` のあと） |
 
 ## CmdlineLeave
 
@@ -350,6 +352,6 @@ insert で有効化、`;ka`、`qa!`。
 ## 未観測・決めていないこと
 
 - `IC`（補完のメニューが開いている状態）と、その中の `CompleteDone` / `TextChangedP` は blink.cmp が無いため観測していません。
-- `R_MID`（`<Insert>` による i→R の移り変わりの途中）と `N_LOST` は観測で作れませんでした。
-- `V_PRE` は `ModeChanged` の確定より前の一瞬です。ダブルクリックでは 1 回目の押下の `CursorMovedI` が先に確定するため、`ModeChanged` の時点で pre-edit は空でした。ドラッグでは `ModeChanged` の時点で残っていました（O18）。
+- `R_MID`（`<Insert>` による i→R の移り変わりの途中）は観測で作れませんでした。遷移の途中の状態としてだけ扱います。`N_LOST` はクラスにせず、読みが消える遷移を P1 の破れとして扱います。
+- `V_PRE` は `<C-o>v` のあと pre-edit が残り続ける状態です（O-ctrl-o-v）。ダブルクリックでは 1 回目の押下の `CursorMovedI` が先に確定するため、`ModeChanged` の時点で pre-edit は空でした。ドラッグでは `ModeChanged` の時点で残っていましたが、これは遷移の途中として扱います（O18）。
 - upstream（denops 版）との比較はしていません。この表は Lua 版のコードと観測だけです。
