@@ -31,15 +31,20 @@
 --   unknown   まだ確かめていない（コード読解だけ、または未観測）
 --   impossible 起こり得ない（BFS で到達しないことを確かめる対象）
 --
--- observed: 根拠の観測。M.observations の id を書く。空なら未観測。
---   その遷移を通った観測だけを書く（model_check が再生の経路で確かめる）。
+-- observed: 根拠の観測。M.observations（04 の観測）か M.probes（06 の観測）の id を書く。
+--   空なら未観測。その遷移を通った観測だけを書く（model_check が再生の経路で確かめる）。
 --
 -- 観測の取り方:
 --   子の nvim（tests/helpers.lua の e2e_set、一時ディレクトリの辞書、HISTFILE=/dev/null）に、
 --   1 つの遷移を 1 回の入力として流し、落ち着いてから observe.classify と同じ見方でクラスを読んだ。
+--   06 の観測は M.probes にある（semantics/compare/probe.lua が取り、gen_probes.lua が作る）。
 --   <C-r>a のように途中で入力待ちになるキーは、まとめて 1 回で流す（分けて流すと観測が崩れる）。
 --   この観測は 04 の作業中だけ使った使い捨てのスクリプトで取った。コマンドは
 --   model_check.lua の「観測の再生」で、キー列からモデルの経路をたどって確かめられる。
+--
+--   キーでないイベント（User イベントや autocmd）は、観測の keys に "@イベント名" と書いて、
+--   その位置で起こす（例: "@blink_refresh"）。07d の blink.cmp のメニューはキーではなく
+--   User skkeleton-handled で開くので、この書き方を使う。
 --
 -- 使い方:
 --   nvim --headless -u NONE -i NONE -l semantics/model/model_check.lua
@@ -50,8 +55,9 @@ local M = {}
 M.issue = 184
 M.parent = 179
 M.scope = "insert / normal / visual / replace / terminal（Vim のモード i / n / v・s / R / t・nt）と、"
-  .. "貼り付け・マウス・ホイール・WinLeave / BufLeave・skkeleton が奪わないキー（#191）、"
-  .. "辞書登録のプロンプト（@、入れ子。Vim のモード c の cmdtype @。#189）"
+  .. "組み込み・blink.cmp の補完、貼り付け・マウス・ホイール・WinLeave / BufLeave・"
+  .. "skkeleton が奪わないキー（#191）、辞書登録のプロンプト（@、入れ子。"
+  .. "Vim のモード c の cmdtype @。#189）"
 M.sources = {
   "semantics/GLOSSARY.md",
   "semantics/inventory/keys.md（#181）",
@@ -59,6 +65,7 @@ M.sources = {
   "semantics/issues.md（#183）",
   "lua/skkeleton/map.lua、keymap.lua、guard.lua、cleanup.lua、paste.lua、function/",
   "lua/skkeleton/render.lua、render/cmdline.lua、preedit.lua（terminal の pre-edit、#188）",
+  "lua/skkeleton/completion/init.lua、completion/blink.lua（#190）",
   "semantics/explore/explore.lua の terminal プロファイル（#188 の観測）",
   "semantics/explore/observations/misc.jsonl（#191）",
   "semantics/explore/register.lua、semantics/explore/observations/register.jsonl（#189）",
@@ -68,6 +75,8 @@ M.sources = {
 -- 設定。guard から config.<名前> で引く。model_check の --config で上書きできる
 M.config = {
   keepState = false,
+  -- blink.cmp の eggLikeNewline。真ならメニューで選んだ候補を <CR> で確定する
+  eggLikeNewline = false,
 }
 
 -- 解析の開始状態。BFS はここから広げる
@@ -78,7 +87,9 @@ M.initial = { "N_OFF" }
 -- class は人が読む状態クラス。観測（semantics/explore/observe.lua の classify）が
 -- 返す名前と違うときは notes に書く。
 -- 内部で分けた状態（NI_POINT など）は、class にまとめ先を書く。
--- aspect は抱えている相（direct / point / select）。NI / V_PRE / P_PROMPT で使う。
+-- aspect はクラスの中の相や補完の種類を内部で分ける名前。NI / V_PRE / P_PROMPT は
+-- direct / point / select を、IC は builtin / waiting-direct / waiting-romaji / waiting-point /
+-- waiting-select / blink-point を、I_OFF は buffer-menu を持つ。
 -- reading は、その状態が抱えている読み。none / romaji / point / henkan / any。
 --   any は「入り方で変わる」の意味で、性質の検査では読みがあるものとして扱う。
 M.states = {
@@ -128,7 +139,8 @@ M.states = {
     preedit = "point",
     label = "▽ / ▽*",
     refs = { "keymap.lua:23-56", "function/input.lua" },
-    notes = "▽ と ▽* はまとめた。今の観測では同じ遷移になり、分ける根拠が無い（作者の判断 7）。",
+    notes = "▽ と ▽* はまとめた。06 の観測で `a` は I_POINT と I_SELECT、`<Space>` は I_SELECT と P_PROMPT に割れ、"
+      .. "作者の判断 7 の条件が成立した。分ける作業は #194 と #193 で扱う。",
   },
   I_SELECT = {
     class = "I_SELECT",
@@ -196,15 +208,113 @@ M.states = {
   },
   IC = {
     class = "IC",
-    layer = "Vim のモードが ic（組み込み補完のメニュー）",
+    aspect = "builtin",
+    layer = "Vim のモードが ic（組み込み補完のメニュー）。pre-edit は消えている",
     vim_mode = "ic",
     enabled = true,
     phase = "input:direct",
     reading = "none",
     preedit = "none",
-    label = "completion",
-    refs = { "#18", "#19", "#190" },
-    notes = "補完の中の動きは #190（07d）。ここでは入口と出口の境界だけを書く。",
+    menu = "builtin",
+    label = "completion（組み込み）",
+    refs = { "#18", "#19", "#45", "#190", "keys.md §5", "events.md O16" },
+    notes = "組み込みの補完。▽ から <C-n> で入ると、その時点で pre-edit（extmark）が消える（#190 の観測）。"
+      .. "人の読むクラスでは、補完のメニューが開いているあいだは pre-edit が無い。",
+  },
+  IX_DIRECT = {
+    class = "IC",
+    aspect = "waiting-direct",
+    layer = "Vim のモードが ix（<C-x> のあと、補完の種類のキー待ち）。読みは無い",
+    vim_mode = "ix",
+    enabled = true,
+    phase = "input:direct",
+    reading = "none",
+    preedit = "none",
+    menu = "waiting",
+    transient = true,
+    reachable = true,
+    label = "completion（キー待ち・direct）",
+    refs = { "keys.md §5", "#190" },
+    notes = "<C-x> は次のキーで補完の種類を選ぶ。この状態はその 1 キーのあいだだけ。",
+  },
+  IX_ROMAJI = {
+    class = "IC",
+    aspect = "waiting-romaji",
+    layer = "Vim のモードが ix。ローマ字の打ちかけを抱えたまま",
+    vim_mode = "ix",
+    enabled = true,
+    phase = "input:direct",
+    reading = "romaji",
+    preedit = "romaji",
+    menu = "waiting",
+    transient = true,
+    reachable = true,
+    label = "completion（キー待ち・打ちかけ）",
+    refs = { "keys.md §5", "#190" },
+  },
+  IX_POINT = {
+    class = "IC",
+    aspect = "waiting-point",
+    layer = "Vim のモードが ix。▽ を抱えたまま",
+    vim_mode = "ix",
+    enabled = true,
+    phase = "input:okurinasi|okuriari",
+    reading = "point",
+    preedit = "point",
+    menu = "waiting",
+    transient = true,
+    reachable = true,
+    label = "completion（キー待ち・▽）",
+    refs = { "keys.md §5", "#190" },
+    notes = "<C-x> の時点では pre-edit は消えない（観測）。次の <C-n> などで補完が始まると消える。",
+  },
+  IX_SELECT = {
+    class = "IC",
+    aspect = "waiting-select",
+    layer = "Vim のモードが ix。▼ を抱えたまま",
+    vim_mode = "ix",
+    enabled = true,
+    phase = "henkan",
+    reading = "henkan",
+    preedit = "henkan",
+    menu = "waiting",
+    transient = true,
+    reachable = true,
+    label = "completion（キー待ち・▼）",
+    refs = { "keys.md §5", "#190" },
+  },
+  I_BLINK_POINT = {
+    class = "IC",
+    aspect = "blink-point",
+    layer = "Vim のモードは i のまま。blink.cmp のメニューが開いていて、▽ の読みを抱えたまま",
+    vim_mode = "i",
+    enabled = true,
+    phase = "input:okurinasi",
+    reading = "point",
+    preedit = "point",
+    menu = "blink",
+    reachable = "unknown",
+    label = "completion（blink・▽）",
+    refs = { "#24", "#143", "#174", "#190", "completion/init.lua:246-273" },
+    notes = "人が読むクラスは IC（組み込みと同じ補完）。blink は Vim のモードを変えないので、"
+      .. "pre-edit は残ったままメニューが出る。状態は User skkeleton-handled の refresh で開き、"
+      .. "User BlinkCmpMenuClose / skkeleton-enable-post / disable-post で閉じる（キーではない）。",
+  },
+  I_OFF_MENU = {
+    class = "I_OFF",
+    aspect = "buffer-menu",
+    layer = "Vim のモードが i、skkeleton は無効。blink.cmp の buffer 補完のメニューが開いている",
+    vim_mode = "i",
+    enabled = false,
+    phase = "input",
+    reading = "none",
+    preedit = "none",
+    menu = "buffer",
+    reachable = "unknown",
+    label = "insert（無効・buffer 補完）",
+    refs = { "#24", "completion/init.lua:135-142" },
+    notes = "無効のあいだに出る blink の buffer 補完のメニュー（#24）。"
+      .. "skkeleton の状態ではないが、有効化したときに閉じるかどうかが結果を分けるので状態にした。",
   },
   N_OFF = {
     class = "N_OFF",
@@ -720,6 +830,27 @@ M.events = {
     modes = { "i", "R", "t" },
     refs = { "guard.lua:15-16", "cleanup.lua:183,207-214", "#29", "#38", "#156" },
   },
+  normal_R = {
+    kind = "key",
+    keys = { "R" },
+    modes = { "n" },
+    refs = { "Vim 本体" },
+    notes = "normal の R は置換モードに入る。skk は置換モードでは有効化を拒否する（main.lua:103-106）。",
+  },
+  ni_R = {
+    kind = "key",
+    keys = { "R" },
+    modes = { "i" },
+    refs = { "cleanup.lua:179-190" },
+    notes = "niI（<C-o> のあと）で R を 1 キーで打つ。insert からの <C-o>R と同じ移り先。",
+  },
+  ni_v = {
+    kind = "key",
+    keys = { "v" },
+    modes = { "i" },
+    refs = { "cleanup.lua:179-190" },
+    notes = "niI（<C-o> のあと）で v を 1 キーで打つ。insert からの <C-o>v と同じ移り先。",
+  },
   ctrl_o = {
     kind = "key",
     keys = { "<C-o>" },
@@ -791,21 +922,104 @@ M.events = {
   },
   completion_open = {
     kind = "key",
-    keys = { "<C-n>", "<C-p>", "<C-x>", "<C-x><C-n>" },
+    keys = { "<C-n>", "<C-p>", "<C-x><C-n>" },
     modes = { "i", "t" },
     refs = { "guard.lua:78-80", "keys.md §5", "#18", "#19", "#45", "#190" },
+    notes = "<C-n> / <C-p> はそのまま補完を始め、<C-x><C-n> は <C-x> のあとに始める。"
+      .. "▽ や ▼ から始めると、その時点で pre-edit が消える（P1 の破れ）。",
+  },
+  completion_key = {
+    kind = "key",
+    keys = { "<C-x>" },
+    modes = { "i", "ic", "t" },
+    refs = { "keys.md §5", "#190" },
+    notes = "補完の種類を選ぶキー待ち（モード ix）。pre-edit はこの時点では消えない。",
   },
   completion_next = {
     kind = "key",
     keys = { "<C-n>", "<C-p>" },
-    modes = { "ic" },
-    refs = { "keys.md §5", "#190" },
+    modes = { "i", "ic" },
+    refs = { "keys.md §5", "#190", "blink.cmp keymap super-tab" },
+    notes = "ic では候補を次／前へ。ix では補完を始める。blink のメニューでは <C-n> / <C-p> も選択を動かす。",
   },
   completion_accept = {
     kind = "key",
-    keys = { "<C-y>", "<C-e>" },
+    keys = { "<C-y>" },
     modes = { "i", "ic", "t" },
     refs = { "keys.md §6", "#19", "#190" },
+    notes = "補完の候補を確定する。<C-e> は取り消しなので completion_cancel に分けた。",
+  },
+  completion_cancel = {
+    kind = "key",
+    keys = { "<C-e>" },
+    modes = { "i", "ic" },
+    refs = { "keys.md §6", "#19", "#190" },
+    notes = "補完の候補を取り消す。メニューが出ていないときは何もしない（観測）。",
+  },
+  completion_newline = {
+    kind = "key",
+    keys = { "<CR>" },
+    modes = { "i", "ic" },
+    refs = { "keys.md §6", "#190", "doc/skkeleton.txt:516-518" },
+    notes = "組み込みの補完では選んだ候補を確定して改行する。blink では eggLikeNewline のときだけ候補を確定する。",
+  },
+  completion_tab = {
+    kind = "key",
+    keys = { "<Tab>", "<S-Tab>" },
+    modes = { "i", "ic" },
+    refs = { "keys.md §5", "#190", "blink.cmp keymap super-tab" },
+    notes = "組み込みの補完では <Tab> が候補を確定する。blink の super-tab では <Tab> が選んだ候補を確定する。",
+  },
+  blink_refresh = {
+    kind = "autocmd",
+    keys = {},
+    modes = { "i" },
+    refs = { "completion/init.lua:128-134,246-273", "#24", "#143", "#174", "#190" },
+    notes = "User skkeleton-handled。▽ の読みが変わったときに blink のメニューを開く／開き直す。"
+      .. "読みが minLength 未満か、▽ でなければ閉じる。ユーザーの設定の blink が要る。",
+  },
+  blink_menu_open = {
+    kind = "autocmd",
+    keys = {},
+    modes = { "i" },
+    refs = { "completion/init.lua:143-151", "#143", "#174", "#190" },
+    notes = "User BlinkCmpMenuOpen。▽ の入力中なら、メニューをカーソルに揃える（align_to = cursor）。",
+  },
+  blink_menu_close = {
+    kind = "autocmd",
+    keys = {},
+    modes = { "i" },
+    refs = { "completion/init.lua:152-158", "#143", "#174", "#190" },
+    notes = "User BlinkCmpMenuClose。align_to を元に戻す。",
+  },
+  blink_hide = {
+    kind = "autocmd",
+    keys = {},
+    modes = { "i" },
+    refs = { "completion/init.lua:135-142", "#24", "#190" },
+    notes = "User skkeleton-enable-post / skkeleton-disable-post。"
+      .. "skkeleton が開いたものではないメニューも閉じる。",
+  },
+  blink_commit = {
+    kind = "api",
+    keys = { "completion.confirm" },
+    modes = { "i" },
+    refs = { "completion/init.lua:221-226", "main.lua:205-236", "#190" },
+    notes = "blink の source の execute が選んだ語で確定する。main.complete が読みを捨てて語を流す。",
+  },
+  buffer_menu_open = {
+    kind = "autocmd",
+    keys = {},
+    modes = { "i" },
+    refs = { "completion/init.lua:143-158", "#24", "#190" },
+    notes = "blink の buffer 補完のメニューが開く。skkeleton が無効でも出る。",
+  },
+  buffer_menu_close = {
+    kind = "autocmd",
+    keys = {},
+    modes = { "i" },
+    refs = { "completion/init.lua:135-158", "#24", "#190" },
+    notes = "blink の buffer 補完のメニューが閉じる。",
   },
   ctrl_o_colon = {
     kind = "key",
@@ -928,7 +1142,21 @@ M.events = {
     keys = {},
     modes = { "i", "v" },
     refs = { "cleanup.lua:120-165,283-286", "events.md", "#8", "#12", "#61", "#66" },
-    notes = "TextChangedI / TextChangedP / CursorMovedI / CompleteDone / on_bytes。",
+    notes = "TextChangedI / CursorMovedI / on_bytes。",
+  },
+  text_changed_p = {
+    kind = "autocmd",
+    keys = {},
+    modes = { "i" },
+    refs = { "cleanup.lua:150-165,283-286", "events.md O16", "#19", "#190" },
+    notes = "補完のメニューが出ているあいだに候補やバッファが変わると来る。check_stale は mode が i / c でなければ何もしない。",
+  },
+  complete_done = {
+    kind = "autocmd",
+    keys = {},
+    modes = { "i" },
+    refs = { "cleanup.lua:150-165,283-286", "events.md O16", "#19", "#190" },
+    notes = "組み込みの補完が終わったときに来る。この時点ではもう insert に戻っていることが多い。",
   },
   paste = {
     kind = "input",
@@ -962,7 +1190,8 @@ M.events = {
   },
   register_cancel = {
     kind = "key",
-    keys = { "<Esc>", "<C-g>", "<C-c>" },
+    -- `@register` は cmdtype の注記。実際に打つのは <Esc> / <C-g> / <C-c>
+    keys = { "<C-g>@register", "<Esc>@register", "<Esc>", "<C-g>", "<C-c>" },
     modes = { "c" },
     refs = { "host.lua:166-169,197-204", "#116", "#154", "#189" },
     notes = "プロンプトの間は、<Esc> / <C-g> / <C-c> が host.cancel_input に差し替えられている"
@@ -1048,14 +1277,14 @@ end
 add({
   id = "t.N_OFF.enable",
   from = "N_OFF", event = "enable", to = "I_DIRECT",
-  effects = { "save_mapping", "install_mapping", "reset_state" },
+  effects = { "save_mapping", "install_mapping", "reset_state", "hide_completion" },
   status = "ok", refs = { "main.lua:101-125" }, observed = { "O-enable" },
   notes = "元のマッピングを退避してから、skkeleton のマッピングを張る。",
 })
 add({
   id = "t.I_OFF.enable",
   from = "I_OFF", event = "enable", to = "I_DIRECT",
-  effects = { "save_mapping", "install_mapping", "reset_state" },
+  effects = { "save_mapping", "install_mapping", "reset_state", "hide_completion" },
   status = "ok", refs = { "main.lua:101-125" }, observed = { "O-enable-insert" },
 })
 add({
@@ -1064,6 +1293,35 @@ add({
   effects = { "save_mapping", "install_mapping", "reset_state" },
   status = "unknown", refs = { "main.lua:169-175" },
   notes = "events.md O15 は API の観測で、キー列では toggle を再生できない。",
+})
+-- insert で有効のまま enable を呼ぶ（<Plug>(skkeleton-enable) を押す）
+add({
+  id = "t.I_DIRECT.enable",
+  from = "I_DIRECT", event = "enable", to = "I_DIRECT",
+  effects = { "save_mapping", "install_mapping", "reset_state" },
+  status = "ok", refs = { "main.lua:101-125", "06 の観測 P.t.I_DIRECT.enable" },
+  notes = "有効なまま enable を呼んでも、direct のまま（06 の観測）。マッピングを張り直す。",
+})
+add({
+  id = "t.I_ROMAJI.enable",
+  from = "I_ROMAJI", event = "enable", to = "I_DIRECT",
+  effects = { "drop", "save_mapping", "install_mapping", "reset_state", "clear_extmark" },
+  status = "gap", refs = { "main.lua:101-125", "#210", "06 の観測 P.t.I_ROMAJI.enable" },
+  notes = "変換中に enable を呼ぶと、打ちかけのローマ字が確定せずに消える（#210）。",
+})
+add({
+  id = "t.I_POINT.enable",
+  from = "I_POINT", event = "enable", to = "I_DIRECT",
+  effects = { "drop", "save_mapping", "install_mapping", "reset_state", "clear_extmark" },
+  status = "gap", refs = { "main.lua:101-125", "#210", "06 の観測 P.t.I_POINT.enable" },
+  notes = "変換中に enable を呼ぶと、読みが確定せずに消える（#210）。",
+})
+add({
+  id = "t.I_SELECT.enable",
+  from = "I_SELECT", event = "enable", to = "I_DIRECT",
+  effects = { "drop", "save_mapping", "install_mapping", "reset_state", "clear_extmark" },
+  status = "gap", refs = { "main.lua:101-125", "#210", "06 の観測 P.t.I_SELECT.enable" },
+  notes = "候補を選んでいる途中に enable を呼ぶと、候補が確定せずに消える（#210）。",
 })
 add({
   id = "t.I_OFF.toggle",
@@ -1229,9 +1487,18 @@ add({
 })
 add({
   id = "t.N_OFF.insert_key",
-  from = "N_OFF", event = "insert_key", to = "R_OFF",
+  from = "N_OFF", event = "insert_key", to = "I_OFF",
   effects = { "pass_key" },
-  status = "ok", refs = { "Vim 本体" },
+  status = "ok", refs = { "Vim 本体", "06 の観測 P.t.N_OFF.insert_key" },
+  notes = "normal の <Insert> は insert に入る（置換モードではない）。06 の観測で確かめた。"
+    .. "normal の R は normal_R の遷移。",
+})
+add({
+  id = "t.N_OFF.R",
+  from = "N_OFF", event = "normal_R", to = "R_OFF",
+  effects = { "pass_key" },
+  status = "ok", refs = { "Vim 本体", "06 の観測 P.t.N_OFF.R" },
+  notes = "normal の R は置換モードに入る。skk は無効のまま。",
 })
 add({
   id = "t.I_OFF.insert_key",
@@ -1257,7 +1524,7 @@ for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT" }) do
     from = from, event = "ctrl_c", to = "N_WAIT",
     effects = {},
     status = "ok", refs = { "cleanup.lua:187,225-248", "#70", "#142" },
-    observed = from ~= "I_SELECT" and { "O-ctrlc" } or {},
+    observed = from == "I_POINT" and { "O-ctrlc" } or {},
     notes = "ModeChanged が SafeState の one-shot を作るだけ。確定は safestate の遷移で起きる。",
   })
   add({
@@ -1318,7 +1585,7 @@ for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT" }) do
       or from ~= "I_DIRECT" and { "commit_reading", "clear_extmark" } or { "clear_extmark" },
     status = from ~= "I_SELECT" and "ok" or "unknown",
     refs = { "cleanup.lua:183,207-214", "#29", "#156" },
-    observed = from ~= "I_SELECT" and { "O-insert" } or {},
+    observed = from == "I_POINT" and { "O-insert" } or {},
     notes = "ModeChanged の規則 2。置換モードでは確定した文字の後ろへカーソルを移す。"
       .. "O-insert は ▽ から打っていて、▼ からは打っていない。",
   })
@@ -1335,14 +1602,29 @@ add({
   id = "t.I_DIRECT.ctrl_o",
   from = "I_DIRECT", event = "ctrl_o", to = "NI_DIRECT",
   effects = { "keep" },
-  status = "ok", refs = { "#117" }, observed = { "O-ctrl-o-l" },
+  status = "ok", refs = { "#117" }, observed = {},
 })
 add({
   id = "t.I_ROMAJI.ctrl_o",
-  from = "I_ROMAJI", event = "ctrl_o", to = "NI_DIRECT",
+  from = "I_ROMAJI", event = "ctrl_o", to = "NI_POINT",
   effects = { "keep" },
-  status = "unknown", refs = { "#117" },
-  notes = "ローマ字の打ちかけを niI へ持ち越すかは未観測。今のモデルでは持ち越さない。",
+  status = "ok", refs = { "#117", "06 の観測 P.t.I_ROMAJI.ctrl_o" },
+  notes = "打ちかけ（▽k）を niI へ持ち越す（06 の観測）。NI_POINT の相は point だが、"
+    .. "実際の pre-edit はローマ字の打ちかけ（▽k）。モデルは打ちかけの中身を状態に持っていない。",
+})
+add({
+  id = "t.I_ROMAJI.ctrl_o_R",
+  from = "I_ROMAJI", event = "ctrl_o_R", to = "R_OFF",
+  effects = { "commit_reading", "reset_state", "restore_mapping", "clear_extmark" },
+  status = "ok", refs = { "cleanup.lua:179-190", "06 の観測 P.t.I_ROMAJI.ctrl_o_R" },
+  notes = "打ちかけのローマ字をそのまま確定して（k がバッファに入る）無効化する。",
+})
+add({
+  id = "t.I_ROMAJI.ctrl_o_v",
+  from = "I_ROMAJI", event = "ctrl_o_v", to = "V_PRE_POINT",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "cleanup.lua:179-190", "06 の観測 P.t.I_ROMAJI.ctrl_o_v" },
+  notes = "打ちかけ（▽k）を描いたまま visual に入る。相は point だが pre-edit はローマ字。",
 })
 add({
   id = "t.I_POINT.ctrl_o",
@@ -1366,7 +1648,7 @@ for _, from in ipairs({ "NI_DIRECT", "NI_POINT", "NI_SELECT" }) do
     effects = commit and { commit, "reset_state", "render" } or { "reset_state", "render" },
     status = from ~= "NI_SELECT" and "ok" or "unknown",
     refs = { "cleanup.lua:120-147,215-217", "#117" },
-    observed = from ~= "NI_SELECT" and { "O4" } or {},
+    observed = from == "NI_POINT" and { "O4" } or {},
     notes = "カーソルだけがずれたとき。pre-edit の位置に確定する（カーソルは動かさない）。"
       .. "O4 の <C-o>0 は niI から戻る。O-ctrl-o-l は keep の道を通るのでここでは使わない。",
   })
@@ -1376,7 +1658,7 @@ for _, from in ipairs({ "NI_DIRECT", "NI_POINT", "NI_SELECT" }) do
     effects = { "drop", "reset_state", "clear_extmark", "render" },
     status = from ~= "NI_DIRECT" and "gap" or "unknown",
     refs = { "cleanup.lua:120-147,215-217", "#199" },
-    observed = from ~= "NI_SELECT" and { "O5", "O-ctrl-o-x" } or {},
+    observed = from == "NI_POINT" and { "O5", "O-ctrl-o-x" } or {},
     notes = "カーソル以外のずれ（バッファが変わった）。読みは確定せずに捨てる。"
       .. "O5 / O-ctrl-o-x は ▽ から打っていて、▼ からは打っていない。",
   })
@@ -1402,7 +1684,7 @@ add({
 })
 add({
   id = "t.NI_DIRECT.visual",
-  from = "NI_DIRECT", event = "ctrl_o_v", to = "V_IDLE",
+  from = "NI_DIRECT", event = "ni_v", to = "V_IDLE",
   effects = { "keep" },
   status = "unknown", refs = { "cleanup.lua:179-190" },
   notes = "<C-o>v を direct から。visual の間は pre-edit が無く、skk は有効のまま。"
@@ -1410,7 +1692,7 @@ add({
 })
 add({
   id = "t.NI_POINT.visual",
-  from = "NI_POINT", event = "ctrl_o_v", to = "V_PRE_POINT",
+  from = "NI_POINT", event = "ni_v", to = "V_PRE_POINT",
   effects = { "keep", "render" },
   status = "unknown", refs = { "cleanup.lua:179-190" },
   notes = "MODE_TRANSITIONS が niI からの移り先を見ていないので、visual の間も pre-edit が描かれたまま残る。"
@@ -1418,7 +1700,7 @@ add({
 })
 add({
   id = "t.NI_SELECT.visual",
-  from = "NI_SELECT", event = "ctrl_o_v", to = "V_PRE_SELECT",
+  from = "NI_SELECT", event = "ni_v", to = "V_PRE_SELECT",
   effects = { "keep", "render" },
   status = "unknown", refs = { "cleanup.lua:179-190" },
   notes = "▼ から niI を経て visual へ。pre-edit は残るが、P1 などは破らない。観測は無い。",
@@ -1446,14 +1728,14 @@ add({
 })
 add({
   id = "t.NI_DIRECT.replace",
-  from = "NI_DIRECT", event = "ctrl_o_R", to = "R_OFF",
+  from = "NI_DIRECT", event = "ni_R", to = "R_OFF",
   effects = { "reset_state", "restore_mapping", "clear_extmark" },
   status = "unknown", refs = { "cleanup.lua:179-190" },
   notes = "O-ctrl-o-R は <C-o>R を 1 つのキーとして I_POINT から通るので、niI 経由は未観測。",
 })
 add({
   id = "t.NI_POINT.replace",
-  from = "NI_POINT", event = "ctrl_o_R", to = "R_OFF",
+  from = "NI_POINT", event = "ni_R", to = "R_OFF",
   effects = { "commit_reading", "reset_state", "restore_mapping", "clear_extmark" },
   status = "unknown", refs = { "cleanup.lua:179-190" },
   notes = "O-ctrl-o-R は I_POINT から 1 キーで通る。niI 経由は未観測。"
@@ -1461,7 +1743,7 @@ add({
 })
 add({
   id = "t.NI_SELECT.replace",
-  from = "NI_SELECT", event = "ctrl_o_R", to = "R_OFF",
+  from = "NI_SELECT", event = "ni_R", to = "R_OFF",
   effects = { "commit_candidate", "reset_state", "restore_mapping", "clear_extmark" },
   status = "unknown", refs = { "cleanup.lua:179-190" },
 })
@@ -1596,7 +1878,9 @@ for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT" }) do
     from = from, event = "ctrl_o_colon", to = from,
     effects = { "keep", "clean_cmdline" },
     status = "ok", refs = { "cleanup.lua:254-266", "#86" },
-    observed = from == "I_SELECT" and { "O-ctrl-o-colon-cr-select" } or { "O-ctrl-o-colon" },
+    observed = from == "I_SELECT" and { "O-ctrl-o-colon-cr-select" }
+      or from == "I_POINT" and { "O-ctrl-o-colon" }
+      or {},
     notes = "<C-o>:<Esc> も <C-o>:<CR> も、戻ると pre-edit を保つ（観測）。cmdline の中は 07a。"
       .. "O-ctrl-o-colon は ▽ から、▼ からは O-ctrl-o-colon-cr-select で確かめた。",
   })
@@ -1626,9 +1910,12 @@ add({
 })
 add({
   id = "t.I_ROMAJI.char.commit",
-  from = "I_ROMAJI", event = "char", to = "I_DIRECT",
-  effects = { "feed_key" },
-  status = "ok", refs = { "function/input.lua:85-120" }, observed = { "O-ka" },
+  from = "I_ROMAJI", event = "char", to = "I_POINT",
+  effects = { "feed_key", "render" },
+  status = "ok", refs = { "function/input.lua:85-120", "06 の観測 P.t.I_ROMAJI.char.commit" },
+  observed = { "O-ka" },
+  notes = "打った文字がかなになって読みに入る（▽k + a → ▽か）。04 はここを I_DIRECT としていたが、"
+    .. "06 の観測に合わせて I_POINT に直した。",
 })
 add({
   id = "t.I_POINT.char",
@@ -1679,9 +1966,11 @@ add({
 })
 add({
   id = "t.I_SELECT.char_shift",
-  from = "I_SELECT", event = "char_shift", to = "I_DIRECT",
-  effects = { "commit_candidate", "feed_key", "reset_state" },
-  status = "unknown", refs = { "function/henkan.lua:137-162" },
+  from = "I_SELECT", event = "char_shift", to = "I_ROMAJI",
+  effects = { "commit_candidate", "feed_key", "reset_state", "render" },
+  status = "ok", refs = { "function/henkan.lua:137-162", "06 の観測 P.t.I_SELECT.char_shift" },
+  notes = "候補を確定してから、シフト付きの文字を input として処理し直す（K → ▽k）。"
+    .. "04 はここを I_DIRECT としていたが、06 の観測に合わせて I_ROMAJI に直した。",
 })
 
 -- 文字キーのうち、関数が割り当てられているもの
@@ -1697,6 +1986,20 @@ add({
   from = "I_POINT", event = "key_X", to = "I_POINT",
   effects = { "keep", "render" },
   status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.I_ROMAJI.key_l",
+  from = "I_ROMAJI", event = "key_l", to = "I_OFF",
+  effects = { "drop", "restore_mapping", "reset_state", "clear_extmark" },
+  status = "ok", refs = { "keymap.lua:37", "function/disable.lua", "#67", "06 の観測 P.t.I_ROMAJI.key_l" },
+  notes = "打ちかけのローマ字は確定せずに捨てる（06 の観測でバッファは空のまま）。",
+})
+add({
+  id = "t.I_SELECT.key_l",
+  from = "I_SELECT", event = "key_l", to = "I_OFF",
+  effects = { "commit_candidate", "restore_mapping", "reset_state", "clear_extmark" },
+  status = "ok", refs = { "keymap.lua:37", "function/disable.lua", "#67", "06 の観測 P.t.I_SELECT.key_l" },
+  notes = "候補を確定してから無効にする（06 の観測で 缶 がバッファに入る）。",
 })
 add({
   id = "t.I_DIRECT.key_l",
@@ -1720,16 +2023,19 @@ add({
 })
 add({
   id = "t.I_POINT.key_q",
-  from = "I_POINT", event = "key_q", to = "I_POINT",
-  effects = { "keep", "render" },
-  status = "unknown", refs = { "keymap.lua:38" },
+  from = "I_POINT", event = "key_q", to = "I_DIRECT",
+  effects = { "commit_reading", "render" },
+  status = "ok", refs = { "keymap.lua:38", "function/mode.lua:63-84", "06 の観測 P.t.I_POINT.key_q" },
+  notes = "変換中の q は、読みをカタカナにして確定する（カン がバッファに入る）。"
+    .. "04 はここを I_POINT（状態は変えない）としていたが、06 の観測に合わせて直した。",
 })
 add({
   id = "t.I_DIRECT.key_semicolon",
-  from = "I_DIRECT", event = "key_semicolon", to = "I_POINT",
+  from = "I_DIRECT", event = "key_semicolon", to = "I_ROMAJI",
   effects = { "render" },
-  status = "unknown", refs = { "keymap.lua:39", "function/input.lua:147-" },
-  notes = "送り仮名の入力へ。",
+  status = "ok", refs = { "keymap.lua:39", "function/input.lua:147-", "06 の観測 P.t.I_DIRECT.key_semicolon" },
+  notes = "送り仮名の入力へ。読みが空の direct では、▽ だけが描かれた状態になる（06 の観測）。"
+    .. "04 はここを I_POINT としていたが、読みがまだ無いので I_ROMAJI に直した。",
 })
 add({
   id = "t.I_POINT.key_semicolon",
@@ -1739,10 +2045,11 @@ add({
 })
 add({
   id = "t.I_DIRECT.key_slash",
-  from = "I_DIRECT", event = "key_slash", to = "I_DIRECT",
+  from = "I_DIRECT", event = "key_slash", to = "I_ROMAJI",
   effects = { "render" },
-  status = "unknown", refs = { "keymap.lua:40" },
-  notes = "abbrev モードへ。状態クラスは変えない。",
+  status = "ok", refs = { "keymap.lua:40", "06 の観測 P.t.I_DIRECT.key_slash" },
+  notes = "abbrev モードへ。読みが空の direct では、▽ だけが描かれた状態になる（06 の観測）。"
+    .. "04 はここを I_DIRECT としていたが、I_ROMAJI に直した。",
 })
 add({
   id = "t.I_DIRECT.key_L",
@@ -1752,9 +2059,11 @@ add({
 })
 add({
   id = "t.I_POINT.key_L",
-  from = "I_POINT", event = "key_L", to = "I_POINT",
-  effects = { "keep", "render" },
-  status = "unknown", refs = { "keymap.lua:41" },
+  from = "I_POINT", event = "key_L", to = "I_DIRECT",
+  effects = { "commit_reading", "render" },
+  status = "ok", refs = { "keymap.lua:41", "function/mode.lua:98-111", "06 の観測 P.t.I_POINT.key_L" },
+  notes = "変換中の L は、読みを確定してから全角モードに切り替える（かん がバッファに入る）。"
+    .. "04 はここを I_POINT としていたが、06 の観測に合わせて直した。",
 })
 add({
   id = "t.I_DIRECT.key_cq",
@@ -1765,9 +2074,11 @@ add({
 })
 add({
   id = "t.I_POINT.key_cq",
-  from = "I_POINT", event = "key_cq", to = "I_POINT",
-  effects = { "keep", "render" },
-  status = "unknown", refs = { "keymap.lua:33" },
+  from = "I_POINT", event = "key_cq", to = "I_DIRECT",
+  effects = { "commit_reading", "render" },
+  status = "ok", refs = { "keymap.lua:33", "function/mode.lua:63-84", "06 の観測 P.t.I_POINT.key_cq" },
+  notes = "変換中の <C-q> は、読みを半角カタカナにして確定する（ｶﾝ がバッファに入る）。"
+    .. "04 はここを I_POINT としていたが、06 の観測に合わせて直した。",
 })
 add({
   id = "t.I_DIRECT.key_gt",
@@ -1780,7 +2091,9 @@ add({
   from = "I_POINT", event = "key_gt", to = "I_SELECT",
   effects = { "keep", "render" },
   status = "unknown", refs = { "keymap.lua:53", "function/input.lua:206-223" },
-  notes = "接頭辞・接尾辞を付けて変換に入る。",
+  notes = "接頭辞・接尾辞を付けて変換に入る。06 の観測（既定の辞書に かん> が無い）では、"
+    .. "候補が無いので辞書登録のプロンプト（P_PROMPT）に入った。辞書に候補があるかを"
+    .. "状態クラスに持っていないので、どちらになるかはモデルで決められない。",
 })
 add({
   id = "t.I_SELECT.key_gt",
@@ -1790,6 +2103,15 @@ add({
 })
 
 -- ▽ / ▼ の操作
+add({
+  id = "t.I_DIRECT.space",
+  from = "I_DIRECT", event = "space", to = "I_DIRECT",
+  effects = { "feed_key" },
+  status = "ok", refs = { "function/henkan.lua:21-38", "06 の観測 P.t.I_DIRECT.space" },
+  notes = "読みが無い direct では、<Space> は空白をバッファに入れる（henkan_first が direct では"
+    .. "kana_input に落ちる）。04 はこの遷移を書いていなかった。",
+})
+
 add({
   id = "t.I_POINT.space.select",
   from = "I_POINT", event = "space", to = "I_SELECT",
@@ -1852,7 +2174,9 @@ add({
   effects = { "render" },
   status = "ok", refs = { "host.lua:175-213", "function/input.lua", "#189" },
   observed = { "O-register-char" },
-  notes = "直接入力の文字は、そのまま欄に入る（▽ は出ない）。",
+  notes = "直接入力の文字は、そのまま欄に入る（▽ は出ない）。"
+    .. "X は purgeCandidate の確認ダイアログで、辞書登録には入らない"
+    .. "（06 の観測も同じ。semantics/compare/README.md）。",
 })
 
 add({
@@ -2614,10 +2938,11 @@ add({
 })
 add({
   id = "t.I_POINT.bs.empty",
-  from = "I_POINT", event = "bs", to = "I_DIRECT",
-  effects = { "cancel", "reset_state", "clear_extmark" },
-  status = "ok", refs = { "function/input.lua:178-204" },
-  notes = "読みが空になったとき。",
+  from = "I_POINT", event = "bs", to = "I_ROMAJI",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "function/input.lua:178-204", "06 の観測 P.t.I_POINT.bs.empty" },
+  notes = "読みが空になったとき。▽ だけが描かれた状態（I_ROMAJI）に戻る（06 の観測）。"
+    .. "04 はここを I_DIRECT（pre-edit を消す）としていたが、観測では ▽ が残る。",
 })
 add({
   id = "t.I_ROMAJI.bs",
@@ -2664,7 +2989,7 @@ local function insert_control(id, event, refs, observed, notes)
       id = "t." .. from .. "." .. id,
       from = from, event = event, to = "I_DIRECT",
       effects = e, status = status,
-      refs = refs, observed = from ~= "I_SELECT" and observed or {},
+      refs = refs, observed = from == "I_POINT" and observed or {},
       notes = notes,
     })
   end
@@ -2737,7 +3062,7 @@ for _, from in ipairs({ "I_ROMAJI", "I_POINT", "I_SELECT" }) do
     effects = { "pass_key" },
     status = from ~= "I_SELECT" and "ok" or "unknown",
     refs = { "keys.md §6 補足" },
-    observed = from ~= "I_SELECT" and { "O-ctrl-w-empty" } or {},
+    observed = from == "I_POINT" and { "O-ctrl-w-empty" } or {},
     notes = "バッファに消す文字が無いので、バッファも pre-edit も変わらない。"
       .. "O-ctrl-w-empty は ▽ からで、▼ からは打っていない。",
   })
@@ -2757,38 +3082,124 @@ for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT" }) do
     effects = { "pass_key" },
     status = from ~= "I_SELECT" and "ok" or "unknown",
     refs = { "keys.md §6" },
-    observed = from ~= "I_SELECT" and { "O-ctrl-y-e" } or {},
+    observed = from == "I_POINT" and { "O-ctrl-y-e" } or {},
     notes = "補完のメニューが無いとき。pre-edit が残る（観測）。O-ctrl-y-e は ▽ から。",
+  })
+  add({
+    id = "t." .. from .. ".completion_cancel",
+    from = from, event = "completion_cancel", to = from,
+    effects = { "pass_key" },
+    status = "ok",
+    refs = { "keys.md §6", "#190" },
+    notes = "補完のメニューが無いときの <C-e>。Neovim の i_CTRL-E に落ちて、pre-edit は残る（#19 の再現の最後）。",
   })
 end
 
--- 補完（#190 の境界）
+-- 補完（#190）
+--
+-- 組み込みの補完（ic）は、<C-n> / <C-p> で入った時点で pre-edit が消える（#190 の観測）。
+-- <C-x> はモード ix のキー待ちになり、この時点では pre-edit が残る。
+-- blink.cmp は Vim のモードを変えずにメニューを出すので、IC（point）のままキーで結果が分かれる。
 add({
   id = "t.I_DIRECT.completion_open",
   from = "I_DIRECT", event = "completion_open", to = "IC",
   effects = { "pass_key" },
-  status = "unknown", refs = { "keys.md §5", "#190" },
+  status = "ok", refs = { "keys.md §5", "#190" }, observed = { "O-completion-direct" },
   notes = "pre-edit が無いので、補完はそのまま始まる。",
 })
 add({
   id = "t.I_ROMAJI.completion_open",
   from = "I_ROMAJI", event = "completion_open", to = "IC",
-  effects = { "drop", "clear_extmark" },
-  status = "gap", refs = { "keys.md §5", "#19", "#190" },
+  effects = { "drop", "clear_extmark", "reset_state" },
+  status = "gap", refs = { "keys.md §5", "#19", "#190" }, observed = { "O-completion-romaji" },
+  notes = "観測では打ちかけ（▽k）が消えて補完の候補が入った。読みは確定しない。",
 })
 add({
   id = "t.I_POINT.completion_open",
   from = "I_POINT", event = "completion_open", to = "IC",
-  effects = { "drop", "clear_extmark" },
+  effects = { "drop", "clear_extmark", "reset_state" },
   status = "gap", refs = { "keys.md §5", "#18", "#19", "#190" }, observed = { "O-completion-open" },
   notes = "観測では pre-edit が消え、補完の候補が入った。読みは確定しない。",
 })
 add({
   id = "t.I_SELECT.completion_open",
   from = "I_SELECT", event = "completion_open", to = "IC",
-  effects = { "drop", "clear_extmark" },
-  status = "gap", refs = { "keys.md §5", "#18", "#190" },
+  effects = { "drop", "clear_extmark", "reset_state" },
+  status = "gap", refs = { "keys.md §5", "#18", "#190" }, observed = { "O-completion-select" },
+  notes = "観測では ▼ の候補が消え、補完の候補が入った。候補は確定しない。",
 })
+
+-- <C-x> のキー待ち（モード ix）
+add({
+  id = "t.I_DIRECT.completion_key",
+  from = "I_DIRECT", event = "completion_key", to = "IX_DIRECT",
+  effects = { "keep" },
+  status = "ok", refs = { "keys.md §5", "#190" },
+  notes = "pre-edit が無いので、そのままキー待ちになる。",
+})
+add({
+  id = "t.I_ROMAJI.completion_key",
+  from = "I_ROMAJI", event = "completion_key", to = "IX_ROMAJI",
+  effects = { "keep" },
+  status = "ok", refs = { "keys.md §5", "#190" }, observed = { "O-completion-x-romaji" },
+})
+add({
+  id = "t.I_POINT.completion_key",
+  from = "I_POINT", event = "completion_key", to = "IX_POINT",
+  effects = { "keep" },
+  status = "ok", refs = { "keys.md §5", "#190" }, observed = { "O-completion-x" },
+  notes = "観測では pre-edit が残ったままモード ix になった。",
+})
+add({
+  id = "t.I_SELECT.completion_key",
+  from = "I_SELECT", event = "completion_key", to = "IX_SELECT",
+  effects = { "keep" },
+  status = "unknown", refs = { "keys.md §5", "#190" },
+})
+add({
+  id = "t.IC.completion_key",
+  from = "IC", event = "completion_key", to = "IX_DIRECT",
+  effects = { "pass_key" },
+  status = "ok", refs = { "keys.md §5", "#190" }, observed = { "O-completion-x-after" },
+  notes = "補完の候補が入ったあとに <C-x>。pre-edit は無いので、そのままキー待ちになる。",
+})
+for _, from in ipairs({ "IX_DIRECT", "IX_ROMAJI", "IX_POINT", "IX_SELECT" }) do
+  local reading = from ~= "IX_DIRECT"
+  add({
+    id = "t." .. from .. ".completion_next",
+    from = from, event = "completion_next", to = "IC",
+    effects = reading and { "drop", "clear_extmark", "reset_state" } or { "pass_key" },
+    status = reading and "gap" or "ok",
+    refs = { "keys.md §5", "#190" },
+    observed = (from == "IX_POINT" and { "O-completion-x-n" })
+      or (from == "IX_ROMAJI" and { "O-completion-x-n-romaji" })
+      or {},
+    notes = reading and "観測では打ちかけ／▽／▼ が消えて補完の候補が入った。読みは確定しない。"
+      or "読みが無いので、そのまま補完が始まる。",
+  })
+  add({
+    id = "t." .. from .. ".esc",
+    from = from, event = "esc", to = "N_OFF",
+    effects = reading and { "commit_reading", "reset_state", "restore_mapping", "clear_extmark" }
+      or { "reset_state", "restore_mapping", "clear_extmark" },
+    status = "ok", refs = { "function/disable.lua:21-27", "#190" },
+    observed = (from == "IX_POINT" and { "O-completion-x-esc" })
+      or (from == "IX_ROMAJI" and { "O-completion-x-esc-romaji" })
+      or {},
+  })
+  add({
+    id = "t." .. from .. ".ctrl_c",
+    from = from, event = "ctrl_c", to = "N_WAIT",
+    effects = {},
+    status = "ok", refs = { "cleanup.lua:187,225-248", "#70", "#142" },
+    observed = (from == "IX_POINT" and { "O-completion-x-ctrlc" })
+      or (from == "IX_ROMAJI" and { "O-completion-x-ctrlc-romaji" })
+      or {},
+    notes = "SafeState の one-shot を作るだけ。確定は safestate の遷移で起きる。",
+  })
+end
+
+-- 組み込みの補完（ic）の中
 add({
   id = "t.IC.completion_next",
   from = "IC", event = "completion_next", to = "IC",
@@ -2798,9 +3209,58 @@ add({
 add({
   id = "t.IC.completion_accept.C-y",
   from = "IC", event = "completion_accept", to = "I_DIRECT",
-  effects = { "reset_state" },
+  effects = { "pass_key" },
   status = "ok", refs = { "#190" }, observed = { "O-completion-accept" },
-  notes = "<C-y> は候補を受け入れる。<C-e> は取り消して元の文字に戻す。どちらも insert に戻る。",
+  notes = "<C-y> は候補を受け入れる。pre-edit は無いので、そのまま insert に戻る。",
+})
+add({
+  id = "t.IC.completion_cancel.C-e",
+  from = "IC", event = "completion_cancel", to = "I_DIRECT",
+  effects = { "pass_key" },
+  status = "ok", refs = { "#190" }, observed = { "O-completion-c-e" },
+  notes = "<C-e> は候補を取り消して元の文字に戻す。",
+})
+add({
+  id = "t.IC.completion_newline",
+  from = "IC", event = "completion_newline", to = "I_DIRECT",
+  effects = { "feed_key" },
+  status = "ok", refs = { "#190" }, observed = { "O-completion-cr" },
+  notes = "観測では候補を確定して改行した（バッファに候補 + 空行）。",
+})
+add({
+  id = "t.IC.completion_tab",
+  from = "IC", event = "completion_tab", to = "I_DIRECT",
+  effects = { "feed_key" },
+  status = "ok", refs = { "#190" }, observed = { "O-completion-tab" },
+  notes = "観測では候補を確定してタブを入れた。",
+})
+add({
+  id = "t.IC.char",
+  from = "IC", event = "char", to = "I_DIRECT",
+  effects = { "feed_key" },
+  status = "ok", refs = { "#190" }, observed = { "O-completion-char" },
+  notes = "候補を確定してから、その文字を入れる。",
+})
+add({
+  id = "t.IC.char_shift",
+  from = "IC", event = "char_shift", to = "I_ROMAJI",
+  effects = { "feed_key", "render" },
+  status = "ok", refs = { "#190" }, observed = { "O-completion-shift" },
+  notes = "観測では補完が終わり、シフト付きの文字で ▽ を開始した。",
+})
+add({
+  id = "t.IC.bs",
+  from = "IC", event = "bs", to = "IC",
+  effects = { "pass_key" },
+  status = "ok", refs = { "#190" }, observed = { "O-completion-bs" },
+  notes = "候補の最後の 1 文字を消す。補完は続く。",
+})
+add({
+  id = "t.IC.key_q",
+  from = "IC", event = "key_q", to = "I_DIRECT",
+  effects = { "feed_key" },
+  status = "unknown", refs = { "#190", "#174" },
+  notes = "組み込みの補完では q は文字として入る（blink のときはカタカナで確定する）。",
 })
 add({
   id = "t.IC.esc",
@@ -2812,14 +3272,22 @@ add({
   id = "t.IC.ctrl_c",
   from = "IC", event = "ctrl_c", to = "N_WAIT",
   effects = {},
-  status = "unknown", refs = { "cleanup.lua:187" },
+  status = "ok", refs = { "cleanup.lua:187" }, observed = { "O-completion-ctrlc" },
+  notes = "SafeState で insert を抜ける。",
 })
 add({
-  id = "t.IC.stale",
-  from = "IC", event = "stale", to = "I_DIRECT",
+  id = "t.IC.text_changed_p",
+  from = "IC", event = "text_changed_p", to = "IC",
+  effects = { "pass_key" },
+  status = "ok", refs = { "cleanup.lua:150-165,283-286", "#190" },
+  notes = "check_stale は mode が i / c でないので何もしない（観測でも pre-edit は無いまま）。",
+})
+add({
+  id = "t.IC.complete_done",
+  from = "IC", event = "complete_done", to = "I_DIRECT",
   effects = { "reset_state" },
-  status = "unknown", refs = { "cleanup.lua:283-286", "#190" },
-  notes = "CompleteDone / TextChangedP でずれを見る。O16 は 04 で取っていない。",
+  status = "unknown", refs = { "cleanup.lua:150-165,283-286", "#190" },
+  notes = "補完が終わったあとの CompleteDone。この時点ではもう insert に戻っていることが多い。",
 })
 add({
   id = "t.IC.winleave",
@@ -2827,6 +3295,241 @@ add({
   effects = { "drop", "reset_state", "restore_mapping", "clear_extmark" },
   status = "unknown", refs = { "cleanup.lua:269-281", "#169" },
   notes = "読みが無い（IC）ので drop は起きない。P1 は破らない。",
+})
+
+-- blink.cmp のメニュー（User イベントで開閉する）
+add({
+  id = "t.I_POINT.blink_refresh",
+  from = "I_POINT", event = "blink_refresh", to = "I_BLINK_POINT",
+  effects = { "keep", "show_completion", "render" },
+  status = "ok", refs = { "completion/init.lua:246-273", "#24", "#143", "#174" },
+  notes = "読みが minLength 以上なら、blink が skkeleton の source でメニューを開く。",
+})
+add({
+  id = "t.I_BLINK_POINT.blink_refresh",
+  from = "I_BLINK_POINT", event = "blink_refresh", to = "I_BLINK_POINT",
+  effects = { "keep", "show_completion", "render" },
+  status = "ok", refs = { "completion/init.lua:246-273", "#143", "#174" },
+  notes = "読みが変わるとメニューを開き直す。",
+})
+add({
+  id = "t.I_BLINK_POINT.blink_menu_open",
+  from = "I_BLINK_POINT", event = "blink_menu_open", to = "I_BLINK_POINT",
+  effects = { "keep", "show_completion" },
+  status = "ok", refs = { "completion/init.lua:143-151", "#143", "#174" },
+  notes = "メニューをカーソルに揃える（align_to = cursor）。",
+})
+add({
+  id = "t.I_POINT.blink_menu_open",
+  from = "I_POINT", event = "blink_menu_open", to = "I_BLINK_POINT",
+  effects = { "keep", "show_completion" },
+  status = "ok", refs = { "completion/init.lua:143-151", "#143", "#174" },
+  notes = "blink の auto_show が先にメニューを開く道。",
+})
+add({
+  id = "t.I_BLINK_POINT.blink_menu_close",
+  from = "I_BLINK_POINT", event = "blink_menu_close", to = "I_POINT",
+  effects = { "keep", "hide_completion" },
+  status = "ok", refs = { "completion/init.lua:152-158", "#143", "#174" },
+})
+add({
+  id = "t.I_BLINK_POINT.blink_hide",
+  from = "I_BLINK_POINT", event = "blink_hide", to = "I_POINT",
+  effects = { "keep", "hide_completion" },
+  status = "ok", refs = { "completion/init.lua:135-142", "#24" },
+})
+add({
+  id = "t.I_OFF.blink_hide",
+  from = "I_OFF", event = "blink_hide", to = "I_OFF",
+  effects = { "hide_completion" },
+  status = "ok", refs = { "completion/init.lua:135-142", "#24" },
+  notes = "有効化・無効化のときに、skkeleton が開いたものではないメニューも閉じる。",
+})
+add({
+  id = "t.N_OFF.blink_hide",
+  from = "N_OFF", event = "blink_hide", to = "N_OFF",
+  effects = { "hide_completion" },
+  status = "ok", refs = { "completion/init.lua:135-142", "#24" },
+})
+for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_SELECT" }) do
+  add({
+    id = "t." .. from .. ".blink_refresh",
+    from = from, event = "blink_refresh", to = from,
+    effects = { "hide_completion" },
+    status = "ok", refs = { "completion/init.lua:246-273", "#24" },
+    notes = "▽ の入力中でないので、blink のメニューは開かない（開いていれば閉じる）。",
+  })
+end
+
+-- blink のメニューの中のキー
+add({
+  id = "t.I_BLINK_POINT.completion_next",
+  from = "I_BLINK_POINT", event = "completion_next", to = "I_BLINK_POINT",
+  effects = { "pass_key", "keep" },
+  status = "ok", refs = { "#190", "blink.cmp keymap super-tab" }, observed = { "O-blink-next" },
+  notes = "<C-n> / <C-p> は選択を動かす。読みは残る。",
+})
+add({
+  id = "t.I_BLINK_POINT.completion_accept",
+  from = "I_BLINK_POINT", event = "completion_accept", to = "I_BLINK_POINT",
+  effects = { "pass_key", "keep" },
+  status = "unknown", refs = { "#190" },
+  notes = "<C-y> は blink の既定のキーマップには無い。Neovim の i_CTRL-Y に落ちる（未観測）。",
+})
+add({
+  id = "t.I_BLINK_POINT.completion_tab.tab",
+  from = "I_BLINK_POINT", event = "completion_tab", to = "I_DIRECT",
+  effects = { "commit_candidate", "reset_state", "hide_completion" },
+  status = "ok", refs = { "#190", "blink.cmp keymap super-tab" }, observed = { "O-blink-tab" },
+  notes = "super-tab の <Tab>（select_and_accept）。観測では候補 漢字 を確定した。",
+})
+add({
+  id = "t.I_BLINK_POINT.completion_tab.s-tab",
+  from = "I_BLINK_POINT", event = "completion_tab", to = "I_DIRECT",
+  effects = { "commit_reading", "feed_key", "reset_state", "clear_extmark", "hide_completion" },
+  status = "ok", refs = { "#190", "blink.cmp keymap super-tab" }, observed = { "O-blink-s-tab" },
+  notes = "super-tab の <S-Tab> はメニューを選ばずに fallback し、guard が読みを確定してからタブを流す。",
+})
+add({
+  id = "t.I_BLINK_POINT.completion_newline.accept",
+  from = "I_BLINK_POINT", event = "completion_newline", to = "I_DIRECT",
+  guard = { { "config.eggLikeNewline", "=", true } },
+  effects = { "commit_candidate", "reset_state", "hide_completion" },
+  status = "unknown", refs = { "main.lua:84-87", "doc/skkeleton.txt:516-518", "#190" },
+  notes = "eggLikeNewline = true のときの <CR>。選んだ候補で確定する（未観測）。",
+})
+add({
+  id = "t.I_BLINK_POINT.completion_newline.newline",
+  from = "I_BLINK_POINT", event = "completion_newline", to = "I_DIRECT",
+  guard = { { "config.eggLikeNewline", "=", false } },
+  effects = { "commit_reading", "feed_key", "reset_state", "clear_extmark", "hide_completion" },
+  status = "ok", refs = { "main.lua:84-87", "#190" }, observed = { "O-blink-cr" },
+  notes = "既定（eggLikeNewline = false）では blink は <CR> を取らず、guard が読みを確定して改行する。",
+})
+add({
+  id = "t.I_BLINK_POINT.completion_cancel",
+  from = "I_BLINK_POINT", event = "completion_cancel", to = "I_POINT",
+  effects = { "keep", "hide_completion" },
+  status = "ok", refs = { "#190", "blink.cmp keymap super-tab" }, observed = { "O-blink-c-e" },
+  notes = "<C-e> はメニューを閉じる。読みと pre-edit は残る。",
+})
+add({
+  id = "t.I_BLINK_POINT.char",
+  from = "I_BLINK_POINT", event = "char", to = "I_POINT",
+  effects = { "feed_key", "render" },
+  status = "unknown", refs = { "#190" }, observed = { "O-blink-char" },
+  notes = "観測では読みに足されて I_POINT に戻り、メニューは閉じていた。読み直しは次の refresh で開く（タイミング次第）。",
+})
+add({
+  id = "t.I_BLINK_POINT.bs",
+  from = "I_BLINK_POINT", event = "bs", to = "I_BLINK_POINT",
+  effects = { "pass_key", "keep", "render" },
+  status = "ok", refs = { "#190" }, observed = { "O-blink-bs" },
+  notes = "読みの最後の 1 文字を削る。メニューは開いたまま。",
+})
+add({
+  id = "t.I_BLINK_POINT.space",
+  from = "I_BLINK_POINT", event = "space", to = "I_SELECT",
+  effects = { "keep", "render", "hide_completion" },
+  status = "ok", refs = { "#190" }, observed = { "O-blink-space" },
+  notes = "▽ から ▼ へ。blink のメニューは閉じる。",
+})
+add({
+  id = "t.I_BLINK_POINT.key_q",
+  from = "I_BLINK_POINT", event = "key_q", to = "I_DIRECT",
+  effects = { "commit_reading", "reset_state", "hide_completion" },
+  status = "ok", refs = { "#174", "#190" }, observed = { "O-blink-q" },
+  notes = "カタカナにして確定する（観測では カンジ がバッファに入った）。",
+})
+add({
+  id = "t.I_BLINK_POINT.cg",
+  from = "I_BLINK_POINT", event = "cg", to = "I_DIRECT",
+  effects = { "cancel", "reset_state", "hide_completion" },
+  status = "ok", refs = { "#190" }, observed = { "O-blink-cg" },
+  notes = "読みを取り消して無効化しない（insert のまま）。",
+})
+add({
+  id = "t.I_BLINK_POINT.esc",
+  from = "I_BLINK_POINT", event = "esc", to = "N_OFF",
+  effects = { "commit_reading", "reset_state", "restore_mapping", "clear_extmark", "hide_completion" },
+  status = "ok", refs = { "#190" }, observed = { "O-blink-esc" },
+})
+add({
+  id = "t.I_BLINK_POINT.ctrl_c",
+  from = "I_BLINK_POINT", event = "ctrl_c", to = "N_WAIT",
+  effects = { "hide_completion" },
+  status = "ok", refs = { "cleanup.lua:187,225-248", "#70", "#142" }, observed = { "O-blink-ctrlc" },
+  notes = "SafeState で読みを確定して無効化する。",
+})
+add({
+  id = "t.I_BLINK_POINT.ctrl_w",
+  from = "I_BLINK_POINT", event = "ctrl_w", to = "I_DIRECT",
+  effects = { "drop", "reset_state", "clear_extmark", "hide_completion" },
+  status = "gap", refs = { "#8", "#12", "#190" }, observed = { "O-blink-ctrl-w" },
+  notes = "読みを捨てる（P1 の破れ）。",
+})
+add({
+  id = "t.I_BLINK_POINT.guard_special",
+  from = "I_BLINK_POINT", event = "guard_special", to = "I_DIRECT",
+  effects = { "commit_reading", "feed_key", "reset_state", "clear_extmark", "hide_completion" },
+  status = "ok", refs = { "guard.lua:50-85", "#56", "#190" }, observed = { "O-blink-left" },
+  notes = "guard が読みを確定してから、キーを流す。",
+})
+add({
+  id = "t.I_BLINK_POINT.ctrl_o",
+  from = "I_BLINK_POINT", event = "ctrl_o", to = "NI_POINT",
+  effects = { "keep", "render" },
+  status = "unknown", refs = { "#117", "#190" }, observed = { "O-blink-ctrl-o" },
+  notes = "観測ではメニューが開いたまま niI に入り、pre-edit も残った。",
+})
+add({
+  id = "t.I_BLINK_POINT.blink_commit",
+  from = "I_BLINK_POINT", event = "blink_commit", to = "I_DIRECT",
+  effects = { "commit_candidate", "reset_state", "hide_completion" },
+  status = "ok", refs = { "completion/init.lua:221-226", "#190" },
+  notes = "blink の source の execute が選んだ語で確定する。",
+})
+add({
+  id = "t.I_BLINK_POINT.winleave",
+  from = "I_BLINK_POINT", event = "winleave", to = "N_OFF",
+  effects = { "drop", "reset_state", "restore_mapping", "clear_extmark", "hide_completion" },
+  status = "gap", refs = { "cleanup.lua:269-281", "#169" },
+  notes = "読みを確定しないで捨てる（P1 の破れ、#169）。",
+})
+
+-- 無効のあいだに出る blink の buffer 補完（#24）
+add({
+  id = "t.I_OFF.buffer_menu_open",
+  from = "I_OFF", event = "buffer_menu_open", to = "I_OFF_MENU",
+  effects = { "show_completion" },
+  status = "unknown", refs = { "#24", "completion/init.lua:143-158" },
+  notes = "無効でも blink の buffer source がメニューを出す。",
+})
+add({
+  id = "t.I_OFF_MENU.buffer_menu_close",
+  from = "I_OFF_MENU", event = "buffer_menu_close", to = "I_OFF",
+  effects = { "hide_completion" },
+  status = "unknown", refs = { "#24", "completion/init.lua:143-158" },
+})
+add({
+  id = "t.I_OFF_MENU.enable",
+  from = "I_OFF_MENU", event = "enable", to = "I_DIRECT",
+  effects = { "save_mapping", "install_mapping", "reset_state", "hide_completion" },
+  status = "ok", refs = { "main.lua:101-125", "completion/init.lua:135-142", "#24" },
+  observed = { "O-blink-buffer-24" },
+  notes = "有効化のあとの skkeleton-enable-post で、buffer のメニューも閉じる（#24 の直し）。",
+})
+add({
+  id = "t.I_OFF_MENU.blink_hide",
+  from = "I_OFF_MENU", event = "blink_hide", to = "I_OFF",
+  effects = { "hide_completion" },
+  status = "ok", refs = { "#24" },
+})
+add({
+  id = "t.I_OFF_MENU.esc",
+  from = "I_OFF_MENU", event = "esc", to = "N_OFF",
+  effects = { "pass_key", "hide_completion" },
+  status = "unknown", refs = { "Vim 本体", "#24" },
 })
 
 -- guard が確定するキー・マウス・ホイール・貼り付け（#56、#125、#169、#191）
@@ -2856,7 +3559,7 @@ local function guard_event(event)
       observed = guard_observed[from],
       notes = "pre-edit があるときは、確定してからキーを insert のまま流す。"
         .. "pre-edit が無い（I_DIRECT）ときは何もせずに流す。"
-        .. "観測: <C-.> / <F5> / <S-CR> / <Left> / <C-Left> / <S-Up> / <S-F1>（misc.jsonl）。",
+        .. "観測: <C-.> / <F5> / <S-CR> / <Left> / <C-Left> / <S-Up> / <S-F1>（misc.jsonl）。"
     })
   end
 end
@@ -4165,6 +4868,227 @@ M.observations = {
     expect = { "I_DIRECT" },
     note = "<C-e> で候補を取り消して元の行に戻る。",
   },
+
+  {
+    id = "O-completion-direct",
+    keys = { "<Plug>(skkeleton-enable)", "<C-n>" },
+    expect = { "IC" },
+    note = "pre-edit が無い状態から <C-n>。補完のモード ic に入る（観測）。",
+  },
+  {
+    id = "O-completion-romaji",
+    keys = { "<Plug>(skkeleton-enable)", "K", "<C-n>" },
+    expect = { "IC" },
+    note = "打ちかけ ▽k から <C-n>。pre-edit が消えて ic になる（観測。#19）。",
+  },
+  {
+    id = "O-completion-select",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-n>" },
+    expect = { "IC" },
+    note = "▼ から <C-n>。候補が消えて ic になる（観測）。",
+  },
+  {
+    id = "O-completion-x",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-x>" },
+    expect = { "IC" },
+    note = "<C-x> はモード ix のキー待ち。pre-edit は残る（観測）。",
+  },
+  {
+    id = "O-completion-x-romaji",
+    keys = { "<Plug>(skkeleton-enable)", "K", "<C-x>" },
+    expect = { "IC" },
+    note = "▽k から <C-x>。pre-edit は残る（観測）。",
+  },
+  {
+    id = "O-completion-x-n",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-x>", "<C-n>" },
+    expect = { "IC" },
+    note = "<C-x><C-n> で補完が始まる。pre-edit はこの時点で消える（観測）。",
+  },
+  {
+    id = "O-completion-x-n-romaji",
+    keys = { "<Plug>(skkeleton-enable)", "K", "<C-x>", "<C-n>" },
+    expect = { "IC" },
+    note = "▽k から <C-x><C-n>。pre-edit は消える（観測）。",
+  },
+  {
+    id = "O-completion-x-esc",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-x>", "<Esc>" },
+    expect = { "N_OFF" },
+    note = "<C-x> のキー待ちで <Esc>。読みを確定して無効化する（観測）。",
+  },
+  {
+    id = "O-completion-x-esc-romaji",
+    keys = { "<Plug>(skkeleton-enable)", "K", "<C-x>", "<Esc>" },
+    expect = { "N_OFF" },
+    note = "▽k から <C-x><Esc>。無効化する（観測は未取得。コード読解）。",
+    uncertain = true,
+  },
+  {
+    id = "O-completion-x-ctrlc",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-x>", "<C-c>" },
+    expect = { "N_OFF" },
+    note = "<C-x> のキー待ちで <C-c>。SafeState で読みを確定して無効化する（観測）。",
+  },
+  {
+    id = "O-completion-x-ctrlc-romaji",
+    keys = { "<Plug>(skkeleton-enable)", "K", "<C-x>", "<C-c>" },
+    expect = { "N_OFF" },
+    note = "▽k から <C-x><C-c>。無効化する（観測は未取得。コード読解）。",
+    uncertain = true,
+  },
+  {
+    id = "O-completion-x-after",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-n>", "<C-x>" },
+    expect = { "IC" },
+    note = "補完のあとに <C-x>。モード ix に入る（観測）。",
+  },
+  {
+    id = "O-completion-accept-c-y",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-n>", "<C-y>" },
+    expect = { "I_DIRECT" },
+    note = "<C-y> で候補を受け入れる。",
+  },
+  {
+    id = "O-completion-cr",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-n>", "<CR>" },
+    expect = { "I_DIRECT" },
+    note = "<CR> で候補を受け入れて改行する（観測。バッファに候補 + 空行）。",
+  },
+  {
+    id = "O-completion-tab",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-n>", "<Tab>" },
+    expect = { "I_DIRECT" },
+    note = "<Tab> で候補を受け入れてタブを入れる（観測）。",
+  },
+  {
+    id = "O-completion-char",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-n>", "a" },
+    expect = { "I_DIRECT" },
+    note = "候補を確定してから文字を入れる（観測）。",
+  },
+  {
+    id = "O-completion-shift",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-n>", "R" },
+    expect = { "I_ROMAJI" },
+    note = "補完が終わり、シフト付きの文字で ▽ を始める（観測）。",
+  },
+  {
+    id = "O-completion-bs",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-n>", "<BS>" },
+    expect = { "IC" },
+    note = "<BS> は候補の最後の 1 文字を消す。補完は続く（観測）。",
+  },
+  {
+    id = "O-completion-ctrlc",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-n>", "<C-c>" },
+    expect = { "N_OFF" },
+    note = "<C-c> で insert を抜け、SafeState で無効になる（観測）。",
+  },
+  {
+    id = "O-blink-open",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "j", "@blink_refresh" },
+    expect = { "IC" },
+    note = "blink.cmp。▽かんj でメニューが開く。pre-edit は残る（観測）。",
+  },
+  {
+    id = "O-blink-next",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "j", "@blink_refresh", "<C-n>" },
+    expect = { "IC" },
+    note = "blink のメニューで <C-n>。選択が次へ動く（観測）。",
+  },
+  {
+    id = "O-blink-tab",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "j", "@blink_refresh", "<Tab>" },
+    expect = { "I_DIRECT" },
+    note = "super-tab の <Tab> で候補 漢字 を確定する（観測）。",
+  },
+  {
+    id = "O-blink-s-tab",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "j", "@blink_refresh", "<S-Tab>" },
+    expect = { "I_DIRECT" },
+    note = "<S-Tab> は fallback して、guard が読みを確定してからタブを流す（観測）。",
+  },
+  {
+    id = "O-blink-cr",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "j", "@blink_refresh", "<CR>" },
+    expect = { "I_DIRECT" },
+    config = { eggLikeNewline = false },
+    note = "eggLikeNewline = false の <CR>。読みを確定して改行する（観測）。",
+  },
+  {
+    id = "O-blink-c-e",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "j", "@blink_refresh", "<C-e>" },
+    expect = { "I_POINT" },
+    note = "<C-e> でメニューを閉じる。pre-edit は残る（観測）。",
+  },
+  {
+    id = "O-blink-cg",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "j", "@blink_refresh", "<C-g>" },
+    expect = { "I_DIRECT" },
+    note = "<C-g> で読みを取り消す。insert のまま（観測）。",
+  },
+  {
+    id = "O-blink-space",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "j", "@blink_refresh", "<Space>" },
+    expect = { "I_SELECT" },
+    note = "<Space> で ▼ に入る。メニューは閉じる（観測）。",
+  },
+  {
+    id = "O-blink-bs",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "j", "@blink_refresh", "<BS>" },
+    expect = { "IC" },
+    note = "<BS> で読みの最後の 1 文字を削る。メニューは開いたまま（観測）。",
+  },
+  {
+    id = "O-blink-char",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "j", "@blink_refresh", "a" },
+    expect = { "I_POINT" },
+    note = "読みに足すと I_POINT に戻り、メニューは閉じていた（観測。開き直しはタイミング次第）。",
+  },
+  {
+    id = "O-blink-q",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "j", "i", "@blink_refresh", "q" },
+    expect = { "I_DIRECT" },
+    note = "blink のメニューが出ているときに q。カタカナで確定する（#174 の再現、観測）。",
+  },
+  {
+    id = "O-blink-esc",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "j", "@blink_refresh", "<Esc>" },
+    expect = { "N_OFF" },
+    note = "<Esc> で読みを確定して無効化する（観測）。",
+  },
+  {
+    id = "O-blink-ctrlc",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "j", "@blink_refresh", "<C-c>" },
+    expect = { "N_OFF" },
+    note = "<C-c> で insert を抜け、SafeState で無効になる（観測）。",
+  },
+  {
+    id = "O-blink-ctrl-w",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "j", "@blink_refresh", "<C-w>" },
+    expect = { "I_DIRECT" },
+    note = "<C-w> で読みを捨てる（観測。P1 の破れ）。",
+  },
+  {
+    id = "O-blink-left",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "j", "@blink_refresh", "<Left>" },
+    expect = { "I_DIRECT" },
+    note = "guard が読みを確定してから <Left> を流す（観測）。",
+  },
+  {
+    id = "O-blink-ctrl-o",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "j", "@blink_refresh", "<C-o>" },
+    expect = { "NI" },
+    note = "<C-o> で niI に入る。メニューと pre-edit は残る（観測）。",
+  },
+  {
+    id = "O-blink-buffer-24",
+    keys = { "<Plug>(skkeleton-enable)", "<Insert>", "<Insert>", "@buffer_menu_open", "<Plug>(skkeleton-enable)" },
+    expect = { "I_DIRECT" },
+    note = "無効のあいだに出た buffer のメニューは、有効化のあとに閉じる（#24 の直し。観測は blink_buffer プロファイル）。",
+    uncertain = true,
+  },
   {
     id = "O-space-no-candidate",
     keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>" },
@@ -5127,6 +6051,43 @@ M.replays = {
     expect = { "N_OFF" },
     note = "読みを確定して無効化する。",
   },
+  {
+    id = "replay.completion-19",
+    title = "#19: Kan → <C-n> → R → <C-e>",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-n>", "R", "<C-e>" },
+    expect = { "I_ROMAJI" },
+    note = "#19 の再現列。今の振る舞いでは <C-n> の時点で pre-edit が消える（P1 の破れ、"
+      .. "t.I_POINT.completion_open）。行のずれそのものは表示の層なので、状態クラスには出ない。",
+  },
+  {
+    id = "replay.completion-24",
+    title = "#24: 無効の buffer メニュー → 有効化",
+    keys = {
+      "<Plug>(skkeleton-enable)", "<Insert>", "<Insert>", "@buffer_menu_open",
+      "<Plug>(skkeleton-enable)",
+    },
+    expect = { "I_DIRECT" },
+    note = "#24 の再現列（利用者の <C-j> は <Plug>(skkeleton-enable) で代用）。"
+      .. "有効化のあとの skkeleton-enable-post が buffer のメニューも閉じる。",
+  },
+  {
+    id = "replay.completion-143",
+    title = "#143: 行末で Kanji → blink のメニュー",
+    keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "j", "i", "@blink_refresh" },
+    expect = { "IC" },
+    note = "#143 / #149 の再現列のうち、モデルで表せる部分。メニューの画面の位置は oos.blink_position で扱う。",
+  },
+  {
+    id = "replay.completion-174",
+    title = "#174: Kanji → q（blink のメニュー）",
+    keys = {
+      "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "j", "i", "@blink_refresh", "q",
+    },
+    expect = { "I_DIRECT" },
+    note = "#174 の再現列。issue は Henkan と q だが、この辞書には へんかん の候補が無いので、"
+      .. "同じ形の Kanji で観測した。q でカタカナ カンジ を確定し、メニューは閉じた。"
+      .. "一瞬の位置のずれは表示の層（oos.blink_position）。",
+  },
   -- terminal（#74 / #121）。`#term` は terminal プロファイルで `terminal cat` を開いたところ。
   {
     id = "replay.t74",
@@ -5374,9 +6335,33 @@ M.out_of_scope = {
   },
   {
     id = "oos.completion",
-    what = "補完のメニューの中の動き（blink.cmp の accept、候補の並び）",
-    why = "07d（#190）。ここでは入口と出口の境界だけを書いた。",
-    refs = { "#190" },
+    what = "補完の候補の並び・絞り込み・メニューの描画",
+    why = "状態機械ではなく、辞書と blink の表示の話。候補の確定・取消は 07d（#190）で遷移にした。",
+    refs = { "#190", "#159" },
+    keys = {},
+  },
+  {
+    id = "oos.native_completion",
+    what = "completefunc / <C-x><C-u> の組み込み補完（#45）",
+    why = "実装から消えている（#69 で補完は blink.cmp だけ）。Vim の completefunc を利用者が"
+      .. "自前でつないだ場合の動きは skkeleton の状態機械ではない。",
+    refs = { "#45", "#69" },
+    keys = { "<C-x><C-u>" },
+  },
+  {
+    id = "oos.blink_position",
+    what = "blink.cmp のメニューの画面の位置（#143、#174）",
+    why = "状態クラスに画面の位置を持っていない。観測の JSONL で menu の row / col を取り、"
+      .. "いまは pre-edit の近くに出ることを確かめた。位置そのものは P2 / P15 の表示の層。",
+    refs = { "#143", "#174", "#190" },
+    keys = {},
+  },
+  {
+    id = "oos.buffer_completion",
+    what = "無効のあいだの blink.cmp の buffer 補完の候補（#24）",
+    why = "候補は blink の buffer source が作る。ここではメニューが開いている状態（I_OFF_MENU）と、"
+      .. "有効化・無効化で閉じる遷移だけを書いた。",
+    refs = { "#24", "#190" },
     keys = {},
   },
   {
@@ -5426,9 +6411,9 @@ M.out_of_scope = {
   },
   {
     id = "oos.blink_keys",
-    what = "blink.cmp のキー割り当て（<CR> を含む）",
-    why = "skkeleton の外（#190、keys.md §5 補足）。eggLikeNewline の <CR> は 07d。",
-    refs = { "#190" },
+    what = "blink.cmp が skkeleton の外で持つキー（snippet の移動など）",
+    why = "利用者の blink のキーマップしだい。skkeleton が関わる <Tab> / <CR> は 07d（#190）で遷移にした。",
+    refs = { "#190", "blink.cmp keymap super-tab" },
     keys = {},
   },
   {
@@ -5488,23 +6473,23 @@ M.inventory = {
     { id = "WinLeave", covered_by = { "winleave" } },
     { id = "BufLeave", covered_by = { "bufleave" } },
     { id = "TextChangedI", covered_by = { "stale" } },
-    { id = "TextChangedP", covered_by = { "stale" } },
+    { id = "TextChangedP", covered_by = { "text_changed_p" } },
     { id = "CursorMovedI", covered_by = { "stale", "mouse_click" } },
     { id = "CmdlineChanged", out_of_scope = "07a（#187）" },
-    { id = "CompleteDone", covered_by = { "stale" } },
+    { id = "CompleteDone", covered_by = { "complete_done" } },
     { id = "VimLeavePre", out_of_scope = "入力状態を変えない（events.md O14）" },
-    { id = "User skkeleton-handled", out_of_scope = "表示だけ（07d #190、インジケータ）" },
-    { id = "User skkeleton-enable-post", out_of_scope = "表示だけ（07d #190、インジケータ）" },
-    { id = "User skkeleton-disable-post", out_of_scope = "表示だけ（07d #190、インジケータ）" },
-    { id = "User BlinkCmpMenuOpen", out_of_scope = "07d（#190）" },
-    { id = "User BlinkCmpMenuClose", out_of_scope = "07d（#190）" },
+    { id = "User skkeleton-handled", covered_by = { "blink_refresh" } },
+    { id = "User skkeleton-enable-post", covered_by = { "blink_hide" } },
+    { id = "User skkeleton-disable-post", covered_by = { "blink_hide" } },
+    { id = "User BlinkCmpMenuOpen", covered_by = { "blink_menu_open" } },
+    { id = "User BlinkCmpMenuClose", covered_by = { "blink_menu_close" } },
     { id = "WinEnter", covered_by = { "prompt_winenter" } },
     { id = "CmdlineEnter", covered_by = { "prompt_cmdlineenter" } },
     { id = "InsertEnter", covered_by = { "insert_enter" } },
     { id = "enable", covered_by = { "enable" } },
     { id = "disable", covered_by = { "disable" } },
     { id = "toggle", covered_by = { "toggle" } },
-    { id = "complete", out_of_scope = "07d（#190）" },
+    { id = "complete", covered_by = { "blink_commit" } },
     { id = "commit_preedit", covered_by = { "guard_special" } },
     { id = "on_bytes", covered_by = { "stale" } },
     { id = "vim.on_key", covered_by = { "guard_special", "ctrl_c" } },
@@ -5518,7 +6503,8 @@ M.inventory = {
 M.properties = {
   { id = "P1", title = "読みが黙って消えない", decided = true, kind = "no_silent_loss" },
   { id = "P2", title = "pre-edit は 1 つだけで、置き場所が正しく、中身が state と一致する", decided = false,
-    why = "extmark の数と位置を状態クラスに持っていない（05 の探索器と 06 の比較で見る）。" },
+    why = "extmark の数と位置を状態クラスに持っていない（05 の探索器と 06 の比較で見る）。"
+      .. "07d で blink.cmp のメニューの位置も観測の JSONL に残した。" },
   { id = "P3", title = "n / v / s / R では、状態とマッピングが元に戻っている", decided = true, kind = "return_to_normal" },
   { id = "P4", title = "cmdline / terminal を抜けたら、何も残っていない", decided = true,
     kind = "terminal_normal_keep",
@@ -5529,7 +6515,8 @@ M.properties = {
   { id = "P5", title = "1 つのキーを二重に処理しない", decided = true, kind = "no_double_commit" },
   { id = "P6", title = "決定的に振る舞う（タイミングに左右されるものには印を付ける）", decided = false,
     why = "モデルの分岐はタイミングではなく、辞書・バッファ・設定という持っていない条件。"
-      .. "分かれる組は検査の最後に一覧で出す。" },
+      .. "分かれる組は検査の最後に一覧で出す。blink.cmp のメニューは User skkeleton-handled のあとに"
+      .. "タイマーで開くので、同じキー列でも観測の時点で開いていないことがある（07d）。" },
   { id = "P7", title = "片付けは何度やっても同じ結果になる", decided = false,
     why = "同じ片付けを 2 度流す遷移の対を持っていない（reset_state の自己遷移を足せば見られる）。" },
   { id = "P8", title = "enable のあと disable すると元に戻る", decided = true, kind = "recoverable" },
@@ -5546,7 +6533,8 @@ M.properties = {
     why = "07b（#188）。terminal でジョブへ渡すキー（pass_key）は、読みを確定してから渡す（#121）。"
       .. "guard の own_output と <C-\\><C-n> は確定しない。" },
   { id = "P15", title = "state が空でないなら、pre-edit が見えている", decided = false,
-    why = "表示（extmark）を状態クラスに持っていない。" },
+    why = "表示（extmark）を状態クラスに持っていない。補完のメニューだけが開いている状態は"
+      .. "pre-edit が無いので、この性質の対象外（07d）。" },
 }
 
 -- 既知の破れ（性質の検査で出るが、issue にしてあるもの）。
@@ -5561,6 +6549,10 @@ M.known = {
   { property = "P1", transition = "t.I_ROMAJI.ctrl_u", refs = { "#8", "#12" } },
   { property = "P1", transition = "t.I_ROMAJI.ctrl_v", refs = { "#8", "#12" } },
   { property = "P1", transition = "t.I_ROMAJI.ctrl_w", refs = { "#8", "#12" } },
+  { property = "P1", transition = "t.I_ROMAJI.enable", refs = { "#210" } },
+  { property = "P1", transition = "t.I_ROMAJI.key_l", refs = { "#67", "06 の観測" } },
+  { property = "P1", transition = "t.I_POINT.enable", refs = { "#210" } },
+  { property = "P1", transition = "t.I_SELECT.enable", refs = { "#210" } },
   { property = "P1", transition = "t.I_ROMAJI.stale.buffer", refs = { "#8", "#12" } },
   { property = "P1", transition = "t.I_ROMAJI.tab", refs = { "#8", "#12" } },
   { property = "P1", transition = "t.I_ROMAJI.winleave", refs = { "#169" } },
@@ -5579,6 +6571,11 @@ M.known = {
   { property = "P1", transition = "t.I_POINT.mouse_click_other", refs = { "#169" } },
   { property = "P1", transition = "t.I_SELECT.bufleave", refs = { "#169" } },
   { property = "P1", transition = "t.I_SELECT.completion_open", refs = { "#18", "#19", "#190" } },
+  { property = "P1", transition = "t.IX_ROMAJI.completion_next", refs = { "#19", "#190" } },
+  { property = "P1", transition = "t.IX_POINT.completion_next", refs = { "#19", "#190" } },
+  { property = "P1", transition = "t.IX_SELECT.completion_next", refs = { "#19", "#190" } },
+  { property = "P1", transition = "t.I_BLINK_POINT.ctrl_w", refs = { "#8", "#12", "#190" } },
+  { property = "P1", transition = "t.I_BLINK_POINT.winleave", refs = { "#169", "#190" } },
   { property = "P1", transition = "t.I_POINT.completion_open", refs = { "#18", "#19", "#190" } },
   { property = "P1", transition = "t.I_SELECT.stale.buffer", refs = { "#8", "#12" } },
   { property = "P1", transition = "t.I_SELECT.winleave", refs = { "#169" } },
@@ -5677,5 +6674,237 @@ M.decisions = {
     reflected_in = { "V_PRE_POINT", "V_PRE_SELECT", "semantics/inventory/events.md" },
   },
 }
+
+
+-- 06 の観測を、遷移の observed 欄に足す。04 の observed はそのまま残す。
+do
+  local by_transition = {}
+  for _, t in ipairs(M.transitions) do
+    by_transition[t.id] = t
+  end
+  for _, p in ipairs(M.probes or {}) do
+    local t = by_transition[p.transition]
+    if t then
+      local seen = false
+      for _, id in ipairs(t.observed) do
+        if id == p.id then
+          seen = true
+        end
+      end
+      if not seen then
+        t.observed[#t.observed + 1] = p.id
+      end
+    end
+  end
+end
+
+
+-- 06 の観測（#186）。semantics/compare/probe.lua が、状態ごとの前置きを流してから
+-- イベントのキーを 1 つ打ち、落ち着いたあとの状態クラスを読んだもの。1 行が 1 つの観測で、
+-- keys を流したときに transition の遷移を通ることを model_check が確かめる。
+-- 前置きは 1 キーずつに開いてある。イベントのキー（`<C-o>v` など）は events.keys と
+-- 同じまとまりで書いてある。world が keepstate の観測だけ config を持つ。
+M.probes = {
+  { id = "P.t.IC.completion_accept.C-y", transition = "t.IC.completion_accept.C-y", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-n>", "<C-y>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.IC.completion_next", transition = "t.IC.completion_next", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-n>", "<C-n>" }, expect = { "IC" } },
+  { id = "P.t.IC.ctrl_c", transition = "t.IC.ctrl_c", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-n>", "<C-c>" }, expect = { "N_OFF" } },
+  { id = "P.t.IC.esc", transition = "t.IC.esc", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-n>", "<Esc>" }, expect = { "N_OFF" } },
+  { id = "P.t.I_DIRECT.bs", transition = "t.I_DIRECT.bs", keys = { "i", "<Plug>(skkeleton-enable)", "<BS>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.cg", transition = "t.I_DIRECT.cg", keys = { "i", "<Plug>(skkeleton-enable)", "<C-g>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.char.keep", transition = "t.I_DIRECT.char.keep", keys = { "i", "<Plug>(skkeleton-enable)", "a" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.char.romaji", transition = "t.I_DIRECT.char.romaji", keys = { "i", "<Plug>(skkeleton-enable)", "k" }, expect = { "I_ROMAJI" } },
+  { id = "P.t.I_DIRECT.char_shift", transition = "t.I_DIRECT.char_shift", keys = { "i", "<Plug>(skkeleton-enable)", "K" }, expect = { "I_ROMAJI" } },
+  { id = "P.t.I_DIRECT.char_shift.point", transition = "t.I_DIRECT.char_shift.point", keys = { "i", "<Plug>(skkeleton-enable)", "A" }, expect = { "I_POINT" } },
+  { id = "P.t.I_DIRECT.completion_accept", transition = "t.I_DIRECT.completion_accept", keys = { "i", "<Plug>(skkeleton-enable)", "<C-y>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.completion_open", transition = "t.I_DIRECT.completion_open", keys = { "i", "<Plug>(skkeleton-enable)", "<C-n>" }, expect = { "IC" } },
+  { id = "P.t.I_DIRECT.cr", transition = "t.I_DIRECT.cr", keys = { "i", "<Plug>(skkeleton-enable)", "<CR>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.ctrl_c", transition = "t.I_DIRECT.ctrl_c", keys = { "i", "<Plug>(skkeleton-enable)", "<C-c>" }, expect = { "N_OFF" } },
+  { id = "P.t.I_DIRECT.ctrl_k", transition = "t.I_DIRECT.ctrl_k", keys = { "i", "<Plug>(skkeleton-enable)", "<C-k>a:" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.ctrl_o", transition = "t.I_DIRECT.ctrl_o", keys = { "i", "<Plug>(skkeleton-enable)", "<C-o>" }, expect = { "NI" } },
+  { id = "P.t.I_DIRECT.ctrl_o_R", transition = "t.I_DIRECT.ctrl_o_R", keys = { "i", "<Plug>(skkeleton-enable)", "<C-o>R" }, expect = { "R_OFF" } },
+  { id = "P.t.I_DIRECT.ctrl_o_colon", transition = "t.I_DIRECT.ctrl_o_colon", keys = { "i", "<Plug>(skkeleton-enable)", "<C-o>:<Esc>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.ctrl_o_v", transition = "t.I_DIRECT.ctrl_o_v", keys = { "i", "<Plug>(skkeleton-enable)", "<C-o>v" }, expect = { "V_IDLE" } },
+  { id = "P.t.I_DIRECT.ctrl_r", transition = "t.I_DIRECT.ctrl_r", keys = { "i", "<Plug>(skkeleton-enable)", "<C-r>a" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.ctrl_t", transition = "t.I_DIRECT.ctrl_t", keys = { "i", "<Plug>(skkeleton-enable)", "<C-t>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.ctrl_u", transition = "t.I_DIRECT.ctrl_u", keys = { "i", "<Plug>(skkeleton-enable)", "<C-u>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.ctrl_v", transition = "t.I_DIRECT.ctrl_v", keys = { "i", "<Plug>(skkeleton-enable)", "<C-v>065" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.ctrl_w", transition = "t.I_DIRECT.ctrl_w", keys = { "i", "<Plug>(skkeleton-enable)", "<C-w>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.disable", transition = "t.I_DIRECT.disable", keys = { "i", "<Plug>(skkeleton-enable)", "<Plug>(skkeleton-disable)" }, expect = { "I_OFF" } },
+  { id = "P.t.I_DIRECT.enable", transition = "t.I_DIRECT.enable", keys = { "i", "<Plug>(skkeleton-enable)", "<Plug>(skkeleton-enable)" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.esc", transition = "t.I_DIRECT.esc", keys = { "i", "<Plug>(skkeleton-enable)", "<Esc>" }, expect = { "N_OFF" } },
+  { id = "P.t.I_DIRECT.esc.keepstate", transition = "t.I_DIRECT.esc.keepstate", keys = { "i", "<Plug>(skkeleton-enable)", "<Esc>" }, expect = { "N_OFF" }, config = { keepState = true } },
+  { id = "P.t.I_DIRECT.guard_special", transition = "t.I_DIRECT.guard_special", keys = { "i", "<Plug>(skkeleton-enable)", "<S-Tab>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.insert_key", transition = "t.I_DIRECT.insert_key", keys = { "i", "<Plug>(skkeleton-enable)", "<Insert>" }, expect = { "R_OFF" } },
+  { id = "P.t.I_DIRECT.key_L", transition = "t.I_DIRECT.key_L", keys = { "i", "<Plug>(skkeleton-enable)", "L" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.key_X", transition = "t.I_DIRECT.key_X", keys = { "i", "<Plug>(skkeleton-enable)", "X" }, expect = { "I_ROMAJI" } },
+  { id = "P.t.I_DIRECT.key_cq", transition = "t.I_DIRECT.key_cq", keys = { "i", "<Plug>(skkeleton-enable)", "<C-q>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.key_gt", transition = "t.I_DIRECT.key_gt", keys = { "i", "<Plug>(skkeleton-enable)", ">" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.key_l", transition = "t.I_DIRECT.key_l", keys = { "i", "<Plug>(skkeleton-enable)", "l" }, expect = { "I_OFF" } },
+  { id = "P.t.I_DIRECT.key_q", transition = "t.I_DIRECT.key_q", keys = { "i", "<Plug>(skkeleton-enable)", "q" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.key_semicolon", transition = "t.I_DIRECT.key_semicolon", keys = { "i", "<Plug>(skkeleton-enable)", ";" }, expect = { "I_ROMAJI" } },
+  { id = "P.t.I_DIRECT.key_slash", transition = "t.I_DIRECT.key_slash", keys = { "i", "<Plug>(skkeleton-enable)", "/" }, expect = { "I_ROMAJI" } },
+  { id = "P.t.I_DIRECT.nl", transition = "t.I_DIRECT.nl", keys = { "i", "<Plug>(skkeleton-enable)", "<C-j>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.space", transition = "t.I_DIRECT.space", keys = { "i", "<Plug>(skkeleton-enable)", "<Space>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.tab", transition = "t.I_DIRECT.tab", keys = { "i", "<Plug>(skkeleton-enable)", "<Tab>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_DIRECT.toggle", transition = "t.I_DIRECT.toggle", keys = { "i", "<Plug>(skkeleton-enable)", "<Plug>(skkeleton-toggle)" }, expect = { "I_OFF" } },
+  { id = "P.t.I_OFF.ctrl_at", transition = "t.I_OFF.ctrl_at", keys = { "i", "<Plug>(skkeleton-enable)", "<Esc>", "i", "<C-@>" }, expect = { "N_OFF" } },
+  { id = "P.t.I_OFF.esc", transition = "t.I_OFF.esc", keys = { "i", "<Plug>(skkeleton-enable)", "<Esc>", "i", "<Esc>" }, expect = { "N_OFF" } },
+  { id = "P.t.I_OFF.guard_special", transition = "t.I_OFF.guard_special", keys = { "i", "<Plug>(skkeleton-enable)", "<Esc>", "i", "<S-Tab>" }, expect = { "I_OFF" } },
+  { id = "P.t.I_OFF.insert_key", transition = "t.I_OFF.insert_key", keys = { "i", "<Plug>(skkeleton-enable)", "<Esc>", "i", "<Insert>" }, expect = { "R_OFF" } },
+  { id = "P.t.I_POINT.bs", transition = "t.I_POINT.bs", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<BS>" }, expect = { "I_POINT" } },
+  { id = "P.t.I_POINT.bs.empty", transition = "t.I_POINT.bs.empty", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "<BS>" }, expect = { "I_ROMAJI" } },
+  { id = "P.t.I_POINT.cg", transition = "t.I_POINT.cg", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-g>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_POINT.char", transition = "t.I_POINT.char", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "a" }, expect = { "I_POINT" } },
+  { id = "P.t.I_POINT.char_shift", transition = "t.I_POINT.char_shift", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "K" }, expect = { "I_POINT" } },
+  { id = "P.t.I_POINT.completion_accept", transition = "t.I_POINT.completion_accept", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-y>" }, expect = { "I_POINT" } },
+  { id = "P.t.I_POINT.completion_open", transition = "t.I_POINT.completion_open", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-n>" }, expect = { "IC" } },
+  { id = "P.t.I_POINT.cr", transition = "t.I_POINT.cr", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<CR>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_POINT.ctrl_c", transition = "t.I_POINT.ctrl_c", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-c>" }, expect = { "N_OFF" } },
+  { id = "P.t.I_POINT.ctrl_k", transition = "t.I_POINT.ctrl_k", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-k>a:" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_POINT.ctrl_o", transition = "t.I_POINT.ctrl_o", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-o>" }, expect = { "NI" } },
+  { id = "P.t.I_POINT.ctrl_o_R", transition = "t.I_POINT.ctrl_o_R", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-o>R" }, expect = { "R_OFF" } },
+  { id = "P.t.I_POINT.ctrl_o_colon", transition = "t.I_POINT.ctrl_o_colon", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-o>:<Esc>" }, expect = { "I_POINT" } },
+  { id = "P.t.I_POINT.ctrl_o_v", transition = "t.I_POINT.ctrl_o_v", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-o>v" }, expect = { "V_PRE" } },
+  { id = "P.t.I_POINT.ctrl_r", transition = "t.I_POINT.ctrl_r", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-r>a" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_POINT.ctrl_t", transition = "t.I_POINT.ctrl_t", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-t>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_POINT.ctrl_u", transition = "t.I_POINT.ctrl_u", keys = { "i", "<Plug>(skkeleton-enable)", "a", "K", "a", "n", "<C-u>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_POINT.ctrl_u.keep", transition = "t.I_POINT.ctrl_u.keep", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-u>" }, expect = { "I_POINT" } },
+  { id = "P.t.I_POINT.ctrl_v", transition = "t.I_POINT.ctrl_v", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-v>065" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_POINT.ctrl_w", transition = "t.I_POINT.ctrl_w", keys = { "i", "<Plug>(skkeleton-enable)", "a", "K", "a", "n", "<C-w>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_POINT.ctrl_w.keep", transition = "t.I_POINT.ctrl_w.keep", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-w>" }, expect = { "I_POINT" } },
+  { id = "P.t.I_POINT.disable", transition = "t.I_POINT.disable", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Plug>(skkeleton-disable)" }, expect = { "I_OFF" } },
+  { id = "P.t.I_POINT.enable", transition = "t.I_POINT.enable", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Plug>(skkeleton-enable)" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_POINT.esc", transition = "t.I_POINT.esc", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Esc>" }, expect = { "N_OFF" } },
+  { id = "P.t.I_POINT.esc.keepstate", transition = "t.I_POINT.esc.keepstate", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Esc>" }, expect = { "N_OFF" }, config = { keepState = true } },
+  { id = "P.t.I_POINT.guard_special", transition = "t.I_POINT.guard_special", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<S-Tab>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_POINT.insert_key", transition = "t.I_POINT.insert_key", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Insert>" }, expect = { "R_OFF" } },
+  { id = "P.t.I_POINT.key_L", transition = "t.I_POINT.key_L", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "L" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_POINT.key_X", transition = "t.I_POINT.key_X", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "X" }, expect = { "I_POINT" } },
+  { id = "P.t.I_POINT.key_cq", transition = "t.I_POINT.key_cq", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-q>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_POINT.key_l", transition = "t.I_POINT.key_l", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "l" }, expect = { "I_OFF" } },
+  { id = "P.t.I_POINT.key_q", transition = "t.I_POINT.key_q", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "q" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_POINT.key_semicolon", transition = "t.I_POINT.key_semicolon", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", ";" }, expect = { "I_POINT" } },
+  { id = "P.t.I_POINT.nl", transition = "t.I_POINT.nl", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-j>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_POINT.space.register", transition = "t.I_POINT.space.register", keys = { "i", "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>" }, expect = { "P_PROMPT" } },
+  { id = "P.t.I_POINT.space.select", transition = "t.I_POINT.space.select", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>" }, expect = { "I_SELECT" } },
+  { id = "P.t.I_POINT.tab", transition = "t.I_POINT.tab", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Tab>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_POINT.toggle", transition = "t.I_POINT.toggle", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Plug>(skkeleton-toggle)" }, expect = { "I_OFF" } },
+  { id = "P.t.I_ROMAJI.bs", transition = "t.I_ROMAJI.bs", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<BS>" }, expect = { "I_ROMAJI" } },
+  { id = "P.t.I_ROMAJI.bs.empty", transition = "t.I_ROMAJI.bs.empty", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<BS>", "<BS>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_ROMAJI.cg", transition = "t.I_ROMAJI.cg", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<C-g>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_ROMAJI.char.commit", transition = "t.I_ROMAJI.char.commit", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a" }, expect = { "I_POINT" } },
+  { id = "P.t.I_ROMAJI.char.keep", transition = "t.I_ROMAJI.char.keep", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<BS>", "k" }, expect = { "I_ROMAJI" } },
+  { id = "P.t.I_ROMAJI.char_shift", transition = "t.I_ROMAJI.char_shift", keys = { "i", "<Plug>(skkeleton-enable)", "K", "K" }, expect = { "I_POINT" } },
+  { id = "P.t.I_ROMAJI.completion_accept", transition = "t.I_ROMAJI.completion_accept", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<C-y>" }, expect = { "I_ROMAJI" } },
+  { id = "P.t.I_ROMAJI.completion_open", transition = "t.I_ROMAJI.completion_open", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<C-n>" }, expect = { "IC" } },
+  { id = "P.t.I_ROMAJI.cr", transition = "t.I_ROMAJI.cr", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<CR>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_ROMAJI.ctrl_c", transition = "t.I_ROMAJI.ctrl_c", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<C-c>" }, expect = { "N_OFF" } },
+  { id = "P.t.I_ROMAJI.ctrl_k", transition = "t.I_ROMAJI.ctrl_k", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<C-k>a:" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_ROMAJI.ctrl_o", transition = "t.I_ROMAJI.ctrl_o", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<C-o>" }, expect = { "NI" } },
+  { id = "P.t.I_ROMAJI.ctrl_o_R", transition = "t.I_ROMAJI.ctrl_o_R", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<C-o>R" }, expect = { "R_OFF" } },
+  { id = "P.t.I_ROMAJI.ctrl_o_colon", transition = "t.I_ROMAJI.ctrl_o_colon", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<C-o>:<Esc>" }, expect = { "I_ROMAJI" } },
+  { id = "P.t.I_ROMAJI.ctrl_o_v", transition = "t.I_ROMAJI.ctrl_o_v", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<C-o>v" }, expect = { "V_PRE" } },
+  { id = "P.t.I_ROMAJI.ctrl_r", transition = "t.I_ROMAJI.ctrl_r", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<C-r>a" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_ROMAJI.ctrl_t", transition = "t.I_ROMAJI.ctrl_t", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<C-t>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_ROMAJI.ctrl_u", transition = "t.I_ROMAJI.ctrl_u", keys = { "i", "<Plug>(skkeleton-enable)", "a", "K", "<C-u>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_ROMAJI.ctrl_u.keep", transition = "t.I_ROMAJI.ctrl_u.keep", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<C-u>" }, expect = { "I_ROMAJI" } },
+  { id = "P.t.I_ROMAJI.ctrl_v", transition = "t.I_ROMAJI.ctrl_v", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<C-v>065" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_ROMAJI.ctrl_w", transition = "t.I_ROMAJI.ctrl_w", keys = { "i", "<Plug>(skkeleton-enable)", "a", "K", "<C-w>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_ROMAJI.ctrl_w.keep", transition = "t.I_ROMAJI.ctrl_w.keep", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<C-w>" }, expect = { "I_ROMAJI" } },
+  { id = "P.t.I_ROMAJI.disable", transition = "t.I_ROMAJI.disable", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<Plug>(skkeleton-disable)" }, expect = { "I_OFF" } },
+  { id = "P.t.I_ROMAJI.enable", transition = "t.I_ROMAJI.enable", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<Plug>(skkeleton-enable)" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_ROMAJI.esc", transition = "t.I_ROMAJI.esc", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<Esc>" }, expect = { "N_OFF" } },
+  { id = "P.t.I_ROMAJI.esc.keepstate", transition = "t.I_ROMAJI.esc.keepstate", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<Esc>" }, expect = { "N_OFF" }, config = { keepState = true } },
+  { id = "P.t.I_ROMAJI.guard_special", transition = "t.I_ROMAJI.guard_special", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<S-Tab>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_ROMAJI.insert_key", transition = "t.I_ROMAJI.insert_key", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<Insert>" }, expect = { "R_OFF" } },
+  { id = "P.t.I_ROMAJI.key_l", transition = "t.I_ROMAJI.key_l", keys = { "i", "<Plug>(skkeleton-enable)", "K", "l" }, expect = { "I_OFF" } },
+  { id = "P.t.I_ROMAJI.nl", transition = "t.I_ROMAJI.nl", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<C-j>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_ROMAJI.tab", transition = "t.I_ROMAJI.tab", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<Tab>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_ROMAJI.toggle", transition = "t.I_ROMAJI.toggle", keys = { "i", "<Plug>(skkeleton-enable)", "K", "<Plug>(skkeleton-toggle)" }, expect = { "I_OFF" } },
+  { id = "P.t.I_SELECT.bs", transition = "t.I_SELECT.bs", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<BS>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_SELECT.cg", transition = "t.I_SELECT.cg", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-g>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_SELECT.char.commit", transition = "t.I_SELECT.char.commit", keys = { "i", "<Plug>(skkeleton-enable)", "N", "i", "h", "o", "n", "<Space>", "a" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_SELECT.char.commit_romaji", transition = "t.I_SELECT.char.commit_romaji", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "z" }, expect = { "I_ROMAJI" } },
+  { id = "P.t.I_SELECT.char_shift", transition = "t.I_SELECT.char_shift", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "K" }, expect = { "I_ROMAJI" } },
+  { id = "P.t.I_SELECT.completion_accept", transition = "t.I_SELECT.completion_accept", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-y>" }, expect = { "I_SELECT" } },
+  { id = "P.t.I_SELECT.completion_open", transition = "t.I_SELECT.completion_open", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-n>" }, expect = { "IC" } },
+  { id = "P.t.I_SELECT.cr", transition = "t.I_SELECT.cr", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<CR>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_SELECT.ctrl_c", transition = "t.I_SELECT.ctrl_c", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-c>" }, expect = { "N_OFF" } },
+  { id = "P.t.I_SELECT.ctrl_k", transition = "t.I_SELECT.ctrl_k", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-k>a:" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_SELECT.ctrl_o", transition = "t.I_SELECT.ctrl_o", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-o>" }, expect = { "NI" } },
+  { id = "P.t.I_SELECT.ctrl_o_R", transition = "t.I_SELECT.ctrl_o_R", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-o>R" }, expect = { "R_OFF" } },
+  { id = "P.t.I_SELECT.ctrl_o_colon", transition = "t.I_SELECT.ctrl_o_colon", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-o>:<Esc>" }, expect = { "I_SELECT" } },
+  { id = "P.t.I_SELECT.ctrl_o_v", transition = "t.I_SELECT.ctrl_o_v", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-o>v" }, expect = { "V_PRE" } },
+  { id = "P.t.I_SELECT.ctrl_r", transition = "t.I_SELECT.ctrl_r", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-r>a" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_SELECT.ctrl_t", transition = "t.I_SELECT.ctrl_t", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-t>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_SELECT.ctrl_u", transition = "t.I_SELECT.ctrl_u", keys = { "i", "<Plug>(skkeleton-enable)", "a", "K", "a", "n", "<Space>", "<C-u>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_SELECT.ctrl_u.keep", transition = "t.I_SELECT.ctrl_u.keep", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-u>" }, expect = { "I_SELECT" } },
+  { id = "P.t.I_SELECT.ctrl_v", transition = "t.I_SELECT.ctrl_v", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-v>065" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_SELECT.ctrl_w", transition = "t.I_SELECT.ctrl_w", keys = { "i", "<Plug>(skkeleton-enable)", "a", "K", "a", "n", "<Space>", "<C-w>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_SELECT.ctrl_w.keep", transition = "t.I_SELECT.ctrl_w.keep", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-w>" }, expect = { "I_SELECT" } },
+  { id = "P.t.I_SELECT.disable", transition = "t.I_SELECT.disable", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Plug>(skkeleton-disable)" }, expect = { "I_OFF" } },
+  { id = "P.t.I_SELECT.enable", transition = "t.I_SELECT.enable", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Plug>(skkeleton-enable)" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_SELECT.esc", transition = "t.I_SELECT.esc", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Esc>" }, expect = { "N_OFF" } },
+  { id = "P.t.I_SELECT.esc.keepstate", transition = "t.I_SELECT.esc.keepstate", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Esc>" }, expect = { "N_OFF" }, config = { keepState = true } },
+  { id = "P.t.I_SELECT.guard_special", transition = "t.I_SELECT.guard_special", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<S-Tab>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_SELECT.insert_key", transition = "t.I_SELECT.insert_key", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Insert>" }, expect = { "R_OFF" } },
+  { id = "P.t.I_SELECT.key_X.purge", transition = "t.I_SELECT.key_X.purge", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "X" }, expect = { "I_SELECT" } },
+  { id = "P.t.I_SELECT.key_l", transition = "t.I_SELECT.key_l", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "l" }, expect = { "I_OFF" } },
+  { id = "P.t.I_SELECT.nl", transition = "t.I_SELECT.nl", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-j>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_SELECT.space.next", transition = "t.I_SELECT.space.next", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Space>" }, expect = { "I_SELECT" } },
+  { id = "P.t.I_SELECT.space.register", transition = "t.I_SELECT.space.register", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>" }, expect = { "P_PROMPT" } },
+  { id = "P.t.I_SELECT.tab", transition = "t.I_SELECT.tab", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Tab>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.I_SELECT.toggle", transition = "t.I_SELECT.toggle", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Plug>(skkeleton-toggle)" }, expect = { "I_OFF" } },
+  { id = "P.t.I_SELECT.x.back", transition = "t.I_SELECT.x.back", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "x" }, expect = { "I_POINT" } },
+  { id = "P.t.I_SELECT.x.prev", transition = "t.I_SELECT.x.prev", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Space>", "x" }, expect = { "I_SELECT" } },
+  { id = "P.t.NI_DIRECT.replace", transition = "t.NI_DIRECT.replace", keys = { "i", "<Plug>(skkeleton-enable)", "<C-o>", "R" }, expect = { "R_OFF" } },
+  { id = "P.t.NI_DIRECT.return_commit", transition = "t.NI_DIRECT.return_commit", keys = { "i", "<Plug>(skkeleton-enable)", "<C-o>", "0" }, expect = { "I_DIRECT" } },
+  { id = "P.t.NI_DIRECT.return_drop", transition = "t.NI_DIRECT.return_drop", keys = { "i", "<Plug>(skkeleton-enable)", "<C-o>", "x" }, expect = { "I_DIRECT" } },
+  { id = "P.t.NI_DIRECT.return_keep", transition = "t.NI_DIRECT.return_keep", keys = { "i", "<Plug>(skkeleton-enable)", "<C-o>", "l" }, expect = { "I_DIRECT" } },
+  { id = "P.t.NI_DIRECT.visual", transition = "t.NI_DIRECT.visual", keys = { "i", "<Plug>(skkeleton-enable)", "<C-o>", "v" }, expect = { "V_IDLE" } },
+  { id = "P.t.NI_POINT.disable", transition = "t.NI_POINT.disable", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-o>", "<Plug>(skkeleton-disable)" }, expect = { "I_OFF" } },
+  { id = "P.t.NI_POINT.replace", transition = "t.NI_POINT.replace", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-o>", "R" }, expect = { "R_OFF" } },
+  { id = "P.t.NI_POINT.return_commit", transition = "t.NI_POINT.return_commit", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-o>", "0" }, expect = { "I_DIRECT" } },
+  { id = "P.t.NI_POINT.return_drop", transition = "t.NI_POINT.return_drop", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-o>", "x" }, expect = { "I_DIRECT" } },
+  { id = "P.t.NI_POINT.return_keep", transition = "t.NI_POINT.return_keep", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-o>", "l" }, expect = { "I_POINT" } },
+  { id = "P.t.NI_POINT.visual", transition = "t.NI_POINT.visual", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-o>", "v" }, expect = { "V_PRE" } },
+  { id = "P.t.NI_SELECT.replace", transition = "t.NI_SELECT.replace", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-o>", "R" }, expect = { "R_OFF" } },
+  { id = "P.t.NI_SELECT.return_commit", transition = "t.NI_SELECT.return_commit", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-o>", "0" }, expect = { "I_DIRECT" } },
+  { id = "P.t.NI_SELECT.return_drop", transition = "t.NI_SELECT.return_drop", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-o>", "x" }, expect = { "I_DIRECT" } },
+  { id = "P.t.NI_SELECT.return_keep", transition = "t.NI_SELECT.return_keep", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-o>", "l" }, expect = { "I_SELECT" } },
+  { id = "P.t.NI_SELECT.visual", transition = "t.NI_SELECT.visual", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-o>", "v" }, expect = { "V_PRE" } },
+  { id = "P.t.N_OFF.R", transition = "t.N_OFF.R", keys = { "R" }, expect = { "R_OFF" } },
+  { id = "P.t.N_OFF.esc", transition = "t.N_OFF.esc", keys = { "<Esc>" }, expect = { "N_OFF" } },
+  { id = "P.t.N_OFF.insert_key", transition = "t.N_OFF.insert_key", keys = { "<Insert>" }, expect = { "I_OFF" } },
+  { id = "P.t.P_PROMPT_POINT.register_cancel", transition = "t.P_PROMPT_POINT.register_cancel", keys = { "i", "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "<Esc>" }, expect = { "I_POINT" } },
+  { id = "P.t.P_PROMPT_SELECT.register_cancel", transition = "t.P_PROMPT_SELECT.register_cancel", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Esc>" }, expect = { "I_SELECT" } },
+  { id = "P.t.R_OFF.esc", transition = "t.R_OFF.esc", keys = { "i", "<Plug>(skkeleton-enable)", "<Insert>", "<Esc>" }, expect = { "N_OFF" } },
+  { id = "P.t.R_OFF.insert_key", transition = "t.R_OFF.insert_key", keys = { "i", "<Plug>(skkeleton-enable)", "<Insert>", "<Insert>" }, expect = { "I_OFF" } },
+  { id = "P.t.V_IDLE.esc", transition = "t.V_IDLE.esc", keys = { "i", "<Plug>(skkeleton-enable)", "<C-o>", "v", "<Esc>" }, expect = { "I_DIRECT" } },
+  { id = "P.t.V_PRE_POINT.esc", transition = "t.V_PRE_POINT.esc", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-o>", "v", "<Esc>" }, expect = { "I_POINT" } },
+  { id = "P.t.V_PRE_SELECT.esc", transition = "t.V_PRE_SELECT.esc", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-o>", "v", "<Esc>" }, expect = { "I_SELECT" } },
+}
+
+-- 06 の観測を、遷移の observed 欄に足す。04 の observed はそのまま残す。
+do
+  local by_transition = {}
+  for _, t in ipairs(M.transitions) do
+    by_transition[t.id] = t
+  end
+  for _, p in ipairs(M.probes or {}) do
+    local t = by_transition[p.transition]
+    if t then
+      local seen = false
+      for _, id in ipairs(t.observed) do
+        if id == p.id then
+          seen = true
+        end
+      end
+      if not seen then
+        t.observed[#t.observed + 1] = p.id
+      end
+    end
+  end
+end
 
 return M
