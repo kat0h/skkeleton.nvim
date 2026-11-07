@@ -26,7 +26,7 @@
 | I_ESCAPE | state.type が escape。マップされた `<Esc>` のあと、`ModeChanged` か `SafeState` の片付けが終わるまで（insert に戻ったあとに残る場合も含む） |
 | I_ROMAJI | ローマ字の打ちかけ（`state.feed`）がある。`pending` は `render.is_pending()` の意味だけに使う |
 | NI | Vim のモードが ni（`<C-o>` の insert-normal）。抱えている相（direct / point / select）は属性で持つ |
-| IC | insert の補完（モード `ic`、blink.cmp のメニュー）。blink.cmp が無い環境では観測していない（unknown） |
+| IC | insert の補完。組み込みはモード `ic`、blink.cmp はモード `i` のままメニューが出る（#190 で観測） |
 | R_OFF | Vim のモードが R で、skkeleton は無効 |
 | C_DIRECT | Vim のモードが c。cmdline に pre-edit は無い |
 | C_POINT | Vim のモードが c。cmdline に pre-edit（`▽` / `▼`）が本物の文字として書かれ、`cmdline.remember()` が覚えている |
@@ -172,10 +172,10 @@ blink.cmp が無い環境では、7–10 の autocmd は登録されるが callb
 
 | イベント | 効く状態 | 何をするか | 根拠 | 印・観測 |
 |---|---|---|---|---|
-| `User skkeleton-handled` | I_POINT / I_SELECT | `completion.refresh()`。有効で、input:okurinasi で、読みが `minLength` 以上なら blink のメニューを開く／開き直す。そうでなければ閉じる | `completion/init.lua:128-134, 246-273` | IC は unknown |
-| `User skkeleton-enable-post`、`skkeleton-disable-post` | すべて | `completion.hide(true)` で、skkeleton が開いたものではないメニューも閉じる | `completion/init.lua:135-142, 93-105` | 同上 |
-| `User BlinkCmpMenuOpen` | IC | 有効で input:okurinasi なら、メニューの `align_to` を一時的に `cursor` にする（#143、#174） | `completion/init.lua:143-151, 69-79` | 同上 |
-| `User BlinkCmpMenuClose` | IC | `align_to` を元に戻す | `completion/init.lua:152-158, 81-91` | 同上 |
+| `User skkeleton-handled` | I_POINT / I_SELECT | `completion.refresh()`。有効で、input:okurinasi で、読みが `minLength` 以上なら blink のメニューを開く／開き直す。そうでなければ閉じる | `completion/init.lua:128-134, 246-273` | O19 |
+| `User skkeleton-enable-post`、`skkeleton-disable-post` | すべて | `completion.hide(true)` で、skkeleton が開いたものではないメニューも閉じる | `completion/init.lua:135-142, 93-105` | O19 |
+| `User BlinkCmpMenuOpen` | IC | 有効で input:okurinasi なら、メニューの `align_to` を一時的に `cursor` にする（#143、#174） | `completion/init.lua:143-151, 69-79` | O19 |
+| `User BlinkCmpMenuClose` | IC | `align_to` を元に戻す | `completion/init.lua:152-158, 81-91` | O19 |
 
 ## インジケータ（`skkeleton-indicator`）
 
@@ -331,6 +331,15 @@ insert で有効化、`;ka`、`qa!`。
 - `enew`（`one` の行で `Kan`）: 元のバッファは `one` のまま。enabled=false、preedit=""。
 - `nvim_get_autocmds` で数えると、常設は 33 個（internal 10、completion 5、indicator 18）。`SafeState`、`WinEnter`、`CmdlineEnter`、`InsertEnter` は動的で、同時に 4 つそろうとは限らない。
 
+### O19. 補完（組み込みと blink.cmp、#190）
+
+一時辞書の子 nvim で、`あいうえお` の次の行の行末から有効化してから確かめました。blink.cmp は観測のためだけに `.tests/blink.cmp`（v1）へ入れ、README と同じ `sources`（有効なら skkeleton、無効なら buffer）と `keymap.preset = "super-tab"` で動かしました。
+
+- 組み込みの補完: `Kan` → `<C-n>` で `ic` になり、pre-edit が消えて候補がバッファに入った。`<C-n>` / `<C-p>` は `ic` のまま候補を動かし、`<C-y>` は候補を受け入れて `i` に戻り、`<C-e>` は元の行に戻した。`<CR>` は候補を受け入れて改行し、`<Tab>` は候補を受け入れてタブを入れた。`<C-x>` だけでは `ix` のキー待ちになり、pre-edit は残った。`<C-x><C-n>` で `ic` に入ると pre-edit が消えた。
+- blink.cmp: `▽かんj` でメニューが開いた（Vim のモードは `i` のまま、pre-edit も残る）。`<C-n>` / `<C-p>` は選択を動かし、`<Tab>` は候補 `漢字` を確定、`<C-e>` はメニューを閉じて pre-edit を残し、`<C-g>` は読みを取り消した。`<CR>` は既定（`eggLikeNewline = false`）では読みを確定して改行した。`<Space>` は ▼ に入り、`<BS>` はメニューを開いたまま読みを 1 文字削った。
+- #24 の再現（無効のあいだの buffer のメニューは、有効化で閉じる）は、`blink_buffer` プロファイルで別に確かめました。
+- メニューの画面の位置は、`observe.lua` が blink の浮動ウィンドウの `row` / `col` を読んで JSONL に残します（#143、#174）。
+
 ## 今の振る舞いのまとめ
 
 - 読みが確定する道は、`<Esc>`（キーの処理）、`commit_preedit` を呼ぶ道（規則 1・2、規則 3 のカーソルだけのずれ、SafeState の one-shot で old が i のとき）、`disable` API です。
@@ -344,14 +353,14 @@ insert で有効化、`;ka`、`qa!`。
 
 - キーそのもの（どのキーを skkeleton が受けるか）は #181。
 - terminal（t / nt）の状態機械は #188。今回の観測は insert・normal・visual・cmdline だけです。
-- 補完メニューの中の動き（blink.cmp の accept など）は #190。この環境には blink.cmp が無いので、`IC` は unknown のままです。
+- 補完メニューの中の動き（blink.cmp の accept など）は #190。07d で blink.cmp を一時的に入れて観測しました（O19）。
 - マクロと `.` は #192、貼り付け・マウス・ホイールは #191。
 - 辞書 DB の非同期の構築（`dictionary/db.lua` の `run_async`、`vim.defer_fn`、`vim.schedule`）は入力状態を変えないので入れていません。
 - インジケータのフェードアウトのタイマー（`indicator.lua` 120–134 行）は表示だけです。
 
 ## 未観測・決めていないこと
 
-- `IC`（補完のメニューが開いている状態）と、その中の `CompleteDone` / `TextChangedP` は blink.cmp が無いため観測していません。
+- `IC`（補完のメニューが開いている状態）の細かい動きは 07d（#190）で観測しました（O19）。
 - `R_MID`（`<Insert>` による i→R の移り変わりの途中）は観測で作れませんでした。遷移の途中の状態としてだけ扱います。`N_LOST` はクラスにせず、読みが消える遷移を P1 の破れとして扱います。
 - `V_PRE` は `<C-o>v` のあと pre-edit が残り続ける状態です（O-ctrl-o-v）。ダブルクリックでは 1 回目の押下の `CursorMovedI` が先に確定するため、`ModeChanged` の時点で pre-edit は空でした。ドラッグでは `ModeChanged` の時点で残っていましたが、これは遷移の途中として扱います（O18）。
 - upstream（denops 版）との比較はしていません。この表は Lua 版のコードと観測だけです。

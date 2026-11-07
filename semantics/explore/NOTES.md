@@ -76,8 +76,8 @@ timeout 900 nvim --headless -u NONE -i NONE -l semantics/explore/explore.lua --n
 | n.wait | N_WAIT | `<C-c>` のあと `SafeState` までの間だけ。1 キーごとのスナップショットには残らないので、`ModeChanged` の時点で写す |
 | n.lost | N_OFF | WinLeave / BufLeave のあとは `g:skkeleton#state` も extmark も空になり、N_OFF と区別できない。遷移の入力と結果だけを再現する |
 | n.visual | V_PRE | |
-| i.direct | I_DIRECT | 打ちかけのローマ字だけの状態は、この探索器では I_PENDING に分ける |
-| i.henkan_pt | I_POINT | 打ちかけのローマ字（`▽k`）は I_PENDING、読みが入った `▽かn` は I_POINT |
+| i.direct | I_DIRECT | 打ちかけのローマ字だけの状態は I_ROMAJI（#184 で I_PENDING から改名） |
+| i.henkan_pt | I_POINT | 打ちかけのローマ字（`▽k`）は I_ROMAJI、読みが入った `▽かn` は I_POINT |
 | i.henkan | I_SELECT | |
 | i.any | 前置きの状態 | 図の「どの状態からでも」は、前置きの観測をそのまま使う |
 | ni | NI | |
@@ -104,3 +104,18 @@ timeout 900 nvim --headless -u NONE -i NONE -l semantics/explore/explore.lua --n
 ## この表について
 
 この表は、`#185` の完了条件にある「NOTES の 49 遷移」を、#179 の調査で使った状態遷移図の `edges`（49 本）に合わせて書き直したものです。図の節点の名前と `semantics/GLOSSARY.md` の状態クラスは同じではないので、上の対応表で結び付けています。`semantics/model/model.lua` ができたら、状態クラスの粒度とこの表を突き合わせます。
+
+## 補完の観測（#190）
+
+組み込みの補完（`completion` プロファイル）と blink.cmp（`blink` / `blink_buffer` プロファイル）の観測です。`completion` は前の表の `e.builtin_completion` / `e.ic.accept` を含みます。`blink` を使うには `.tests/blink.cmp` か `BLINK_PATH` が要ります（観測のためだけに入れ、リポジトリには入れません）。
+
+```sh
+nvim --headless -u NONE -i NONE -l semantics/explore/explore.lua --profile completion --replay "Kan,<C-n>,<CR>"
+nvim --headless -u NONE -i NONE -l semantics/explore/explore.lua --profile blink --replay "Kanj,<Tab>"
+nvim --headless -u NONE -i NONE -l semantics/explore/explore.lua --profile blink_buffer --replay "Kanji,<CR>,Kan,<C-j>"
+```
+
+- `completion` は `あいうえお` の次の行から始めます。`<C-n>` / `<C-p>` / `<C-x><C-n>` で `ic` に入り、その時点で pre-edit が消えます。`<C-x>` だけでは `ix` のキー待ちになり、pre-edit は残ります。
+- `blink` は `あいうえお` の次の行から始めます。`sources.default` は README の静的な一覧ではなく、#24 の再現用に関数にして（有効なら skkeleton、無効なら buffer）、その関数のまま観測します。メニューは `User skkeleton-handled` で開くので、`observe.lua` は blink の浮動ウィンドウの `row` / `col` も残します（#143、#174）。
+- `blink_buffer` は無効のあいだに buffer のメニューを出したあと、`<C-j>`（`<Plug>(skkeleton-enable)` に割り当て）で有効にします（#24）。
+- blink のメニューはタイマーで開くので、`blink` / `blink_buffer` のプロファイルは 1 キーごとに 100ms 待ってから観測します。

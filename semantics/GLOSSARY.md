@@ -29,6 +29,8 @@ N_OFF、N_WAIT、V_PRE、V_IDLE、I_OFF、I_DIRECT、I_POINT、I_SELECT、I_ESCA
 - `R_MID` は観測のクラスではありません。`<Insert>` による insert と replace の移り変わりの途中の状態（transient）としてだけ残します。
 - `NI` / `V_PRE` / `P_PROMPT` は人が読むクラスは 1 つです。抱えている相（direct / point / select）は属性で持つので、仕様書では `NI（point）` のように書きます。モデルの中で `NI_POINT` などに分けてもかまいません。
 - `I_ROMAJI` はローマ字の打ちかけ（`state.feed`）がある状態です。`pending` は `render.is_pending()` の意味だけに使います。
+- `IC` は補完のメニューが開いている状態です。組み込みの補完（Vim のモードは `ic`）と blink.cmp のメニュー（Vim のモードは `i` のまま）を、人の読むクラスでは 1 つにまとめます。モデルの中では、組み込みの `IC`、キー待ちの `IX_DIRECT` / `IX_ROMAJI` / `IX_POINT` / `IX_SELECT`、blink の `I_BLINK_POINT` に分けます。
+- `I_OFF_MENU` は、insert で skkeleton が無効のまま blink.cmp の buffer 補完のメニューが開いている状態です。見分け方が `I_OFF` と同じで、有効化したときにメニューを閉じるかどうかだけが違うので、モデルの中だけで分けます。
 
 `V_PRE` は、`<C-o>v` で visual / select に入ったあと、pre-edit が描かれたまま残り続ける状態です。マウスのドラッグで `ModeChanged` の確定より前に一瞬残るもの（events.md の O18）は、状態ではなく遷移の途中（transient）として扱います。
 
@@ -52,6 +54,8 @@ terminal（07b / #188）の 3 つは、次の意味で使います。
 - `install_mapping`：skkeleton のマッピングを張る
 - `save_mapping`：元のマッピングを退避する
 - `clear_extmark`：pre-edit の extmark を消す
+- `show_completion`：補完のメニューを開く
+- `hide_completion`：補完のメニューを閉じる
 - `clean_cmdline`：cmdline の pre-edit を片付ける
 - `render`：pre-edit を描き直す
 - `feed_key`：キーを Neovim に流す
