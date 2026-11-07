@@ -32,6 +32,12 @@ N_OFF、N_WAIT、V_PRE、V_IDLE、I_OFF、I_DIRECT、I_POINT、I_SELECT、I_ESCA
 
 `V_PRE` は、`<C-o>v` で visual / select に入ったあと、pre-edit が描かれたまま残り続ける状態です。マウスのドラッグで `ModeChanged` の確定より前に一瞬残るもの（events.md の O18）は、状態ではなく遷移の途中（transient）として扱います。
 
+terminal（07b / #188）の 3 つは、次の意味で使います。
+
+- `T_DIRECT` は、terminal に pre-edit が無い状態です。skk が無効のとき（`terminal` で入っただけ、disable、`<Esc>` のあと）も、観測はこのクラスになります。モデルの中では `T_OFF` / `T_ESCAPE` / `T_DIRECT` に分けています。
+- `T_POINT` は、terminal の行に pre-edit を本物の文字として書いている状態です。ローマ字の打ちかけ、▽、▼ を、人が読むクラスではまとめます。モデルの中では `T_ROMAJI` / `T_POINT` / `T_SELECT` に分けています。
+- `T_NORMAL` は terminal-normal（`nt`）です。`<C-\><C-n>` で移っても skk は有効のままで、読みと pre-edit（端末の行の文字）を抱えたままです。モデルの中では抱えている相と有効・無効で `T_NORMAL_*` に分けています。
+
 ## effects の語彙
 
 遷移の結果（効果）を書くときの動詞です。各タスクは、同じ語で同じ効果を表します。

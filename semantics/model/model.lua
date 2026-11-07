@@ -1,4 +1,4 @@
--- insert / normal / visual / replace の状態機械のモデル（#184、親は #179）
+-- insert / normal / visual / replace / terminal の状態機械のモデル（#184、terminal は #188、親は #179）
 --
 -- 今の振る舞いだけを書く。望ましい振る舞いは決めない。
 -- このファイルがモデルの唯一のデータ源で、model_check.lua はここだけを読む。
@@ -49,7 +49,7 @@ local M = {}
 
 M.issue = 184
 M.parent = 179
-M.scope = "insert / normal / visual / replace（Vim のモード i / n / v・s / R）と、"
+M.scope = "insert / normal / visual / replace / terminal（Vim のモード i / n / v・s / R / t・nt）と、"
   .. "貼り付け・マウス・ホイール・WinLeave / BufLeave・skkeleton が奪わないキー（#191）"
 M.sources = {
   "semantics/GLOSSARY.md",
@@ -57,6 +57,8 @@ M.sources = {
   "semantics/inventory/events.md（#182）",
   "semantics/issues.md（#183）",
   "lua/skkeleton/map.lua、keymap.lua、guard.lua、cleanup.lua、paste.lua、function/",
+  "lua/skkeleton/render.lua、render/cmdline.lua、preedit.lua（terminal の pre-edit、#188）",
+  "semantics/explore/explore.lua の terminal プロファイル（#188 の観測）",
   "semantics/explore/observations/misc.jsonl（#191）",
   "状態遷移図の下書き（作者の手元の data.js。18 状態・49 遷移）",
 }
@@ -321,6 +323,154 @@ M.states = {
     refs = { "host.lua:175-213", "#144" },
     notes = "人が読むクラスは P_PROMPT（select）の 1 つで、相を aspect に持つ（作者の判断 4）。",
   },
+  -- terminal（t / nt）。#188（07b）。人が読むクラスは T_DIRECT / T_POINT / T_NORMAL の 3 つで、
+  -- 有効・無効、打ちかけ・▽・▼ の相、nt で抱えている読みはモデルの中で分ける
+  -- （作者の判断 4・cmdline の 07a と同じ考え）。観測（observe.classify）は t の有効・無効を
+  -- 区別しない（t で pre-edit が無ければ T_DIRECT）ので、T_OFF / T_ESCAPE の class は T_DIRECT。
+  T_OFF = {
+    class = "T_DIRECT",
+    layer = "Vim のモードが t、skkeleton は無効（terminal を開いただけ、または disable した）",
+    vim_mode = "t",
+    enabled = false,
+    phase = "input",
+    reading = "none",
+    preedit = "none",
+    label = "terminal（無効）",
+    refs = { "map.lua:113-139", "plugin/skkeleton.lua:20-24", "keys.md §4", "#188" },
+    notes = "terminal を開いただけの状態と、disable した状態。t のマッピングは無いので、"
+      .. "キーはそのままジョブへ渡る。",
+  },
+  T_ESCAPE = {
+    class = "T_DIRECT",
+    layer = "Vim のモードが t のまま、マップされた <Esc> のあと（state.type は escape）",
+    vim_mode = "t",
+    enabled = false,
+    phase = "escape",
+    reading = "none",
+    preedit = "none",
+    reachable = true,
+    label = "terminal（escape の片付け待ち）",
+    refs = { "function/disable.lua:21-27", "cleanup.lua:218-248", "keys.md §4", "#188" },
+    notes = "t の <Esc> はマップされた escape で、読みを確定して無効になり、端末へ Esc を流す。"
+      .. "insert と違い ModeChanged は起きない（t のまま）ので、state.type は escape のまま残る。"
+      .. "<C-\\><C-n> で nt へ移るときに ModeChanged の分岐で reset される。"
+      .. "キーのあとの観測は T_DIRECT になるので、クラスは T_DIRECT にする。",
+  },
+  T_DIRECT = {
+    class = "T_DIRECT",
+    layer = "Vim のモードが t、skk が有効で pre-edit が無い",
+    vim_mode = "t",
+    enabled = true,
+    phase = "input",
+    reading = "none",
+    preedit = "none",
+    label = "terminal（pre-edit 無し）",
+    refs = { "render.lua:395-425", "render.lua:91-97" },
+  },
+  T_ROMAJI = {
+    class = "T_POINT",
+    aspect = "romaji",
+    layer = "Vim のモードが t、ローマ字の打ちかけ（state.feed）を端末の行に書いている",
+    vim_mode = "t",
+    enabled = true,
+    phase = "input:okurinasi|okuriari",
+    reading = "romaji",
+    preedit = "romaji",
+    label = "terminal（打ちかけ）",
+    refs = { "state.lua", "render.lua:395-425" },
+    notes = "観測は pre-edit の有無だけを見るので、class は T_POINT。"
+      .. "端末の行には marker と打ちかけの文字（▽k など）が本物の文字として残る。",
+  },
+  T_POINT = {
+    class = "T_POINT",
+    aspect = "point",
+    layer = "Vim のモードが t、▽ / ▽* を端末の行に書いている",
+    vim_mode = "t",
+    enabled = true,
+    phase = "input:okurinasi|okuriari",
+    reading = "point",
+    preedit = "point",
+    label = "terminal（▽）",
+    refs = { "render.lua:395-425", "function/input.lua" },
+  },
+  T_SELECT = {
+    class = "T_POINT",
+    aspect = "select",
+    layer = "Vim のモードが t、▼ を端末の行に書いている",
+    vim_mode = "t",
+    enabled = true,
+    phase = "henkan",
+    reading = "henkan",
+    preedit = "henkan",
+    label = "terminal（▼）",
+    refs = { "render.lua:395-425", "function/henkan.lua" },
+    notes = "観測は ▽ と ▼ を分けないので、class は T_POINT。",
+  },
+  T_NORMAL_DIRECT = {
+    class = "T_NORMAL",
+    aspect = "direct",
+    layer = "Vim のモードが nt（terminal-normal）、skk は有効のまま、読みは無い",
+    vim_mode = "nt",
+    enabled = true,
+    phase = "input",
+    reading = "none",
+    preedit = "none",
+    label = "terminal-normal（読み無し）",
+    refs = { "cleanup.lua:218-248", "tests/test_e2e_cmdline.lua:147-172", "#74" },
+    notes = "ModeChanged の safe_reset は、nvim_get_mode() が nt のあいだ何もしない（cleanup.lua:229-238）。"
+      .. "t のマッピングは置かれたまま。i / a / I / A で t に戻る。",
+  },
+  T_NORMAL_ROMAJI = {
+    class = "T_NORMAL",
+    aspect = "romaji",
+    layer = "Vim のモードが nt、打ちかけを端末の行に残したまま",
+    vim_mode = "nt",
+    enabled = true,
+    phase = "input:okurinasi|okuriari",
+    reading = "romaji",
+    preedit = "romaji",
+    label = "terminal-normal（打ちかけを抱える）",
+    refs = { "cleanup.lua:218-248", "#74" },
+  },
+  T_NORMAL_POINT = {
+    class = "T_NORMAL",
+    aspect = "point",
+    layer = "Vim のモードが nt、▽ を端末の行に残したまま",
+    vim_mode = "nt",
+    enabled = true,
+    phase = "input:okurinasi|okuriari",
+    reading = "point",
+    preedit = "point",
+    label = "terminal-normal（▽ を抱える）",
+    refs = { "cleanup.lua:218-248", "#74" },
+    notes = "t の pre-edit は端末の行の本物の文字なので、nt でもそのまま見えている。"
+      .. "i で t に戻ると、その続きから打てる（#74 の直し）。",
+  },
+  T_NORMAL_SELECT = {
+    class = "T_NORMAL",
+    aspect = "select",
+    layer = "Vim のモードが nt、▼ を端末の行に残したまま",
+    vim_mode = "nt",
+    enabled = true,
+    phase = "henkan",
+    reading = "henkan",
+    preedit = "henkan",
+    label = "terminal-normal（▼ を抱える）",
+    refs = { "cleanup.lua:218-248", "#74" },
+  },
+  T_NORMAL_OFF = {
+    class = "T_NORMAL",
+    layer = "Vim のモードが nt、skk は無効",
+    vim_mode = "nt",
+    enabled = false,
+    phase = "input",
+    reading = "none",
+    preedit = "none",
+    label = "terminal-normal（無効）",
+    refs = { "cleanup.lua:218-248", "tests/test_e2e_cmdline.lua:147-172" },
+    notes = "disable したあと、または <Esc>（escape）から nt へ移った状態。"
+      .. "i で t に戻っても skk は無効のまま（T_OFF）。",
+  },
 }
 
 -- イベント
@@ -328,24 +478,24 @@ M.states = {
 -- kind: key（キー）/ autocmd（Vim のイベント）/ api（skkeleton の関数）/ input（キー以外の入力）/
 --       internal（キーの処理の途中で走る片付け）
 -- keys: 棚卸し（#181）の表記。イベントが 1 つのキーでないとき（<C-o>v など）はまとめた表記を書く。
--- modes: このモデルで扱う Vim のモード。c / t は別のタスク。
+-- modes: このモデルで扱う Vim のモード。c は 07a、t は 07b（#188）で足した。
 M.events = {
   enable = {
     kind = "api",
     keys = { "<Plug>(skkeleton-enable)", "skkeleton.enable()" },
-    modes = { "i", "n" },
+    modes = { "i", "n", "t" },
     refs = { "main.lua:101-125", "plugin/skkeleton.lua:20-24", "events.md O15" },
   },
   disable = {
     kind = "api",
     keys = { "<Plug>(skkeleton-disable)", "skkeleton.disable()" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "main.lua:129-139", "function/disable.lua:13-18", "events.md O15" },
   },
   toggle = {
     kind = "api",
     keys = { "<Plug>(skkeleton-toggle)", "skkeleton.toggle()" },
-    modes = { "i", "n" },
+    modes = { "i", "n", "t" },
     refs = { "main.lua:169-175", "events.md O15" },
   },
   char = {
@@ -357,7 +507,7 @@ M.events = {
       "!", "\"", "#", "$", "%", "&", "'", "(", ")", ",", ".", ":", "]", "@", "[", "-",
       "^", "\\", "?", "_", "+", "*", "}", "`", "{", "=", "~", "<lt>", "<Bar>",
     },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "keymap.lua:23-56,64-88", "function/input.lua:85-120", "keys.md §1,§3" },
     notes = "l q ; / L > X は、それぞれ別のイベントにした（関数が割り当てられているため）。",
   },
@@ -367,116 +517,116 @@ M.events = {
       "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "M", "N", "O", "P", "Q", "R",
       "S", "T", "U", "V", "W", "Y", "Z",
     },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "function/input.lua:85-120", "keys.md §1" },
     notes = "シフト付きの文字。direct では ▽ を開始する（かなテーブルに単独の項目が無いとき）。",
   },
   key_x = {
     kind = "key",
     keys = { "x" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "keymap.lua:51", "function/henkan.lua:116-133" },
     notes = "input では文字。henkan では候補を 1 つ前へ（henkanBackward）。",
   },
   key_X = {
     kind = "key",
     keys = { "X" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "keymap.lua:52", "function/common.lua:89-", "keys.md §3" },
     notes = "input では文字（▽ を開始）。henkan では候補の削除（purgeCandidate）。",
   },
   key_L = {
     kind = "key",
     keys = { "L" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "keymap.lua:41", "function/mode.lua" },
   },
   key_l = {
     kind = "key",
     keys = { "l" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "keymap.lua:37", "#67", "#87" },
     notes = "既定のかなテーブルのときだけ disable を呼ぶ。",
   },
   key_q = {
     kind = "key",
     keys = { "q" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "keymap.lua:38", "function/mode.lua" },
   },
   key_semicolon = {
     kind = "key",
     keys = { ";" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "keymap.lua:39", "function/input.lua:147-" },
   },
   key_slash = {
     kind = "key",
     keys = { "/" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "keymap.lua:40", "function/mode.lua" },
   },
   key_gt = {
     kind = "key",
     keys = { ">" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "keymap.lua:34,53", "function/input.lua:206-223" },
     notes = "input では接頭辞・接尾辞、henkan では送り仮名（suffix）。",
   },
   key_cq = {
     kind = "key",
     keys = { "<C-q>" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "keymap.lua:33", "function/mode.lua" },
   },
   bs = {
     kind = "key",
     keys = { "<BS>", "<C-h>" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "keymap.lua:27,29", "function/input.lua:178-204", "keys.md §1" },
     notes = "<C-h> は <bs> に正規化され、keymap.lua:29 の <c-h> の行は引かれない。",
   },
   cr = {
     kind = "key",
     keys = { "<CR>" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "keymap.lua:30,48", "function/common.lua:59-68" },
   },
   space = {
     kind = "key",
     keys = { "<Space>" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "keymap.lua:35,50", "function/henkan.lua:21-56,90-113" },
   },
   nl = {
     kind = "key",
     keys = { "<C-j>" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "keymap.lua:32,49", "function/common.lua:18-45" },
   },
   cg = {
     kind = "key",
     keys = { "<C-g>" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "keymap.lua:28,47", "function/common.lua:71-86", "#87" },
   },
   esc = {
     kind = "key",
     keys = { "<Esc>", "<C-[>" },
-    modes = { "i", "n", "v", "R", "ic" },
+    modes = { "i", "n", "v", "R", "ic", "t" },
     refs = { "keymap.lua:31", "function/disable.lua:21-27", "cleanup.lua:192-251", "#86" },
     notes = "insert では keymap の escape。cmdline から visual へ戻るときなどは ModeChanged の規則 5。",
   },
   insert_key = {
     kind = "key",
     keys = { "<Insert>" },
-    modes = { "i", "R" },
+    modes = { "i", "R", "t" },
     refs = { "guard.lua:15-16", "cleanup.lua:183,207-214", "#29", "#38", "#156" },
   },
   ctrl_o = {
     kind = "key",
     keys = { "<C-o>" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "keymap.lua", "cleanup.lua:185,215-217", "#117" },
   },
   ctrl_c = {
@@ -488,7 +638,7 @@ M.events = {
   ctrl_r = {
     kind = "key",
     keys = { "<C-r>", "<C-r><C-r>", "<C-r>=", "<C-r>{reg}", "<C-r>a", "<C-r>=1<CR>" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "guard.lua:78-80", "keys.md §5,§6", "#8", "#12", "#20" },
     notes = "レジスタの中身を入れる・式の結果を入れる。guard は確定しないので、"
       .. "バッファが変わったあとの TextChangedI が読みを捨てる。",
@@ -496,56 +646,56 @@ M.events = {
   ctrl_v = {
     kind = "key",
     keys = { "<C-v>", "<C-v>065" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "guard.lua:78-80", "keys.md §5,§6", "#12" },
   },
   ctrl_k = {
     kind = "key",
     keys = { "<C-k>", "<C-k>a:" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "guard.lua:78-80", "keys.md §5,§6", "#12" },
   },
   ctrl_t = {
     kind = "key",
     keys = { "<C-t>" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "guard.lua:78-80", "keys.md §5,§6" },
   },
   tab = {
     kind = "key",
     keys = { "<Tab>" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "guard.lua:89-96", "keys.md §5,§6", "#12" },
     notes = "<S-Tab> は termcap なので guard が確定する。guard_special のほう。",
   },
   ctrl_w = {
     kind = "key",
     keys = { "<C-w>" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "guard.lua:78-80", "keys.md §5,§6", "#8", "#12" },
   },
   ctrl_u = {
     kind = "key",
     keys = { "<C-u>" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "guard.lua:78-80", "keys.md §5,§6", "#8", "#12" },
   },
   ctrl_a = {
     kind = "key",
     keys = { "<C-a>" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "guard.lua:78-80", "keys.md §6", "NOTES.md 未考慮 7" },
   },
   ctrl_at = {
     kind = "key",
     keys = { "<C-@>" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "guard.lua:62-65", "keys.md §4,§6", "#56" },
   },
   completion_open = {
     kind = "key",
     keys = { "<C-n>", "<C-p>", "<C-x>", "<C-x><C-n>" },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "guard.lua:78-80", "keys.md §5", "#18", "#19", "#45", "#190" },
   },
   completion_next = {
@@ -557,7 +707,7 @@ M.events = {
   completion_accept = {
     kind = "key",
     keys = { "<C-y>", "<C-e>" },
-    modes = { "i", "ic" },
+    modes = { "i", "ic", "t" },
     refs = { "keys.md §6", "#19", "#190" },
   },
   ctrl_o_colon = {
@@ -588,7 +738,7 @@ M.events = {
       "<Left>", "<Right>", "<Up>", "<Down>", "<Home>", "<End>", "<PageUp>", "<PageDown>",
       "<Del>", "<S-Tab>", "<F5>", "<C-.>", "<S-CR>",
     },
-    modes = { "i" },
+    modes = { "i", "t" },
     refs = { "guard.lua:22-37,50-85", "keys.md §4", "#56" },
     notes = "guard が pre-edit を確定してから、キーを流し直す。",
   },
@@ -715,6 +865,41 @@ M.events = {
     keys = { "<C-g>@register", "<Esc>@register" },
     modes = { "c" },
     refs = { "host.lua:197-204", "#116", "#189" },
+  },
+  -- terminal（t / nt）。#188（07b）
+  --
+  -- t でも、map.lua が置いた 102 個のキーは char や esc などの同じイベントで扱う
+  -- （キーマップは Vim のモードで分かれるだけで、keymap の処理は同じ）。
+  -- ここに足すのは、terminal にだけあるイベントと、nt のキー。
+  term_open = {
+    kind = "api",
+    keys = { ":terminal", "vim.cmd('terminal')" },
+    modes = { "n" },
+    refs = { "explore.lua の terminal プロファイル", "keys.md §5", "#188" },
+    notes = "normal から terminal を開くと Vim のモードが t になり、skk は無効のまま（T_OFF）。"
+      .. "探索器の terminal プロファイルは `terminal cat` を実行して同じ所まで進める。",
+  },
+  t_normal = {
+    kind = "key",
+    keys = { "<C-\\><C-n>" },
+    modes = { "t" },
+    refs = { "guard.lua:114-124,154-163", "cleanup.lua:218-248", "tests/test_e2e_cmdline.lua:147-172", "#74" },
+    notes = "terminal から terminal-normal（nt）へ抜ける。guard は pre-edit を確定せずに通す（#74）。",
+  },
+  nt_insert = {
+    kind = "key",
+    keys = { "i", "a", "I", "A" },
+    modes = { "nt" },
+    refs = { "tests/test_e2e_cmdline.lua:147-172", "#74" },
+    notes = "terminal-normal から terminal（t）へ戻る。skk は有効のままで、読みと pre-edit も残る。",
+  },
+  nt_edit = {
+    kind = "key",
+    keys = { "x", "X", "dd", "J", "o", "O", "u", "U", "R", "p", "P", "." },
+    modes = { "nt" },
+    refs = { "keys.md §5", "#188" },
+    notes = "terminal のバッファは nomodifiable なので、編集は E21 で何も変わらない（x / dd / J / o / u / R）。"
+      .. "レジスタが空の p / P と、直前の変更が無い . は何も起きない。",
   },
 }
 
@@ -2081,6 +2266,803 @@ for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT" }) do
   })
 end
 
+-- terminal（t / nt）。#188（07b）
+--
+-- 観測は semantics/explore/explore.lua の terminal プロファイル（`terminal cat`、子の nvim、
+-- 一時ディレクトリの辞書、HISTFILE=/dev/null）で取った。t では pre-edit を本物の文字として
+-- ジョブへ流し、BS で消して書き直すので、端末の行には書き直しの BS が ^H として残る。
+--
+-- t のキーは、マップされた 102 個なら insert と同じイベント（char / esc / space など）で扱う。
+-- ここに書くのは、terminal にだけある道と、t / nt の移り変わり。
+local T_ON = { "T_DIRECT", "T_ROMAJI", "T_POINT", "T_SELECT" }
+local T_NORMAL = {
+  T_DIRECT = "T_NORMAL_DIRECT",
+  T_ROMAJI = "T_NORMAL_ROMAJI",
+  T_POINT = "T_NORMAL_POINT",
+  T_SELECT = "T_NORMAL_SELECT",
+}
+
+-- normal から terminal を開く
+add({
+  id = "t.N_OFF.term_open",
+  from = "N_OFF", event = "term_open", to = "T_OFF",
+  effects = { "pass_key" },
+  status = "ok", refs = { "explore.lua の terminal プロファイル", "keys.md §5" },
+  notes = "terminal を開くと Vim のモードは t で、skk は無効のまま（T_OFF）。"
+    .. "探索器の terminal プロファイルでは `terminal cat` を実行してから enable する。",
+})
+
+-- 有効化・無効化
+add({
+  id = "t.T_OFF.enable",
+  from = "T_OFF", event = "enable", to = "T_DIRECT",
+  effects = { "save_mapping", "install_mapping", "reset_state" },
+  status = "ok", refs = { "main.lua:101-125" }, observed = { "O-t-enable" },
+  notes = "t で有効化すると、t のマッピングが張られる。",
+})
+add({
+  id = "t.T_OFF.toggle",
+  from = "T_OFF", event = "toggle", to = "T_DIRECT",
+  effects = { "save_mapping", "install_mapping", "reset_state" },
+  status = "ok", refs = { "main.lua:169-175" }, observed = { "O-t-toggle-on" },
+  notes = "無効なので enable 側。`<Plug>(skkeleton-toggle)` はキー列で再生できる。",
+})
+add({
+  id = "t.T_ESCAPE.enable",
+  from = "T_ESCAPE", event = "enable", to = "T_DIRECT",
+  effects = { "save_mapping", "install_mapping", "reset_state" },
+  status = "ok", refs = { "main.lua:101-125" }, observed = { "O-t-esc-enable" },
+  notes = "state.type が escape でも、<Plug> からの enable は Context を作り直す。",
+})
+for _, from in ipairs(T_ON) do
+  local commit = from == "T_SELECT" and "commit_candidate" or from ~= "T_DIRECT" and "commit_reading" or nil
+  local obs_disable = ({ T_DIRECT = { "O-t-disable-direct" }, T_POINT = { "O-t-disable" } })[from] or {}
+  local obs_toggle = ({ T_DIRECT = { "O-t-toggle-off-direct" }, T_POINT = { "O-t-toggle-off" } })[from] or {}
+  local obs_esc = ({
+    T_DIRECT = { "O-t-esc-direct" },
+    T_ROMAJI = { "O-t-romaji-esc" },
+    T_POINT = { "O-t-esc" },
+    T_SELECT = { "O-t-select-esc" },
+  })[from] or {}
+  add({
+    id = "t." .. from .. ".disable",
+    from = from, event = "disable", to = "T_OFF",
+    effects = commit and { commit, "restore_mapping", "reset_state" } or { "restore_mapping", "reset_state" },
+    status = "ok", refs = { "main.lua:129-139", "function/disable.lua:13-18" },
+    observed = obs_disable,
+    notes = "読みがあれば確定してから無効にする。t のまま。",
+  })
+  add({
+    id = "t." .. from .. ".toggle",
+    from = from, event = "toggle", to = "T_OFF",
+    effects = commit and { commit, "restore_mapping", "reset_state" } or { "restore_mapping", "reset_state" },
+    status = "ok", refs = { "main.lua:169-175", "function/disable.lua:13-18" },
+    observed = obs_toggle,
+  })
+  add({
+    id = "t." .. from .. ".esc",
+    from = from, event = "esc", to = "T_ESCAPE",
+    effects = commit and { commit, "restore_mapping", "reset_state", "feed_key" }
+      or { "restore_mapping", "reset_state", "feed_key" },
+    status = "ok", refs = { "function/disable.lua:21-27", "function/common.lua:59-68" },
+    observed = obs_esc,
+    notes = "読みを確定して無効にし、端末へ Esc を流す。ModeChanged は起きないので state.type は escape のまま（T_ESCAPE）。",
+  })
+end
+
+-- terminal → terminal-normal（<C-\><C-n>）。読みと pre-edit を持ち越す（#74）
+for _, from in ipairs(T_ON) do
+  local obs_nt = ({
+    T_DIRECT = { "O-t-nt-direct" },
+    T_ROMAJI = { "O-t-romaji-nt" },
+    T_POINT = { "O-t-nt" },
+    T_SELECT = { "O-t-select-nt" },
+  })[from] or {}
+  add({
+    id = "t." .. from .. ".t_normal",
+    from = from, event = "t_normal", to = T_NORMAL[from],
+    effects = { "keep" },
+    status = "ok", refs = { "guard.lua:114-124,154-163", "cleanup.lua:218-248", "#74" },
+    observed = obs_nt,
+    notes = "guard は pre-edit を確定せずに通す。ModeChanged の safe_reset は nt のあいだ何もしない。"
+      .. "端末の行には pre-edit の文字が残ったまま。",
+  })
+end
+add({
+  id = "t.T_OFF.t_normal",
+  from = "T_OFF", event = "t_normal", to = "T_NORMAL_OFF",
+  effects = {},
+  status = "ok", refs = { "guard.lua:114-124,154-163", "cleanup.lua:218-248" }, observed = { "O-t-disable-nt" },
+})
+add({
+  id = "t.T_ESCAPE.t_normal",
+  from = "T_ESCAPE", event = "t_normal", to = "T_NORMAL_OFF",
+  effects = { "reset_state" },
+  status = "ok", refs = { "cleanup.lua:218-221" }, observed = { "O-t-esc-nt" },
+  notes = "state.type が escape なので、ModeChanged の分岐でその場で reset する。",
+})
+
+-- terminal-normal → terminal（i / a / I / A）。読みと pre-edit が残っている
+for _, from in ipairs(T_ON) do
+  local obs_back = ({
+    T_DIRECT = { "O-t-nt-direct-back" },
+    T_ROMAJI = { "O-t-romaji-nt-back" },
+    T_POINT = { "O-t-nt-back" },
+    T_SELECT = { "O-t-select-nt-back" },
+  })[from] or {}
+  add({
+    id = "t." .. T_NORMAL[from] .. ".nt_insert",
+    from = T_NORMAL[from], event = "nt_insert", to = from,
+    effects = from == "T_DIRECT" and {} or { "keep" },
+    status = "ok", refs = { "tests/test_e2e_cmdline.lua:147-172", "#74" },
+    observed = obs_back,
+    notes = "nt から t に戻る。読みは捨てずに続きから打てる。",
+  })
+end
+add({
+  id = "t.T_NORMAL_OFF.nt_insert",
+  from = "T_NORMAL_OFF", event = "nt_insert", to = "T_OFF",
+  effects = {},
+  status = "ok", refs = { "tests/test_e2e_cmdline.lua:147-172" }, observed = { "O-t-disable-nt-back" },
+  notes = "skk が無効のまま t に戻る。",
+})
+-- nt で端末のバッファを編集するキー（nomodifiable なので E21、状態は変わらない）
+for _, from in ipairs({ "T_NORMAL_DIRECT", "T_NORMAL_ROMAJI", "T_NORMAL_POINT", "T_NORMAL_SELECT", "T_NORMAL_OFF" }) do
+  add({
+    id = "t." .. from .. ".nt_edit",
+    from = from, event = "nt_edit", to = from,
+    effects = { "pass_key" },
+    status = "ok", refs = { "keys.md §5", "#188" },
+    observed = from == "T_NORMAL_POINT" and { "O-t-nt-edit" } or {},
+    notes = "terminal のバッファは nomodifiable。x / dd / J / o / u / R は E21 になり、何も変わらない。"
+      .. "p / P / . は何もしない。",
+  })
+  add({
+    id = "t." .. from .. ".t_normal_again",
+    from = from, event = "t_normal", to = from,
+    effects = { "pass_key" },
+    status = "ok", refs = { "Vim 本体" },
+    observed = from == "T_NORMAL_POINT" and { "O-t-nt-again" } or {},
+    notes = "nt で <C-\\><C-n> を押しても何も起きない。",
+  })
+  add({
+    id = "t." .. from .. ".esc",
+    from = from, event = "esc", to = from,
+    effects = { "pass_key" },
+    status = "ok", refs = { "Vim 本体" },
+    observed = from == "T_NORMAL_POINT" and { "O-t-nt-esc" } or {},
+    notes = "nt の <Esc> は normal の <Esc>。skk は何もしない。",
+  })
+  add({
+    id = "t." .. from .. ".ctrl_c",
+    from = from, event = "ctrl_c", to = from,
+    effects = { "pass_key" },
+    status = "ok", refs = { "Vim 本体" },
+    observed = from == "T_NORMAL_POINT" and { "O-t-nt-ctrl-c" } or {},
+  })
+end
+
+-- 無効な terminal（T_OFF / T_ESCAPE）では、キーはジョブへそのまま渡る
+local T_PASS_EVENTS = {
+  "char", "char_shift", "key_x", "key_X", "key_L", "key_l", "key_q", "key_semicolon", "key_slash",
+  "key_gt", "key_cq", "bs", "cr", "space", "nl", "cg", "esc", "insert_key", "ctrl_o", "ctrl_r",
+  "ctrl_v", "ctrl_k", "ctrl_t", "tab", "ctrl_w", "ctrl_u", "ctrl_a", "ctrl_at", "completion_open",
+  "completion_accept", "guard_special",
+}
+for _, from in ipairs({ "T_OFF", "T_ESCAPE" }) do
+  for _, event in ipairs(T_PASS_EVENTS) do
+    local observed
+    if from == "T_OFF" and event == "char" then
+      observed = { "O-t-off-char" }
+    elseif from == "T_ESCAPE" and event == "char" then
+      observed = { "O-t-esc-char" }
+    elseif from == "T_ESCAPE" and event == "ctrl_a" then
+      observed = { "O-t-esc-ctrl-a" }
+    end
+    add({
+      id = "t." .. from .. "." .. event,
+      from = from, event = event, to = from,
+      effects = { "pass_key" },
+      status = observed and "ok" or "unknown",
+      refs = { "guard.lua:139-189", "keys.md §4" },
+      observed = observed or {},
+      notes = "skk が無効なので、キーは端末のジョブへそのまま渡る。確定はしない。",
+    })
+  end
+end
+
+-- t・有効で pre-edit が無い（T_DIRECT）
+add({
+  id = "t.T_DIRECT.char.keep",
+  from = "T_DIRECT", event = "char", to = "T_DIRECT",
+  effects = { "feed_key" },
+  status = "ok", refs = { "function/input.lua:85-120" }, observed = { "O-t-a" },
+  notes = "direct でかなテーブルの 1 打が確定する（例: a → あ）。端末のジョブへ流れる。",
+})
+add({
+  id = "t.T_DIRECT.char.romaji",
+  from = "T_DIRECT", event = "char", to = "T_ROMAJI",
+  effects = { "feed_key", "render" },
+  status = "unknown", refs = { "function/input.lua:85-120" },
+  notes = "ローマ字が続く（例: k）。端末の行に打ちかけを書く。",
+})
+add({
+  id = "t.T_DIRECT.char_shift",
+  from = "T_DIRECT", event = "char_shift", to = "T_ROMAJI",
+  effects = { "render" },
+  status = "ok", refs = { "function/input.lua:85-120" }, observed = { "O-t-k" },
+})
+add({
+  id = "t.T_DIRECT.char_shift.point",
+  from = "T_DIRECT", event = "char_shift", to = "T_POINT",
+  effects = { "render" },
+  status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.T_DIRECT.key_X",
+  from = "T_DIRECT", event = "key_X", to = "T_ROMAJI",
+  effects = { "render" },
+  status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.T_DIRECT.key_l",
+  from = "T_DIRECT", event = "key_l", to = "T_OFF",
+  effects = { "restore_mapping", "reset_state" },
+  status = "ok", refs = { "keymap.lua:37", "function/disable.lua", "#67" },
+  notes = "既定のかなテーブルのときだけ。t のまま無効になる。",
+})
+add({
+  id = "t.T_DIRECT.key_q",
+  from = "T_DIRECT", event = "key_q", to = "T_DIRECT",
+  effects = { "render" },
+  status = "unknown", refs = { "keymap.lua:38" },
+  notes = "かなモードをカタカナにする。クラスは変えない（P11 の外）。",
+})
+add({
+  id = "t.T_DIRECT.key_semicolon",
+  from = "T_DIRECT", event = "key_semicolon", to = "T_ROMAJI",
+  effects = { "render" },
+  status = "unknown", refs = { "keymap.lua:39", "function/input.lua:147-" },
+  notes = "送り仮名の入力へ。",
+})
+add({
+  id = "t.T_DIRECT.key_slash",
+  from = "T_DIRECT", event = "key_slash", to = "T_DIRECT",
+  effects = { "render" },
+  status = "unknown", refs = { "keymap.lua:40" },
+  notes = "abbrev モードへ。クラスは変えない。",
+})
+add({
+  id = "t.T_DIRECT.key_L",
+  from = "T_DIRECT", event = "key_L", to = "T_DIRECT",
+  effects = { "render" },
+  status = "unknown", refs = { "keymap.lua:41" },
+})
+add({
+  id = "t.T_DIRECT.key_cq",
+  from = "T_DIRECT", event = "key_cq", to = "T_DIRECT",
+  effects = { "render" },
+  status = "unknown", refs = { "keymap.lua:33" },
+  notes = "半角カタカナにする。読みが無いのでクラスは変えない。",
+})
+add({
+  id = "t.T_DIRECT.key_gt",
+  from = "T_DIRECT", event = "key_gt", to = "T_DIRECT",
+  effects = { "feed_key" },
+  status = "unknown", refs = { "keymap.lua:34" },
+})
+add({
+  id = "t.T_DIRECT.space",
+  from = "T_DIRECT", event = "space", to = "T_DIRECT",
+  effects = { "feed_key" },
+  status = "ok", refs = { "function/henkan.lua:21-56" }, observed = { "O-t-space" },
+  notes = "読みが無いので、<Space> はジョブへそのまま渡る（端末の行に空白が入る）。",
+})
+add({
+  id = "t.T_DIRECT.bs",
+  from = "T_DIRECT", event = "bs", to = "T_DIRECT",
+  effects = { "feed_key" },
+  status = "unknown", refs = { "function/input.lua:178-204" },
+  notes = "打ちかけが無いので、端末の 1 文字を消す。",
+})
+add({
+  id = "t.T_DIRECT.cr",
+  from = "T_DIRECT", event = "cr", to = "T_DIRECT",
+  effects = { "feed_key" },
+  status = "unknown", refs = { "function/common.lua:59-68" },
+})
+add({
+  id = "t.T_DIRECT.nl",
+  from = "T_DIRECT", event = "nl", to = "T_DIRECT",
+  effects = {},
+  status = "unknown", refs = { "function/common.lua:18-45" },
+  notes = "確定する読みが無いので、何も流さない。",
+})
+add({
+  id = "t.T_DIRECT.cg",
+  from = "T_DIRECT", event = "cg", to = "T_DIRECT",
+  effects = {},
+  status = "unknown", refs = { "keymap.lua:28" },
+})
+add({
+  id = "t.T_DIRECT.insert_key",
+  from = "T_DIRECT", event = "insert_key", to = "T_DIRECT",
+  effects = { "pass_key" },
+  status = "unknown", refs = { "guard.lua:15-16,143-145" },
+  notes = "guard は <Insert> で確定しない。t ではジョブへそのまま渡る。",
+})
+add({
+  id = "t.T_DIRECT.ctrl_c",
+  from = "T_DIRECT", event = "ctrl_c", to = "T_DIRECT",
+  effects = { "pass_key" },
+  status = "unknown", refs = { "guard.lua:89-112" },
+})
+add({
+  id = "t.T_DIRECT.ctrl_o",
+  from = "T_DIRECT", event = "ctrl_o", to = "T_DIRECT",
+  effects = { "pass_key" },
+  status = "unknown", refs = { "guard.lua:89-112" },
+  notes = "t の <C-o> は insert-normal ではなく、ジョブへ渡る（tty の C-o）。",
+})
+add({
+  id = "t.T_DIRECT.ctrl_r",
+  from = "T_DIRECT", event = "ctrl_r", to = "T_DIRECT",
+  effects = { "pass_key" },
+  status = "ok", refs = { "guard.lua:89-112" }, observed = { "O-t-ctrl-r-direct" },
+})
+add({
+  id = "t.T_DIRECT.ctrl_a",
+  from = "T_DIRECT", event = "ctrl_a", to = "T_DIRECT",
+  effects = { "pass_key" },
+  status = "ok", refs = { "guard.lua:89-112" }, observed = { "O-t-ctrl-a-direct" },
+})
+for _, event in ipairs({ "ctrl_v", "ctrl_k", "ctrl_t", "tab", "ctrl_w", "ctrl_u", "ctrl_at", "completion_open", "completion_accept", "guard_special" }) do
+  add({
+    id = "t.T_DIRECT." .. event,
+    from = "T_DIRECT", event = event, to = "T_DIRECT",
+    effects = { "pass_key" },
+    status = "unknown", refs = { "guard.lua:89-112", "keys.md §4" },
+  })
+end
+
+-- t・有効で打ちかけがある（T_ROMAJI）
+add({
+  id = "t.T_ROMAJI.char.keep",
+  from = "T_ROMAJI", event = "char", to = "T_ROMAJI",
+  effects = { "render" },
+  status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.T_ROMAJI.char.commit",
+  from = "T_ROMAJI", event = "char", to = "T_DIRECT",
+  effects = { "feed_key" },
+  status = "ok", refs = { "function/input.lua:85-120" }, observed = { "O-t-ka" },
+  notes = "打ちかけがかなに解決して確定する（k → a で か）。",
+})
+add({
+  id = "t.T_ROMAJI.char_shift",
+  from = "T_ROMAJI", event = "char_shift", to = "T_POINT",
+  effects = { "keep", "render" },
+  status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.T_ROMAJI.key_X",
+  from = "T_ROMAJI", event = "key_X", to = "T_POINT",
+  effects = { "keep", "render" },
+  status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.T_ROMAJI.key_l",
+  from = "T_ROMAJI", event = "key_l", to = "T_OFF",
+  effects = { "commit_reading", "restore_mapping", "reset_state" },
+  status = "unknown", refs = { "keymap.lua:37", "function/disable.lua", "#67" },
+})
+add({
+  id = "t.T_ROMAJI.key_q",
+  from = "T_ROMAJI", event = "key_q", to = "T_ROMAJI",
+  effects = { "render" },
+  status = "unknown", refs = { "keymap.lua:38" },
+})
+add({
+  id = "t.T_ROMAJI.key_semicolon",
+  from = "T_ROMAJI", event = "key_semicolon", to = "T_POINT",
+  effects = { "render" },
+  status = "unknown", refs = { "keymap.lua:39" },
+})
+add({
+  id = "t.T_ROMAJI.key_slash",
+  from = "T_ROMAJI", event = "key_slash", to = "T_ROMAJI",
+  effects = { "render" },
+  status = "unknown", refs = { "keymap.lua:40" },
+})
+add({
+  id = "t.T_ROMAJI.key_L",
+  from = "T_ROMAJI", event = "key_L", to = "T_ROMAJI",
+  effects = { "render" },
+  status = "unknown", refs = { "keymap.lua:41" },
+})
+add({
+  id = "t.T_ROMAJI.key_cq",
+  from = "T_ROMAJI", event = "key_cq", to = "T_DIRECT",
+  effects = { "commit_reading", "feed_key" },
+  status = "unknown", refs = { "keymap.lua:33" },
+  notes = "半角カタカナにして確定する。",
+})
+add({
+  id = "t.T_ROMAJI.key_gt",
+  from = "T_ROMAJI", event = "key_gt", to = "T_POINT",
+  effects = { "render" },
+  status = "unknown", refs = { "keymap.lua:34" },
+})
+add({
+  id = "t.T_ROMAJI.space",
+  from = "T_ROMAJI", event = "space", to = "T_SELECT",
+  effects = { "keep", "render" },
+  status = "unknown", refs = { "function/henkan.lua:21-56" },
+  notes = "打ちかけを解決して変換に入る。",
+})
+add({
+  id = "t.T_ROMAJI.bs",
+  from = "T_ROMAJI", event = "bs", to = "T_POINT",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "function/input.lua:178-204" }, observed = { "O-t-romaji-bs" },
+  notes = "打ちかけの 1 文字を削る。▽ だけになり、クラスは T_POINT（観測）。"
+    .. "もう一度 <BS> を押すと T_DIRECT になる（T_POINT.bs.empty の道）。",
+})
+add({
+  id = "t.T_ROMAJI.cr",
+  from = "T_ROMAJI", event = "cr", to = "T_DIRECT",
+  effects = { "commit_reading", "feed_key" },
+  status = "unknown", refs = { "function/common.lua:59-68" },
+})
+add({
+  id = "t.T_ROMAJI.nl",
+  from = "T_ROMAJI", event = "nl", to = "T_DIRECT",
+  effects = { "commit_reading" },
+  status = "unknown", refs = { "function/common.lua:18-45" },
+})
+add({
+  id = "t.T_ROMAJI.cg",
+  from = "T_ROMAJI", event = "cg", to = "T_DIRECT",
+  effects = { "cancel", "reset_state" },
+  status = "unknown", refs = { "keymap.lua:28", "function/common.lua:71-86" },
+})
+add({
+  id = "t.T_ROMAJI.insert_key",
+  from = "T_ROMAJI", event = "insert_key", to = "T_ROMAJI",
+  effects = { "pass_key" },
+  status = "unknown", refs = { "guard.lua:15-16,143-145" },
+})
+add({
+  id = "t.T_ROMAJI.tab",
+  from = "T_ROMAJI", event = "tab", to = "T_ROMAJI",
+  effects = { "pass_key" },
+  status = "unknown", refs = { "guard.lua:89-96" },
+})
+add({
+  id = "t.T_ROMAJI.ctrl_c",
+  from = "T_ROMAJI", event = "ctrl_c", to = "T_DIRECT",
+  effects = { "commit_reading", "pass_key" },
+  status = "unknown", refs = { "guard.lua:89-112" },
+})
+add({
+  id = "t.T_ROMAJI.ctrl_o",
+  from = "T_ROMAJI", event = "ctrl_o", to = "T_DIRECT",
+  effects = { "commit_reading", "pass_key" },
+  status = "unknown", refs = { "guard.lua:89-112" },
+})
+add({
+  id = "t.T_ROMAJI.ctrl_a",
+  from = "T_ROMAJI", event = "ctrl_a", to = "T_DIRECT",
+  effects = { "commit_reading", "pass_key" },
+  status = "ok", refs = { "guard.lua:89-112" }, observed = { "O-t-romaji-ctrl-a" },
+})
+for _, event in ipairs({ "ctrl_r", "ctrl_v", "ctrl_k", "ctrl_t", "ctrl_w", "ctrl_u", "ctrl_at", "completion_open", "completion_accept", "guard_special" }) do
+  add({
+    id = "t.T_ROMAJI." .. event,
+    from = "T_ROMAJI", event = event, to = "T_DIRECT",
+    effects = { "commit_reading", "pass_key" },
+    status = "unknown", refs = { "guard.lua:89-112", "keys.md §4" },
+  })
+end
+
+-- t・有効で ▽（T_POINT）
+add({
+  id = "t.T_POINT.char",
+  from = "T_POINT", event = "char", to = "T_POINT",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "function/input.lua:85-120" }, observed = { "O-t-kan-n" },
+})
+add({
+  id = "t.T_POINT.char_shift",
+  from = "T_POINT", event = "char_shift", to = "T_POINT",
+  effects = { "keep", "render" },
+  status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.T_POINT.key_X",
+  from = "T_POINT", event = "key_X", to = "T_POINT",
+  effects = { "keep", "render" },
+  status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.T_POINT.key_l",
+  from = "T_POINT", event = "key_l", to = "T_OFF",
+  effects = { "commit_reading", "restore_mapping", "reset_state" },
+  status = "unknown", refs = { "keymap.lua:37", "function/disable.lua", "#67" },
+})
+add({
+  id = "t.T_POINT.key_q",
+  from = "T_POINT", event = "key_q", to = "T_POINT",
+  effects = { "render" },
+  status = "unknown", refs = { "keymap.lua:38" },
+})
+add({
+  id = "t.T_POINT.key_semicolon",
+  from = "T_POINT", event = "key_semicolon", to = "T_POINT",
+  effects = { "keep", "render" },
+  status = "unknown", refs = { "keymap.lua:39" },
+})
+add({
+  id = "t.T_POINT.key_slash",
+  from = "T_POINT", event = "key_slash", to = "T_POINT",
+  effects = { "keep", "render" },
+  status = "unknown", refs = { "keymap.lua:40" },
+})
+add({
+  id = "t.T_POINT.key_L",
+  from = "T_POINT", event = "key_L", to = "T_POINT",
+  effects = { "keep", "render" },
+  status = "unknown", refs = { "keymap.lua:41" },
+})
+add({
+  id = "t.T_POINT.key_gt",
+  from = "T_POINT", event = "key_gt", to = "T_SELECT",
+  effects = { "keep", "render" },
+  status = "unknown", refs = { "keymap.lua:53", "function/input.lua:206-223" },
+})
+add({
+  id = "t.T_POINT.key_cq",
+  from = "T_POINT", event = "key_cq", to = "T_DIRECT",
+  effects = { "commit_reading", "feed_key" },
+  status = "ok", refs = { "keymap.lua:33" }, observed = { "O-t-cq" },
+  notes = "半角カタカナにして確定する（観測では ｶﾝ）。",
+})
+add({
+  id = "t.T_POINT.space.select",
+  from = "T_POINT", event = "space", to = "T_SELECT",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "function/henkan.lua:21-56" }, observed = { "O-t-select" },
+})
+add({
+  id = "t.T_POINT.bs",
+  from = "T_POINT", event = "bs", to = "T_POINT",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "function/input.lua:178-204" }, observed = { "O-t-bs" },
+})
+add({
+  id = "t.T_POINT.bs.empty",
+  from = "T_POINT", event = "bs", to = "T_DIRECT",
+  effects = { "cancel", "reset_state" },
+  status = "ok", refs = { "function/input.lua:178-204" }, observed = { "O-t-bs-empty" },
+  notes = "読みが空になったとき。",
+})
+add({
+  id = "t.T_POINT.cr",
+  from = "T_POINT", event = "cr", to = "T_DIRECT",
+  effects = { "commit_reading", "feed_key" },
+  status = "ok", refs = { "function/common.lua:59-68" }, observed = { "O-t-cr" },
+})
+add({
+  id = "t.T_POINT.nl",
+  from = "T_POINT", event = "nl", to = "T_DIRECT",
+  effects = { "commit_reading" },
+  status = "ok", refs = { "function/common.lua:18-45" }, observed = { "O-t-nl" },
+})
+add({
+  id = "t.T_POINT.cg",
+  from = "T_POINT", event = "cg", to = "T_DIRECT",
+  effects = { "cancel", "reset_state" },
+  status = "ok", refs = { "keymap.lua:28", "#87" }, observed = { "O-t-cg" },
+})
+add({
+  id = "t.T_POINT.insert_key",
+  from = "T_POINT", event = "insert_key", to = "T_POINT",
+  effects = { "pass_key" },
+  status = "ok", refs = { "guard.lua:15-16,143-145" }, observed = { "O-t-insert" },
+  notes = "guard は <Insert> で確定しない。t ではエスケープシーケンスがジョブへ渡る。",
+})
+add({
+  id = "t.T_POINT.tab",
+  from = "T_POINT", event = "tab", to = "T_POINT",
+  effects = { "pass_key" },
+  status = "ok", refs = { "guard.lua:89-96" }, observed = { "O-t-tab" },
+  notes = "<Tab> は skk 自身の書き直しに使う制御バイトなので、guard は確定しない（読みは残る）。",
+})
+add({
+  id = "t.T_POINT.ctrl_c",
+  from = "T_POINT", event = "ctrl_c", to = "T_DIRECT",
+  effects = { "commit_reading", "pass_key" },
+  status = "ok", refs = { "guard.lua:89-112" }, observed = { "O-t-ctrlc" },
+  notes = "確定してからジョブへ <C-c>（SIGINT）。t のままで、skk は有効のまま。",
+})
+add({
+  id = "t.T_POINT.ctrl_o",
+  from = "T_POINT", event = "ctrl_o", to = "T_DIRECT",
+  effects = { "commit_reading", "pass_key" },
+  status = "ok", refs = { "guard.lua:89-112" }, observed = { "O-t-ctrl-o" },
+})
+for _, event in ipairs({ "ctrl_r", "ctrl_v", "ctrl_k", "ctrl_t", "ctrl_w", "ctrl_u", "ctrl_a", "ctrl_at", "completion_open", "completion_accept", "guard_special" }) do
+  local observed = ({
+    ctrl_r = { "O-t-ctrl-r" },
+    ctrl_w = { "O-t-ctrl-w" },
+    ctrl_u = { "O-t-ctrl-u" },
+    ctrl_a = { "O-t-ctrl-a" },
+    ctrl_at = { "O-t-ctrl-at" },
+    ctrl_v = { "O-t-ctrl-v" },
+    ctrl_k = { "O-t-ctrl-k" },
+    ctrl_t = { "O-t-ctrl-t" },
+    completion_open = { "O-t-ctrl-n" },
+    completion_accept = { "O-t-ctrl-y" },
+    guard_special = { "O-t-guard" },
+  })[event] or {}
+  add({
+    id = "t.T_POINT." .. event,
+    from = "T_POINT", event = event, to = "T_DIRECT",
+    effects = { "commit_reading", "pass_key" },
+    status = #observed > 0 and "ok" or "unknown", refs = { "guard.lua:89-112", "keys.md §4" },
+    observed = observed,
+    notes = "ジョブに渡す前に pre-edit を確定する（#121）。",
+  })
+end
+
+-- t・有効で ▼（T_SELECT）
+add({
+  id = "t.T_SELECT.char.commit",
+  from = "T_SELECT", event = "char", to = "T_DIRECT",
+  effects = { "commit_candidate", "feed_key", "reset_state" },
+  status = "unknown", refs = { "function/henkan.lua:137-162" },
+  notes = "henkan の表に無いキーは、候補を確定してから input として処理し直す。",
+})
+add({
+  id = "t.T_SELECT.char.commit_romaji",
+  from = "T_SELECT", event = "char", to = "T_ROMAJI",
+  effects = { "commit_candidate", "feed_key", "render" },
+  status = "unknown", refs = { "function/henkan.lua:137-162" },
+})
+add({
+  id = "t.T_SELECT.char_shift",
+  from = "T_SELECT", event = "char_shift", to = "T_DIRECT",
+  effects = { "commit_candidate", "feed_key", "reset_state" },
+  status = "unknown", refs = { "function/henkan.lua:137-162" },
+})
+add({
+  id = "t.T_SELECT.key_x.back",
+  from = "T_SELECT", event = "key_x", to = "T_POINT",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "keymap.lua:51", "function/henkan.lua:116-133" }, observed = { "O-t-select-x" },
+  notes = "x は henkanBackward。最初の候補で押すと ▽ に戻る（観測: ▼缶 → ▽かん）。",
+})
+add({
+  id = "t.T_SELECT.key_x.prev",
+  from = "T_SELECT", event = "key_x", to = "T_SELECT",
+  effects = { "keep", "render" },
+  status = "unknown", refs = { "keymap.lua:51", "function/henkan.lua:116-133" },
+})
+add({
+  id = "t.T_SELECT.key_X",
+  from = "T_SELECT", event = "key_X", to = "T_SELECT",
+  effects = { "keep", "render" },
+  status = "unknown", refs = { "keymap.lua:52", "#129" },
+})
+add({
+  id = "t.T_SELECT.key_l",
+  from = "T_SELECT", event = "key_l", to = "T_OFF",
+  effects = { "commit_candidate", "restore_mapping", "reset_state" },
+  status = "unknown", refs = { "keymap.lua:37", "function/disable.lua", "#67" },
+})
+add({
+  id = "t.T_SELECT.key_q",
+  from = "T_SELECT", event = "key_q", to = "T_SELECT",
+  effects = { "keep" },
+  status = "unknown", refs = { "keymap.lua:38" },
+})
+add({
+  id = "t.T_SELECT.key_semicolon",
+  from = "T_SELECT", event = "key_semicolon", to = "T_SELECT",
+  effects = { "keep" },
+  status = "unknown", refs = { "keymap.lua:39" },
+})
+add({
+  id = "t.T_SELECT.key_slash",
+  from = "T_SELECT", event = "key_slash", to = "T_SELECT",
+  effects = { "keep" },
+  status = "unknown", refs = { "keymap.lua:40" },
+})
+add({
+  id = "t.T_SELECT.key_L",
+  from = "T_SELECT", event = "key_L", to = "T_SELECT",
+  effects = { "keep" },
+  status = "unknown", refs = { "keymap.lua:41" },
+})
+add({
+  id = "t.T_SELECT.key_gt",
+  from = "T_SELECT", event = "key_gt", to = "T_POINT",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "keymap.lua:53" }, observed = { "O-t-select-gt" },
+  notes = "▼ から > を押すと、▽> に戻る（観測）。接尾辞の入力を続ける。",
+})
+add({
+  id = "t.T_SELECT.key_cq",
+  from = "T_SELECT", event = "key_cq", to = "T_DIRECT",
+  effects = { "commit_candidate", "feed_key" },
+  status = "unknown", refs = { "keymap.lua:33" },
+})
+add({
+  id = "t.T_SELECT.space.next",
+  from = "T_SELECT", event = "space", to = "T_SELECT",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "function/henkan.lua:90-113" }, observed = { "O-t-select-next" },
+})
+add({
+  id = "t.T_SELECT.bs",
+  from = "T_SELECT", event = "bs", to = "T_DIRECT",
+  effects = { "commit_candidate", "feed_key", "reset_state" },
+  status = "ok", refs = { "function/henkan.lua:137-162" }, observed = { "O-t-select-bs" },
+  notes = "候補を確定してから 1 文字消す。",
+})
+add({
+  id = "t.T_SELECT.cr",
+  from = "T_SELECT", event = "cr", to = "T_DIRECT",
+  effects = { "commit_candidate", "feed_key" },
+  status = "ok", refs = { "function/common.lua:59-68" }, observed = { "O-t-select-cr" },
+})
+add({
+  id = "t.T_SELECT.nl",
+  from = "T_SELECT", event = "nl", to = "T_DIRECT",
+  effects = { "commit_candidate" },
+  status = "ok", refs = { "function/common.lua:18-45" }, observed = { "O-t-select-nl" },
+})
+add({
+  id = "t.T_SELECT.cg",
+  from = "T_SELECT", event = "cg", to = "T_DIRECT",
+  effects = { "cancel", "reset_state" },
+  status = "unknown", refs = { "keymap.lua:28", "#87" },
+})
+add({
+  id = "t.T_SELECT.insert_key",
+  from = "T_SELECT", event = "insert_key", to = "T_SELECT",
+  effects = { "pass_key" },
+  status = "ok", refs = { "guard.lua:15-16,143-145" }, observed = { "O-t-select-insert" },
+})
+add({
+  id = "t.T_SELECT.tab",
+  from = "T_SELECT", event = "tab", to = "T_SELECT",
+  effects = { "pass_key" },
+  status = "ok", refs = { "guard.lua:89-96" }, observed = { "O-t-select-tab" },
+})
+add({
+  id = "t.T_SELECT.ctrl_c",
+  from = "T_SELECT", event = "ctrl_c", to = "T_DIRECT",
+  effects = { "commit_candidate", "pass_key" },
+  status = "ok", refs = { "guard.lua:89-112" }, observed = { "O-t-select-ctrlc" },
+})
+add({
+  id = "t.T_SELECT.ctrl_a",
+  from = "T_SELECT", event = "ctrl_a", to = "T_DIRECT",
+  effects = { "commit_candidate", "pass_key" },
+  status = "ok", refs = { "guard.lua:89-112" }, observed = { "O-t-select-ctrl-a" },
+  notes = "▼ でも、ジョブに渡す前に候補を確定する（#121）。",
+})
+for _, event in ipairs({ "ctrl_r", "ctrl_v", "ctrl_k", "ctrl_t", "ctrl_w", "ctrl_u", "ctrl_at", "ctrl_o", "completion_open", "completion_accept", "guard_special" }) do
+  add({
+    id = "t.T_SELECT." .. event,
+    from = "T_SELECT", event = event, to = "T_DIRECT",
+    effects = { "commit_candidate", "pass_key" },
+    status = "unknown", refs = { "guard.lua:89-112", "keys.md §4" },
+  })
+end
+
 -- 観測の記録（子の nvim、一時ディレクトリの辞書）
 --
 -- 04 の観測。1 つのキーを 1 回の入力として流し、落ち着いてから
@@ -2474,6 +3456,443 @@ M.observations = {
     note = "keepState=true のときは、<Esc> のあとの最初の InsertEnter で有効に戻る（#152）。既定は false。",
     uncertain = true,
   },
+  -- terminal（t / nt）。#188（07b）。
+  -- 子の nvim で `terminal cat` を開いてから skk を有効にし、1 つのキーを 1 回の入力として流した。
+  -- 端末の行の pre-edit は本物の文字で、書き直しの BS は ^H として残る。
+  {
+    id = "O-t-enable",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)" },
+    expect = { "T_DIRECT" },
+    note = "terminal で有効化。mode=t、enabled=true、preedit=\"\"。t のマッピングが 102 個。",
+  },
+  {
+    id = "O-t-toggle-on",
+    keys = { ":terminal", "<Plug>(skkeleton-toggle)" },
+    expect = { "T_DIRECT" },
+    note = "無効な terminal での toggle は有効化（main.lua:169-175）。",
+  },
+  {
+    id = "O-t-a",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "a" },
+    expect = { "T_DIRECT" },
+    note = "a → あ が端末のジョブへ流れる（direct のまま）。",
+  },
+  {
+    id = "O-t-k",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K" },
+    expect = { "T_POINT" },
+    note = "K → 端末の行に ▽k。g:state.phase は input:okurinasi、henkanFeed は空。",
+  },
+  {
+    id = "O-t-ka",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a" },
+    expect = { "T_POINT" },
+    note = "K a → ▽か。打ちかけが解決して読みになる。",
+  },
+  {
+    id = "O-t-kan-n",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n" },
+    expect = { "T_POINT" },
+    note = "▽かn。端末の行は ▽k^H^H▽かn。",
+  },
+  {
+    id = "O-t-select",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>" },
+    expect = { "T_POINT" },
+    note = "▽かn → ▼缶。観測のクラスは pre-edit の有無だけなので T_POINT のまま。",
+  },
+  {
+    id = "O-t-select-next",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Space>" },
+    expect = { "T_POINT" },
+    note = "▼缶 → ▼感。候補が進む。",
+  },
+  {
+    id = "O-t-space",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "<Space>" },
+    expect = { "T_DIRECT" },
+    note = "読みが無いので、<Space> は端末のジョブへそのまま渡る。",
+  },
+  {
+    id = "O-t-bs",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<BS>" },
+    expect = { "T_POINT" },
+    note = "▽かn → ▽か。読みの最後の 1 文字を削る。",
+  },
+  {
+    id = "O-t-bs-direct",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "<BS>" },
+    expect = { "T_DIRECT" },
+    note = "読みが無いので、<BS> はジョブへ流れて 1 文字消す（端末の行は ^H）。<C-h> も同じ。",
+  },
+  {
+    id = "O-t-bs-empty",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<BS>", "<BS>", "<BS>" },
+    expect = { "T_DIRECT" },
+    note = "▽かn → ▽か → ▽ → 空。読みが空になったら direct に戻る。",
+  },
+  {
+    id = "O-t-romaji-bs",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "<BS>" },
+    expect = { "T_POINT" },
+    note = "打ちかけ k を消すと、▽ だけが残る（クラスは pre-edit があるので T_POINT）。",
+  },
+  {
+    id = "O-t-romaji-bs-empty",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "<BS>", "<BS>" },
+    expect = { "T_DIRECT" },
+    note = "▽ も消すと direct に戻る。",
+  },
+  {
+    id = "O-t-romaji-ctrl-a",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "<C-a>" },
+    expect = { "T_DIRECT" },
+    note = "打ちかけ k をそのまま確定してから ^A をジョブへ渡す（端末の行は k^A）。",
+  },
+  {
+    id = "O-t-romaji-esc",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "<Esc>" },
+    expect = { "T_DIRECT" },
+    note = "打ちかけ k を確定して無効になり、端末へ Esc を流す。",
+  },
+  {
+    id = "O-t-romaji-nt",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "<C-\\><C-n>" },
+    expect = { "T_NORMAL" },
+    note = "打ちかけを抱えたまま nt へ。",
+  },
+  {
+    id = "O-t-romaji-nt-back",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "<C-\\><C-n>", "i" },
+    expect = { "T_POINT" },
+    note = "nt から戻ると打ちかけの続きから打てる。",
+  },
+  {
+    id = "O-t-nt-direct-back",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "<C-\\><C-n>", "i" },
+    expect = { "T_DIRECT" },
+    note = "読みが無いまま nt から t に戻る。",
+  },
+  {
+    id = "O-t-select-x",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "x" },
+    expect = { "T_POINT" },
+    note = "▼缶 で x を押すと ▽かん に戻る。",
+  },
+  {
+    id = "O-t-select-gt",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", ">" },
+    expect = { "T_POINT" },
+    note = "▼缶 で > を押すと ▽> になる。",
+  },
+  {
+    id = "O-t-select-bs",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<BS>" },
+    expect = { "T_DIRECT" },
+    note = "候補 缶 を確定してから 1 文字消す。",
+  },
+  {
+    id = "O-t-select-insert",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Insert>" },
+    expect = { "T_POINT" },
+    note = "<Insert> は guard が確定しないので、エスケープシーケンスがジョブへ渡る。",
+  },
+  {
+    id = "O-t-select-tab",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Tab>" },
+    expect = { "T_POINT" },
+    note = "<Tab> は guard が確定しない。▼缶 が残る。",
+  },
+  {
+    id = "O-t-cr",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<CR>" },
+    expect = { "T_DIRECT" },
+    note = "かん を確定して改行する。端末の行は ▽かん になり、カーソルは次の行へ。",
+  },
+  {
+    id = "O-t-nl",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-j>" },
+    expect = { "T_DIRECT" },
+    note = "かん を確定する（改行はしない）。",
+  },
+  {
+    id = "O-t-cg",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-g>" },
+    expect = { "T_DIRECT" },
+    note = "読みを取り消す。端末の行の pre-edit は BS で消える。",
+  },
+  {
+    id = "O-t-cq",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-q>" },
+    expect = { "T_DIRECT" },
+    note = "半角カタカナ ｶﾝ にして確定する。skk は有効のまま。",
+  },
+  {
+    id = "O-t-ctrl-a-direct",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "<C-a>" },
+    expect = { "T_DIRECT" },
+    note = "読みが無いので、^A はそのままジョブへ渡る（pre-edit が無いので確定しない）。",
+  },
+  {
+    id = "O-t-ctrl-r-direct",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "<C-r>" },
+    expect = { "T_DIRECT" },
+    note = "読みが無いので、^R はそのままジョブへ渡る。",
+  },
+  {
+    id = "O-t-ctrl-a",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-a>" },
+    expect = { "T_DIRECT" },
+    note = "#121。かん を確定してから ^A をジョブへ渡す。pre-edit は空、有効のまま。",
+  },
+  {
+    id = "O-t-ctrl-r",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-r>" },
+    expect = { "T_DIRECT" },
+    note = "かん を確定してから ^R をジョブへ渡す。",
+  },
+  {
+    id = "O-t-ctrl-w",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-w>" },
+    expect = { "T_DIRECT" },
+    note = "かん を確定してから ^W（tty の単語削除）をジョブへ渡す。",
+  },
+  {
+    id = "O-t-ctrl-u",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-u>" },
+    expect = { "T_DIRECT" },
+    note = "かん を確定してから ^U（tty の行削除）をジョブへ渡す。",
+  },
+  {
+    id = "O-t-ctrl-n",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-n>" },
+    expect = { "T_DIRECT" },
+    note = "かん を確定してから ^N をジョブへ渡す（terminal では補完にならない）。",
+  },
+  {
+    id = "O-t-ctrl-y",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-y>" },
+    expect = { "T_DIRECT" },
+    note = "かん を確定してから ^Y をジョブへ渡す。",
+  },
+  {
+    id = "O-t-ctrl-at",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-@>" },
+    expect = { "T_DIRECT" },
+    note = "かん を確定してから NUL をジョブへ渡す（insert の E29 は起きない）。",
+  },
+  {
+    id = "O-t-ctrl-o",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-o>" },
+    expect = { "T_DIRECT" },
+    note = "t の <C-o> は insert-normal ではない。かん を確定して ^O をジョブへ渡す。",
+  },
+  {
+    id = "O-t-ctrl-v",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-v>" },
+    expect = { "T_DIRECT" },
+    note = "かん を確定してから ^V をジョブへ渡す。",
+  },
+  {
+    id = "O-t-ctrl-k",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-k>" },
+    expect = { "T_DIRECT" },
+    note = "かん を確定してから ^K をジョブへ渡す。",
+  },
+  {
+    id = "O-t-ctrl-t",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-t>" },
+    expect = { "T_DIRECT" },
+    note = "かん を確定してから ^T をジョブへ渡す。",
+  },
+  {
+    id = "O-t-ctrlc",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-c>" },
+    expect = { "T_DIRECT" },
+    note = "かん を確定してから ^C をジョブへ渡す。t のままで skk は有効のまま。猫（cat）は 130 で終わる。",
+  },
+  {
+    id = "O-t-guard",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Left>" },
+    expect = { "T_DIRECT" },
+    note = "guard が かん を確定してから <Left> をジョブへ渡す。",
+  },
+  {
+    id = "O-t-tab",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Tab>" },
+    expect = { "T_POINT" },
+    note = "<Tab> は skk 自身の書き直しと区別できないので guard は確定しない。読みが残る。",
+  },
+  {
+    id = "O-t-insert",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Insert>" },
+    expect = { "T_POINT" },
+    note = "guard は <Insert> で確定しない。エスケープシーケンスがジョブへ渡り、読みは残る。",
+  },
+  {
+    id = "O-t-esc",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Esc>" },
+    expect = { "T_DIRECT" },
+    note = "かん を確定して無効になり、端末へ Esc を流す。t のままで state.type は escape。"
+      .. "観測のクラスは pre-edit が無いので T_DIRECT。",
+  },
+  {
+    id = "O-t-esc-direct",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "<Esc>" },
+    expect = { "T_DIRECT" },
+    note = "読みが無い <Esc>。端末へ Esc を流し、無効になる。",
+  },
+  {
+    id = "O-t-esc-char",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "<Esc>", "a" },
+    expect = { "T_DIRECT" },
+    note = "無効なので a はジョブへ渡る（端末の行は ^[a）。",
+  },
+  {
+    id = "O-t-esc-ctrl-a",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "<Esc>", "<C-a>" },
+    expect = { "T_DIRECT" },
+    note = "無効なので ^A はジョブへ渡る。確定は起きない。",
+  },
+  {
+    id = "O-t-esc-nt",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "<Esc>", "<C-\\><C-n>" },
+    expect = { "T_NORMAL" },
+    note = "escape のまま nt へ移ると、ModeChanged の分岐でその場で reset する（phase=input）。",
+  },
+  {
+    id = "O-t-esc-enable",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "<Esc>", "<Plug>(skkeleton-enable)" },
+    expect = { "T_DIRECT" },
+    note = "escape のあとでも、<Plug> からの enable は Context を作り直して有効になる。",
+  },
+  {
+    id = "O-t-disable",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Plug>(skkeleton-disable)" },
+    expect = { "T_DIRECT" },
+    note = "かん を確定して無効になる。t のまま。",
+  },
+  {
+    id = "O-t-disable-direct",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "<Plug>(skkeleton-disable)" },
+    expect = { "T_DIRECT" },
+    note = "読みが無い disable。t のまま無効になる。",
+  },
+  {
+    id = "O-t-disable-nt",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "<Plug>(skkeleton-disable)", "<C-\\><C-n>" },
+    expect = { "T_NORMAL" },
+    note = "無効のまま nt へ。",
+  },
+  {
+    id = "O-t-disable-nt-back",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "<Plug>(skkeleton-disable)", "<C-\\><C-n>", "i" },
+    expect = { "T_DIRECT" },
+    note = "nt から t へ戻っても無効のまま。a はジョブへ渡る。",
+  },
+  {
+    id = "O-t-off-char",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "<Plug>(skkeleton-disable)", "a" },
+    expect = { "T_DIRECT" },
+    note = "無効なので a はジョブへ渡る（端末の行に a）。",
+  },
+  {
+    id = "O-t-toggle-off",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Plug>(skkeleton-toggle)" },
+    expect = { "T_DIRECT" },
+    note = "有効なときの toggle は disable。かん を確定して無効になる。",
+  },
+  {
+    id = "O-t-toggle-off-direct",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "<Plug>(skkeleton-toggle)" },
+    expect = { "T_DIRECT" },
+    note = "読みが無い toggle（disable）。",
+  },
+  {
+    id = "O-t-nt",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-\\><C-n>" },
+    expect = { "T_NORMAL" },
+    note = "nt へ移っても、enabled は true で pre-edit（▽かn）と読みが残る（#74 の直し）。",
+  },
+  {
+    id = "O-t-nt-direct",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "<C-\\><C-n>" },
+    expect = { "T_NORMAL" },
+    note = "読みが無いまま nt へ。enabled は true。",
+  },
+  {
+    id = "O-t-nt-back",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-\\><C-n>", "i" },
+    expect = { "T_POINT" },
+    note = "nt から i で t に戻ると、▽かn の続きから打てる。",
+  },
+  {
+    id = "O-t-nt-again",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-\\><C-n>", "<C-\\><C-n>" },
+    expect = { "T_NORMAL" },
+    note = "nt で <C-\\><C-n> を押しても何も起きない。",
+  },
+  {
+    id = "O-t-nt-esc",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-\\><C-n>", "<Esc>" },
+    expect = { "T_NORMAL" },
+    note = "nt の <Esc> は normal の <Esc>。skk は何もしない。",
+  },
+  {
+    id = "O-t-nt-ctrl-c",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-\\><C-n>", "<C-c>" },
+    expect = { "T_NORMAL" },
+    note = "nt の <C-c> は何もしない。",
+  },
+  {
+    id = "O-t-nt-edit",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-\\><C-n>", "x" },
+    expect = { "T_NORMAL" },
+    note = "terminal のバッファは nomodifiable。x は E21 になり、状態は変わらない。",
+    uncertain = true,
+  },
+  {
+    id = "O-t-select-nt",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-\\><C-n>" },
+    expect = { "T_NORMAL" },
+    note = "▼ を抱えたまま nt へ。",
+  },
+  {
+    id = "O-t-select-nt-back",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-\\><C-n>", "i" },
+    expect = { "T_POINT" },
+    note = "nt から戻ると ▼ の続きから選べる。",
+  },
+  {
+    id = "O-t-select-ctrl-a",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-a>" },
+    expect = { "T_DIRECT" },
+    note = "▼ でも、ジョブへ <C-a> を渡す前に候補（缶）を確定する（#121）。",
+  },
+  {
+    id = "O-t-select-esc",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Esc>" },
+    expect = { "T_DIRECT" },
+    note = "候補を確定して無効になり、端末へ Esc を流す。",
+  },
+  {
+    id = "O-t-select-ctrlc",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-c>" },
+    expect = { "T_DIRECT" },
+    note = "候補を確定してから ^C をジョブへ渡す。",
+  },
+  {
+    id = "O-t-select-cr",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<CR>" },
+    expect = { "T_DIRECT" },
+    note = "候補 缶 を確定して改行する。",
+  },
+  {
+    id = "O-t-select-nl",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-j>" },
+    expect = { "T_DIRECT" },
+    note = "候補 缶 を確定する。",
+  },
   -- 貼り付け（#57、#125）。実際の観測は semantics/explore/observations/misc.jsonl
   {
     id = "O-paste-direct",
@@ -2678,6 +4097,49 @@ M.replays = {
     expect = { "N_OFF" },
     note = "読みを確定して無効化する。",
   },
+  -- terminal（#74 / #121）。`#term` は terminal プロファイルで `terminal cat` を開いたところ。
+  {
+    id = "replay.t74",
+    title = "#74 terminal で <C-\\><C-n>",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "<C-\\><C-n>" },
+    expect = { "T_NORMAL" },
+    note = "直したあとは state を捨てない。nt で enabled=true、pre-edit と読みが残る。",
+  },
+  {
+    id = "replay.t74-back",
+    title = "#74 nt から i で戻る",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "<C-\\><C-n>", "i" },
+    expect = { "T_POINT" },
+    note = "▽k の続きから打てる。",
+  },
+  {
+    id = "replay.t74-cr",
+    title = "#74 nt から戻って <CR>",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "<C-\\><C-n>", "i", "<CR>" },
+    expect = { "T_DIRECT" },
+    note = "▽k は k として確定し、改行がジョブへ渡る（▽k がそのままシェルへ渡る道ではない）。",
+  },
+  {
+    id = "replay.t121",
+    title = "#121 terminal で <C-a>",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-a>" },
+    expect = { "T_DIRECT" },
+    note = "ジョブへ <C-a> を渡す前に かん を確定する。P14。",
+  },
+  {
+    id = "replay.t121-ka",
+    title = "#121 <C-a> のあと続けて打つ",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-a>", "k", "a" },
+    expect = { "T_POINT" },
+    note = "確定したあとに新しい読み（▽か）を打てる。",
+  },
+  {
+    id = "replay.t121-romaji",
+    title = "#121 打ちかけの途中で <C-a>",
+    keys = { ":terminal", "<Plug>(skkeleton-enable)", "K", "<C-a>" },
+    expect = { "T_DIRECT" },
+    note = "打ちかけ k を確定してから ^A を渡す。",
+  },
   {
     id = "replay.paste.point",
     title = "Kan → <Paste>（#125）",
@@ -2732,10 +4194,56 @@ M.out_of_scope = {
     keys = {},
   },
   {
-    id = "oos.terminal",
-    what = "terminal（t / nt）の遷移",
-    why = "07b（#188）。",
-    refs = { "#188" },
+    id = "oos.terminal_register",
+    what = "terminal から辞書登録のプロンプトへ入る道（候補の無い読みで <Space> など）",
+    why = "07c（#189）。入口の外側の pre-edit は凍結して残るが、中と戻り先は 07c。",
+    refs = { "#189" },
+    keys = {},
+  },
+  {
+    id = "oos.terminal_visual",
+    what = "terminal-normal から visual / select へ入る道（v / V）",
+    why = "07e（#191）。visual の V_PRE は insert から入る道を前提にしているので、"
+      .. "terminal からの道はここでは足さない（観測では v で V_PRE になった）。",
+    refs = { "#191" },
+    keys = {},
+  },
+  {
+    id = "oos.terminal_cmdline",
+    what = "terminal-normal から cmdline へ入る道（`:`）と、そこから terminal を抜ける道",
+    why = "07a（#187）。terminal-normal → cmdline のときに skk の状態は c のクラスで観測される。",
+    refs = { "#187" },
+    keys = {},
+  },
+  {
+    id = "oos.terminal_leave",
+    what = "terminal を完全に抜ける道（:hide / :q / ウィンドウを閉じる）",
+    why = "cmdline・ウィンドウ操作は 07a / 07e。nt → n で skk は無効になり状態も捨てるが、"
+      .. "端末の行に本物の文字として残っている読みは消えない（端末の表示層の話）。",
+    refs = { "#187", "#191" },
+    keys = {},
+  },
+  {
+    id = "oos.terminal_mouse",
+    what = "terminal のマウス・ホイール",
+    why = "07e（#191）。観測では t のホイールで Vim のモードが nt に変わった（pre-edit は残る）。",
+    refs = { "#191" },
+    keys = {},
+  },
+  {
+    id = "oos.terminal_control_other",
+    what = "terminal のその他の単バイト制御（<C-b> <C-f> <C-l> <C-s> <C-z> など）",
+    why = "guard.lua:89-112 の同じ道（確定してからジョブへ渡す）なので、"
+      .. "代表の <C-a> / <C-r> / <C-w> / <C-u> / <C-n> / <C-y> だけ遷移にした。",
+    refs = { "guard.lua:89-112", "keys.md §4" },
+    keys = {},
+  },
+  {
+    id = "oos.terminal_insert_job",
+    what = "terminal でジョブが終了したあと（<C-c> で cat が 130 で終わるなど）",
+    why = "cat の終了は端末のジョブの話で、skk の状態は t のまま。"
+      .. "シェルでは <C-c> はジョブを止めるだけで端末は続く。",
+    refs = { "keys.md §4" },
     keys = {},
   },
   {
@@ -2854,7 +4362,7 @@ M.inventory = {
   events = {
     { id = "ModeChanged", covered_by = {
       "cleanup_escape", "safestate", "modechanged_i_to_R", "ni_return_keep", "ni_return_commit",
-      "ni_return_drop", "ctrl_o_v", "ctrl_o_R", "mouse_select", "insert_key",
+      "ni_return_drop", "ctrl_o_v", "ctrl_o_R", "mouse_select", "insert_key", "t_normal",
     } },
     { id = "SafeState", covered_by = { "safestate" } },
     { id = "CmdlineLeave", out_of_scope = "07a（#187）" },
@@ -2887,14 +4395,18 @@ M.inventory = {
 }
 
 -- 性質（GLOSSARY の P1–P15）。このモデルで決められるかどうかも書く。
--- decided = false の性質は、状態クラスに持っていない層（表示・マッピングの数・cmdline・terminal）が要る。
+-- decided = false の性質は、状態クラスに持っていない層（表示・マッピングの数・cmdline）が要る。
 M.properties = {
   { id = "P1", title = "読みが黙って消えない", decided = true, kind = "no_silent_loss" },
   { id = "P2", title = "pre-edit は 1 つだけで、置き場所が正しく、中身が state と一致する", decided = false,
     why = "extmark の数と位置を状態クラスに持っていない（05 の探索器と 06 の比較で見る）。" },
   { id = "P3", title = "n / v / s / R では、状態とマッピングが元に戻っている", decided = true, kind = "return_to_normal" },
-  { id = "P4", title = "cmdline / terminal を抜けたら、何も残っていない", decided = false,
-    why = "cmdline は 07a（#187）、terminal は 07b（#188）。" },
+  { id = "P4", title = "cmdline / terminal を抜けたら、何も残っていない", decided = true,
+    kind = "terminal_normal_keep",
+    why = "terminal は 07b（#188）で決めた。t の pre-edit は端末の行に本物の文字として書くので、"
+      .. "t → nt で「何も残らない」ようにはできない（#74 の直しは、状態を捨てずに残す側）。"
+      .. "ここでは P4 の terminal 側を「t → nt → t で、読みと pre-edit が保たれる」と読み、"
+      .. "nt を経ても読みが消えないことを検査する。cmdline は 07a（#187）。" },
   { id = "P5", title = "1 つのキーを二重に処理しない", decided = true, kind = "no_double_commit" },
   { id = "P6", title = "決定的に振る舞う（タイミングに左右されるものには印を付ける）", decided = false,
     why = "モデルの分岐はタイミングではなく、辞書・バッファ・設定という持っていない条件。"
@@ -2909,7 +4421,10 @@ M.properties = {
   { id = "P12", title = "マッピングの範囲が正しい", decided = false,
     why = "マッピングの数と範囲を状態クラスに持っていない。出口の restore_mapping だけ P3 で見る。" },
   { id = "P13", title = "pending が片付く", decided = true, kind = "transient_progress" },
-  { id = "P14", title = "terminal の Ctrl を正しく扱う", decided = false, why = "07b（#188）。" },
+  { id = "P14", title = "terminal の Ctrl を正しく扱う", decided = true,
+    kind = "terminal_ctrl_commit",
+    why = "07b（#188）。terminal でジョブへ渡すキー（pass_key）は、読みを確定してから渡す（#121）。"
+      .. "guard の own_output と <C-\\><C-n> は確定しない。" },
   { id = "P15", title = "state が空でないなら、pre-edit が見えている", decided = false,
     why = "表示（extmark）を状態クラスに持っていない。" },
 }
@@ -2988,7 +4503,8 @@ M.decisions = {
     decision = "人が読むクラスは 1 つのまま、抱えている相（direct / point / select）を属性で持つ。"
       .. "モデルの中で NI_POINT などに分けるのは可。仕様書では NI（point）のように書く。",
     reflected_in = { "NI_DIRECT", "NI_POINT", "NI_SELECT", "V_PRE_POINT", "V_PRE_SELECT",
-      "P_PROMPT_POINT", "P_PROMPT_SELECT" },
+      "P_PROMPT_POINT", "P_PROMPT_SELECT", "T_ROMAJI", "T_POINT", "T_SELECT",
+      "T_NORMAL_ROMAJI", "T_NORMAL_POINT", "T_NORMAL_SELECT" },
   },
   {
     id = 5,
