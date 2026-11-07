@@ -1,4 +1,5 @@
--- insert / normal / visual / replace / cmdline / terminal の状態機械のモデル（#184、cmdline は #187、terminal は #188、親は #179）
+-- insert / normal / visual / replace / cmdline / terminal の状態機械のモデル（#184、cmdline は #187、terminal は #188、
+-- マクロと `.` は #192、親は #179）
 --
 -- 今の振る舞いだけを書く。望ましい振る舞いは決めない。
 -- このファイルがモデルの唯一のデータ源で、model_check.lua はここだけを読む。
@@ -57,8 +58,7 @@ M.parent = 179
 M.scope = "insert / normal / visual / replace / cmdline / terminal"
   .. "（Vim のモード i / n / v・s / R / c・cr / t・nt）と、"
   .. "組み込み・blink.cmp の補完、貼り付け・マウス・ホイール・WinLeave / BufLeave・"
-  .. "skkeleton が奪わないキー（#191）、辞書登録のプロンプト（@、入れ子。"
-  .. "Vim のモード c の cmdtype @。#189）"
+  .. "skkeleton が奪わないキー（#191）、辞書登録のプロンプト（@、入れ子。#189）、マクロと `.`（#192）"
 M.sources = {
   "semantics/GLOSSARY.md",
   "semantics/inventory/keys.md（#181）",
@@ -71,6 +71,8 @@ M.sources = {
   "semantics/explore/explore.lua の terminal プロファイル（#188 の観測）",
   "semantics/explore/observations/misc.jsonl（#191）",
   "semantics/explore/register.lua、semantics/explore/observations/register.jsonl（#189）",
+  "semantics/explore/repeat.lua、semantics/explore/observations/repeat.jsonl（#192）",
+  "lua/skkeleton/render.lua の feed（#36 の修正）",
   "semantics/explore/observations/cmdline.jsonl（#187 の観測）",
   "状態遷移図の下書き（作者の手元の data.js。18 状態・49 遷移）",
 }
@@ -328,8 +330,39 @@ M.states = {
     reading = "none",
     preedit = "none",
     label = "normal（無効）",
-    refs = { "host.lua:235-244", "#152" },
-    notes = "keepState の one-shot 待ちはクラスを分けず、遷移の guard（config.keepState）で表す（作者の判断 3）。",
+    refs = { "host.lua:235-244", "#152", "#192" },
+    notes = "keepState の one-shot 待ちは人から見たクラスを分けない（作者の判断 3）。"
+      .. "07f で `.` と `@a` の観測を取ったところ、one-shot を使い切ったあとの insert は"
+      .. "有効にならないので、内部だけ N_KEEP に分けた（class は N_OFF のまま）。"
+      .. "マクロの記録中も内部だけ N_REC に分ける（class は N_OFF のまま）。",
+  },
+  N_KEEP = {
+    class = "N_OFF",
+    layer = "Vim のモードが n、skkeleton は無効で、keepState の one-shot が残っている",
+    vim_mode = "n",
+    enabled = false,
+    phase = "input",
+    reading = "none",
+    preedit = "none",
+    label = "normal（keepState の one-shot 待ち）",
+    refs = { "host.lua:235-244", "#152", "#192" },
+    notes = "人の読むクラスは N_OFF（作者の判断 3）。07f で `.` が InsertEnter を起こして"
+      .. "one-shot を使い切ることを観測したので、内部だけ分けた（class は N_OFF のまま）。"
+      .. "one-shot は同じバッファの次の InsertEnter で 1 回だけ使う。",
+  },
+  N_REC = {
+    class = "N_OFF",
+    layer = "Vim のモードが n、skkeleton は無効で、マクロを記録している",
+    vim_mode = "n",
+    enabled = false,
+    phase = "input",
+    reading = "none",
+    preedit = "none",
+    label = "normal（マクロ記録中）",
+    refs = { "#36", "#192" },
+    notes = "人の読むクラスは N_OFF。記録中かどうかは観測の状態クラスに出ないので分けない。"
+      .. "記録は insert をまたいで続くが、そのあいだの skk の状態は記録の有無で変わらない。"
+      .. "insert から戻ると N_OFF になるので、`q` は N_OFF からも開始と停止の両方を許す（分かれる組）。",
   },
   N_WAIT = {
     class = "N_WAIT",
@@ -1338,6 +1371,43 @@ M.events = {
     refs = { "host.lua:235-244", "events.md", "#152" },
     notes = "normal から insert へ入る。keepState の one-shot があるときだけ skk を有効にする。",
   },
+  macro_record_start = {
+    kind = "key",
+    keys = { "qa" },
+    modes = { "n" },
+    refs = { "Vim 本体（q のコマンド）", "#36", "#192" },
+    notes = "normal の `q{reg}`。レジスタは a だけを対象にする（#36 の再現と観測が a）。"
+      .. "skk のマッピングは normal に無いので、Vim が記録を始める。",
+  },
+  macro_record_stop = {
+    kind = "key",
+    keys = { "q" },
+    modes = { "n" },
+    refs = { "Vim 本体（q のコマンド）", "#36", "#192" },
+    notes = "記録中の `q`。記録を止めるだけで、skk の状態は変えない。",
+  },
+  macro_replay = {
+    kind = "key",
+    keys = { "@a", "3@a" },
+    modes = { "n" },
+    refs = { "Vim 本体（@ のコマンド）", "#36", "#152", "#192" },
+    notes = "レジスタ a のマクロを再生する。記録されたキーを Vim が流し直すので、"
+      .. "中に toggle や insert があれば skk の状態も動く。",
+  },
+  dot_repeat = {
+    kind = "key",
+    keys = { "." },
+    modes = { "n" },
+    refs = { "Vim 本体（. のコマンド）", "#36", "#152", "#192" },
+    notes = "直前の変更を繰り返す。変更が insert なら InsertEnter を起こす（#152）。",
+  },
+  normal_motion = {
+    kind = "key",
+    keys = { "j", "k", "h", "l", "0", "$", "G", "j0", "3G0" },
+    modes = { "n" },
+    refs = { "Vim 本体（normal の移動）", "#192" },
+    notes = "マクロの再生や `.` の前後で使う移動。skk の状態は変えない。",
+  },
   -- 辞書登録のプロンプト（#189 / 07c）。キーは普通の表記で書く（プロンプトの状態にだけ遷移を置く）
   register_commit = {
     kind = "key",
@@ -1633,28 +1703,28 @@ add({
 })
 add({
   id = "t.I_DIRECT.esc.keepstate",
-  from = "I_DIRECT", event = "esc", to = "N_OFF",
+  from = "I_DIRECT", event = "esc", to = "N_KEEP",
   guard = { { "config.keepState", "=", true } },
   effects = { "restore_mapping", "reset_state", "clear_extmark" },
   status = "ok", refs = { "function/disable.lua:21-27", "host.lua:235-244", "#152" },
 })
 add({
   id = "t.I_ROMAJI.esc.keepstate",
-  from = "I_ROMAJI", event = "esc", to = "N_OFF",
+  from = "I_ROMAJI", event = "esc", to = "N_KEEP",
   guard = { { "config.keepState", "=", true } },
   effects = { "commit_reading", "restore_mapping", "reset_state", "clear_extmark" },
   status = "ok", refs = { "function/disable.lua:21-27", "#152" },
 })
 add({
   id = "t.I_POINT.esc.keepstate",
-  from = "I_POINT", event = "esc", to = "N_OFF",
+  from = "I_POINT", event = "esc", to = "N_KEEP",
   guard = { { "config.keepState", "=", true } },
   effects = { "commit_reading", "restore_mapping", "reset_state", "clear_extmark" },
   status = "ok", refs = { "function/disable.lua:21-27", "#152" },
 })
 add({
   id = "t.I_SELECT.esc.keepstate",
-  from = "I_SELECT", event = "esc", to = "N_OFF",
+  from = "I_SELECT", event = "esc", to = "N_KEEP",
   guard = { { "config.keepState", "=", true } },
   effects = { "commit_candidate", "restore_mapping", "reset_state", "clear_extmark" },
   status = "ok", refs = { "function/disable.lua:21-27", "#152" },
@@ -1667,20 +1737,38 @@ add({
   notes = "state.type が escape のときの ModeChanged の分岐。pre-edit はすでに無い。",
 })
 add({
-  id = "t.N_OFF.insert_enter.keepstate",
-  from = "N_OFF", event = "insert_enter", to = "I_DIRECT",
+  id = "t.N_KEEP.insert_enter.keepstate",
+  from = "N_KEEP",
+  event = "insert_enter",
+  to = "I_DIRECT",
   guard = { { "config.keepState", "=", true } },
   effects = { "save_mapping", "install_mapping", "reset_state" },
-  status = "ok", refs = { "host.lua:235-244", "#152" }, observed = { "O152" },
-  notes = "buffer ローカルの one-shot InsertEnter。keepState のときは、次に insert へ入ったとき 1 回だけ有効化する。"
-    .. "N_KEEP はクラスにせず、この guard で表す（作者の判断 3）。",
+  status = "ok",
+  refs = { "host.lua:235-244", "#152", "#192" },
+  observed = { "O152" },
+  notes = "buffer ローカルの one-shot InsertEnter。one-shot が残っている間だけ、"
+    .. "次の insert で 1 回有効化する。使ったら N_OFF に戻る（クラスは N_OFF のまま）。",
+})
+add({
+  id = "t.N_KEEP.insert_enter",
+  from = "N_KEEP",
+  event = "insert_enter",
+  to = "I_OFF",
+  effects = { "pass_key" },
+  status = "ok",
+  refs = { "host.lua:235-244", "#152" },
+  notes = "one-shot が残っていても keepState が偽なら有効化しない（N_KEEP は config が真のときだけ届く）。",
 })
 add({
   id = "t.N_OFF.insert_enter",
-  from = "N_OFF", event = "insert_enter", to = "I_OFF",
-  guard = { { "config.keepState", "=", false } },
+  from = "N_OFF",
+  event = "insert_enter",
+  to = "I_OFF",
   effects = { "pass_key" },
-  status = "ok", refs = { "events.md O1" }, observed = { "O-esc-then-i" },
+  status = "ok",
+  refs = { "events.md O1" },
+  observed = { "O-esc-then-i" },
+  notes = "one-shot が無いときの insert。keepState が真でも、skk の <Esc> のあとでなければ有効化しない（#152）。",
 })
 add({
   id = "t.I_OFF.esc",
@@ -1728,6 +1816,196 @@ add({
   from = "R_OFF", event = "insert_key", to = "I_OFF",
   effects = { "pass_key" },
   status = "ok", refs = { "#38" }, observed = { "O-insert-twice" },
+})
+
+-- keepState の one-shot 待ち（#152、#192）
+add({
+  id = "t.N_KEEP.esc",
+  from = "N_KEEP",
+  event = "esc",
+  to = "N_KEEP",
+  effects = { "pass_key" },
+  status = "unknown",
+  refs = { "Vim 本体", "#152" },
+  notes = "normal の <Esc> は one-shot を使わない（次の InsertEnter まで残る）。",
+})
+add({
+  id = "t.N_KEEP.normal_motion",
+  from = "N_KEEP",
+  event = "normal_motion",
+  to = "N_KEEP",
+  effects = { "pass_key" },
+  status = "unknown",
+  refs = { "Vim 本体", "#152" },
+  notes = "normal の移動は InsertEnter を起こさないので、one-shot は残る。",
+})
+add({
+  id = "t.N_KEEP.dot",
+  from = "N_KEEP",
+  event = "dot_repeat",
+  to = "N_OFF",
+  effects = { "feed_key", "pass_key" },
+  status = "ok",
+  refs = { "Vim 本体（. のコマンド）", "#152", "#192" },
+  observed = { "O-dot-keepstate" },
+  notes = "`.` は直前の変更を繰り返す。変更が insert なら InsertEnter を起こし、"
+    .. "one-shot を使い切る（#152 の観測）。使ったあとの insert は有効にならない。",
+})
+add({
+  id = "t.N_KEEP.macro_record_stop",
+  from = "N_KEEP",
+  event = "macro_record_stop",
+  to = "N_KEEP",
+  status = "ok",
+  refs = { "Vim 本体（q のコマンド）", "#152", "#192" },
+  observed = { "O-macro-keepstate" },
+  notes = "insert を経由して normal に戻ったあとの `q`。one-shot は `q` では使わないので残る。",
+})
+add({
+  id = "t.N_KEEP.macro_replay",
+  from = "N_KEEP",
+  event = "macro_replay",
+  to = "N_KEEP",
+  guard = { { "config.keepState", "=", true } },
+  effects = { "feed_key", "pass_key" },
+  status = "ok",
+  refs = { "Vim 本体（@ のコマンド）", "#152", "#192" },
+  observed = { "O-macro-keepstate" },
+  notes = "マクロは normal の `q` で止めるので、最後に insert を抜ける <Esc> を含む。"
+    .. "その <Esc> が再生され、keepState の one-shot がまた残る（観測）。",
+})
+
+-- マクロの記録と再生、`.` の繰り返し（#192）
+add({
+  id = "t.N_OFF.macro_record_start",
+  from = "N_OFF",
+  event = "macro_record_start",
+  to = "N_REC",
+  status = "ok",
+  refs = { "Vim 本体（q のコマンド）", "#192" },
+  observed = { "O-macro-record" },
+  notes = "記録を始める。skk の状態は変えない。",
+})
+add({
+  id = "t.N_REC.macro_record_stop",
+  from = "N_REC",
+  event = "macro_record_stop",
+  to = "N_OFF",
+  status = "ok",
+  refs = { "Vim 本体（q のコマンド）", "#192" },
+  observed = { "O-macro-normal" },
+  notes = "記録を止める。skk の状態は変えない。",
+})
+add({
+  id = "t.N_OFF.macro_record_stop",
+  from = "N_OFF",
+  event = "macro_record_stop",
+  to = "N_OFF",
+  status = "ok",
+  refs = { "Vim 本体（q のコマンド）", "#36", "#192" },
+  observed = { "O36" },
+  notes = "insert を経由して normal に戻ったあとの `q`。記録中かどうかは観測の状態クラスに"
+    .. "出ないので、N_OFF からの `q` は開始（N_REC）と停止（N_OFF）の両方を許す。"
+    .. "分かれる組として出る。",
+})
+add({
+  id = "t.N_REC.insert_enter",
+  from = "N_REC",
+  event = "insert_enter",
+  to = "I_OFF",
+  effects = { "pass_key" },
+  status = "ok",
+  refs = { "Vim 本体", "#36", "#192" },
+  notes = "記録中の insert は、記録していないときと同じく skk は無効のまま。"
+    .. "記録は insert をまたいで続くが、モデルは insert の中の記録の有無を持たない。",
+})
+add({
+  id = "t.N_REC.esc",
+  from = "N_REC",
+  event = "esc",
+  to = "N_REC",
+  effects = { "pass_key" },
+  status = "unknown",
+  refs = { "Vim 本体", "#192" },
+})
+add({
+  id = "t.N_REC.normal_motion",
+  from = "N_REC",
+  event = "normal_motion",
+  to = "N_REC",
+  effects = { "pass_key" },
+  status = "ok",
+  refs = { "Vim 本体", "#192" },
+  observed = { "O-macro-normal" },
+  notes = "記録中の移動はレジスタに入る。skk の状態は変えない。",
+})
+add({
+  id = "t.N_REC.dot",
+  from = "N_REC",
+  event = "dot_repeat",
+  to = "N_REC",
+  effects = { "feed_key", "pass_key" },
+  status = "unknown",
+  refs = { "Vim 本体", "#192" },
+  notes = "記録中の `.` はレジスタに入り、その場でも繰り返す。"
+    .. "繰り返しの途中の状態はモデルに持たない。",
+})
+add({
+  id = "t.N_REC.macro_replay",
+  from = "N_REC",
+  event = "macro_replay",
+  to = "N_REC",
+  effects = { "feed_key", "pass_key" },
+  status = "unknown",
+  refs = { "Vim 本体", "#192" },
+  notes = "記録中の `@a` はレジスタに入り、その場でも再生する。入れ子の再生は対象外。",
+})
+add({
+  id = "t.N_OFF.normal_motion",
+  from = "N_OFF",
+  event = "normal_motion",
+  to = "N_OFF",
+  effects = { "pass_key" },
+  status = "ok",
+  refs = { "Vim 本体", "#192" },
+  observed = { "O36" },
+  notes = "normal の移動。skk の状態は変えない。",
+})
+add({
+  id = "t.N_OFF.dot",
+  from = "N_OFF",
+  event = "dot_repeat",
+  to = "N_OFF",
+  effects = { "feed_key", "pass_key" },
+  status = "ok",
+  refs = { "Vim 本体（. のコマンド）", "#192" },
+  observed = { "O-dot", "O-dot-henkan" },
+  notes = "直前の変更を繰り返す。変更が insert なら、もう一度 insert して確定し、normal に戻る。",
+})
+add({
+  id = "t.N_OFF.macro_replay",
+  from = "N_OFF",
+  event = "macro_replay",
+  to = "N_OFF",
+  guard = { { "config.keepState", "=", false } },
+  effects = { "feed_key", "pass_key" },
+  status = "ok",
+  refs = { "Vim 本体（@ のコマンド）", "#36", "#192" },
+  observed = { "O36" },
+  notes = "記録したキーを流し直す。マクロは normal の `q` で止めるので、最後は normal に戻る。",
+})
+add({
+  id = "t.N_OFF.macro_replay.keepstate",
+  from = "N_OFF",
+  event = "macro_replay",
+  to = "N_KEEP",
+  guard = { { "config.keepState", "=", true } },
+  effects = { "feed_key", "pass_key" },
+  status = "ok",
+  refs = { "Vim 本体（@ のコマンド）", "#152", "#192" },
+  observed = { "O-macro-replay-off" },
+  notes = "insert を含むマクロの再生の最後の <Esc> で、keepState の one-shot がまた残る（観測）。"
+    .. "normal だけのマクロでは残らないが、レジスタの中身を状態に持たないので分けない。",
 })
 
 -- insert から normal へ（<C-c> / :stopinsert / マウスで選択 / WinLeave / BufLeave）
@@ -7403,6 +7681,162 @@ M.observations = {
     expect = { "I_POINT" },
     note = "スクロールは確定せず、pre-edit が残る。",
   },
+  -- マクロと `.`（#192）。子の nvim に打鍵を流し、repeat.jsonl に残した観測。
+  {
+    id = "O-macro-record",
+    keys = {
+      "qa",
+      "A",
+      "<Plug>(skkeleton-enable)",
+      "K",
+      "a",
+      "n",
+      "<Space>",
+      "<C-j>",
+      "<Esc>",
+      "q",
+    },
+    expect = { "N_OFF" },
+    note = "q で記録を始め、insert で変換して確定し、q で止める。レジスタ a には打ったキーだけが入り、"
+      .. "確定した文字や render.finish は入らない（#36）。",
+  },
+  {
+    id = "O-macro-normal",
+    keys = { "qa", "j", "q" },
+    expect = { "N_OFF" },
+    note = "normal の移動だけを記録する。移動はレジスタに入り、skk の状態は変わらない。",
+  },
+  {
+    id = "O36",
+    keys = {
+      "qa",
+      "A",
+      "<Plug>(skkeleton-enable)",
+      "K",
+      "a",
+      "n",
+      "<Space>",
+      "<C-j>",
+      "<Esc>",
+      "q",
+      "j",
+      "@a",
+    },
+    expect = { "N_OFF" },
+    note = "#36 の再現キー列（insert のマクロを記録して @a で再生する）。"
+      .. "今の実装では 2 行目にも 缶 が入る。",
+  },
+  {
+    id = "O-macro-count",
+    keys = {
+      "qa",
+      "A",
+      "<Plug>(skkeleton-enable)",
+      "k",
+      "a",
+      "n",
+      "<C-j>",
+      "<Esc>",
+      "j0",
+      "q",
+      "3@a",
+    },
+    expect = { "N_OFF" },
+    note = "3@a で 3 回再生する。",
+  },
+  {
+    id = "O-dot",
+    keys = { "A", "<Plug>(skkeleton-enable)", "k", "a", "n", "<C-j>", "<Esc>", "j0", "." },
+    expect = { "N_OFF" },
+    note = "insert で確定したあとの `.`。直前の変更（insert と確定）を繰り返す。",
+  },
+  {
+    id = "O-dot-henkan",
+    keys = {
+      "A",
+      "<Plug>(skkeleton-enable)",
+      "K",
+      "a",
+      "n",
+      "<Space>",
+      "<C-j>",
+      "<Esc>",
+      "j0",
+      ".",
+    },
+    expect = { "N_OFF" },
+    note = "変換して確定した insert の `.`。",
+  },
+  {
+    id = "O-dot-keepstate",
+    config = { keepState = true },
+    keys = {
+      "i",
+      "<Plug>(skkeleton-enable)",
+      "K",
+      "a",
+      "n",
+      "<Space>",
+      "<C-j>",
+      "<Esc>",
+      ".",
+      "a",
+    },
+    expect = { "I_OFF" },
+    note = "#152。keepState の one-shot があるとき、`.` が InsertEnter を起こして one-shot を使い切る。"
+      .. "そのあとの `a` は skk を有効にしない。",
+  },
+  {
+    id = "O-macro-replay-keepstate",
+    config = { keepState = true },
+    keys = {
+      "qa",
+      "A",
+      "<Plug>(skkeleton-enable)",
+      "K",
+      "a",
+      "n",
+      "<Space>",
+      "<C-j>",
+      "<Esc>",
+      "q",
+      "j",
+      "@a",
+    },
+    expect = { "N_OFF" },
+    note = "keepState が真のとき、記録したマクロの再生の最後の <Esc> で one-shot がまた残る。",
+  },
+  {
+    id = "O-macro-replay-off",
+    config = { keepState = true },
+    keys = { "qa", "j", "q", "j", "@a" },
+    expect = { "N_OFF" },
+    note = "one-shot が無いときの @a。normal だけのマクロなので、再生の最後に <Esc> は無い。",
+  },
+  {
+    id = "O-macro-keepstate",
+    config = { keepState = true },
+    keys = {
+      "qa",
+      "A",
+      "<Plug>(skkeleton-enable)",
+      "K",
+      "a",
+      "n",
+      "<Space>",
+      "<C-j>",
+      "<Esc>",
+      "q",
+      "i",
+      "<Plug>(skkeleton-enable)",
+      "<Esc>",
+      "j",
+      "@a",
+      "a",
+    },
+    expect = { "I_DIRECT" },
+    note = "#152。one-shot があるときの @a のあと、次の insert も有効になる（再生の最後の <Esc> が one-shot を残す）。",
+  },
 }
 
 -- NOTES（作者の手元の data.js）の再現キー列を、モデルで再生する。
@@ -7643,6 +8077,75 @@ M.replays = {
     note = "取り消して、凍結した ▼ に戻る。",
   },
   {
+    id = "replay.macro",
+    title = "#36 のマクロ（qa A ... q → @a）",
+    keys = {
+      "qa",
+      "A",
+      "<Plug>(skkeleton-enable)",
+      "K",
+      "a",
+      "n",
+      "<Space>",
+      "<C-j>",
+      "<Esc>",
+      "q",
+      "j",
+      "@a",
+    },
+    expect = { "N_OFF" },
+    note = "insert のマクロを記録して再生する。",
+  },
+  {
+    id = "replay.dot",
+    title = "insert のあとの `.`",
+    keys = { "A", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-j>", "<Esc>", "j0", "." },
+    expect = { "N_OFF" },
+    note = "直前の変更を繰り返す。",
+  },
+  {
+    id = "replay.dot.keepstate",
+    title = "#152（`.` が keepState の one-shot を使い切る）",
+    config = { keepState = true },
+    keys = {
+      "i",
+      "<Plug>(skkeleton-enable)",
+      "K",
+      "a",
+      "n",
+      "<Space>",
+      "<C-j>",
+      "<Esc>",
+      ".",
+      "a",
+    },
+    expect = { "I_OFF" },
+    note = "`.` のあとの insert は skk を有効にしない。",
+  },
+  {
+    id = "replay.macro.keepstate",
+    title = "keepState と @a（再生の最後の <Esc> が one-shot を残す）",
+    config = { keepState = true },
+    keys = {
+      "qa",
+      "A",
+      "<Plug>(skkeleton-enable)",
+      "K",
+      "a",
+      "n",
+      "<Space>",
+      "<C-j>",
+      "<Esc>",
+      "q",
+      "i",
+      "<Plug>(skkeleton-enable)",
+      "<Esc>",
+      "j",
+      "@a",
+      "a",
+    },
+    expect = { "I_DIRECT" },
+    note = "one-shot があるときの @a のあと、次の insert も有効になる。",
     id = "replay.cmdline-visual",
     title = "v / で cmdline に入って有効化し、<Esc> で visual に戻る（#28）",
     keys = { "v", "/", "<Plug>(skkeleton-enable)", "<Esc>" },
@@ -7815,9 +8318,27 @@ M.out_of_scope = {
     keys = {},
   },
   {
-    id = "oos.macro",
-    what = "マクロと `.` の繰り返し",
-    why = "07f（#192）。",
+    id = "oos.macro_register",
+    what = "マクロのレジスタに入るキーの種類（skk が流したキー・render.finish が混ざるか）",
+    why = "レジスタの中身は状態クラスに持っていない。07f で repeat.jsonl に記録した。"
+      .. "insert では #36 の修正で混ざらない。cmdline と terminal では混ざり、再生すると"
+      .. "エラーになる（#214）。",
+    refs = { "#36", "#192", "#214" },
+    keys = {},
+  },
+  {
+    id = "oos.repeat_undo",
+    what = "マクロの再生と `.` の undo の単位",
+    why = "undo の区切りは状態クラスに持っていない。07f の観測では、skk の確定ごとに"
+      .. "`<C-g>u` の区切りがあり、`u` 1 回で確定 1 つぶんが戻った（#57、#158）。",
+    refs = { "#36", "#57", "#152", "#158", "#192" },
+    keys = {},
+  },
+  {
+    id = "oos.macro_nested",
+    what = "記録中の再生（入れ子の @）と、記録中の insert の中の状態",
+    why = "記録中かどうかは観測の状態クラスに出ない（N_REC の class は N_OFF）。"
+      .. "記録は insert をまたいで続くが、insert の中の skk の状態は記録の有無で変わらない。",
     refs = { "#192" },
     keys = {},
   },

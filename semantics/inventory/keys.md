@@ -151,11 +151,15 @@ guard は `vim.on_key` で、マッピングに消費されずに素通りして
 | マウスの押下・離す・ドラッグ（`<LeftMouse>` など。実イベントは `0x80 0xfd 0x2c` / `0x2e`） | i | Neovim。guard は確定しない。カーソルが動けば後片付けが確定し、visual に入れば確定して無効化する | `lua/skkeleton/guard.lua:59-61`、`lua/skkeleton/cleanup.lua:120-160,179-222` | なし（実測: 1 回クリックで確定、ダブルクリックは `tests/test_e2e_mode.lua:319-338`） |
 | `<ScrollWheelUp>` `<ScrollWheelDown>`（`0x80 0xfd 0x4b` / `0x4c`） | i | Neovim（スクロール）。guard は確定しない | `lua/skkeleton/guard.lua:59-61` | なし（実測: pre-edit が残る） |
 | `<Plug>(skkeleton-enable)` `<Plug>(skkeleton-disable)` `<Plug>(skkeleton-toggle)` | i / c / t | plugin が置く入口。利用者が好きなキーに割り当てる | `plugin/skkeleton.lua:21-25`、`doc/skkeleton.txt:192-206` | なし（実測: `e2e_set` の子で enable に使える） |
+| `q` | n | Neovim（マクロの記録の開始・停止）。skk は normal にマッピングを置かない | `lua/skkeleton/map.lua:123-137`、`semantics/explore/repeat.lua` | なし（実測: `qa` のあと `reg_recording()` が `a` になる） |
+| `@` | n | Neovim（マクロの実行）。skk は normal にマッピングを置かない | 同上 | なし（実測: `@a` で再生） |
+| `.` | n | Neovim（直前の変更の繰り返し）。skk は normal にマッピングを置かない | 同上 | なし（実測） |
 
 補足です。
 
 - 補完のキー自体は skkeleton のどこにもマッピングがありません（実測: 102 個の一覧に入っていない）。skkeleton が関わるのは `<CR>` の 1 か所だけで、blink のメニューが開いていて項目を選んでいるときに限ります（`lua/skkeleton/main.lua:84-87`）。blink.cmp のキー割り当ては skkeleton の外です。
 - `<C-h>` は §1 で奪うキーです。`<C-r>` などの単バイト制御は、insert と cmdline では奪いません（terminal は §4 の guard が確定します）。
+- `q` `@` `.` は、insert / cmdline / terminal では §1 の skk のキーです。normal の `q` `@` `.` は §5 のとおり Neovim が処理し、skk の状態は変えません（#192）。
 
 ## 6. 観測した振る舞い
 

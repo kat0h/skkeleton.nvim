@@ -25,6 +25,7 @@ N_OFF、N_WAIT、V_PRE、V_IDLE、I_OFF、I_DIRECT、I_POINT、I_SELECT、I_ESCA
 
 - `I_OFF` は insert で skkeleton が無効な状態、`V_IDLE` は visual / select で有効のまま pre-edit が無い状態です。どちらも、同じキーで有効な状態と結果が違うので分けています。
 - `N_OFF` は normal などで無効な状態です。`keepState` の one-shot 待ちも `N_OFF` のままで、遷移の guard（`config.keepState`）で表します。クラスは分けません。
+  - 07f（#192）で、one-shot 待ちとマクロの記録中を内部状態 `N_KEEP` / `N_REC` に分けました。どちらも人が読むクラスは `N_OFF` です。`.` が one-shot を使い切る（#152）ことを観測で確かめたためです。
 - `N_LOST` はクラスにしません。読みが消えるのは遷移の結果なので、effects の `drop` と P1 の破れで表します。
 - `R_MID` は観測のクラスではありません。`<Insert>` による insert と replace の移り変わりの途中の状態（transient）としてだけ残します。
 - `NI` / `V_PRE` / `P_PROMPT` は人が読むクラスは 1 つです。抱えている相（direct / point / select）は属性で持つので、仕様書では `NI（point）` のように書きます。モデルの中で `NI_POINT` などに分けてもかまいません。
