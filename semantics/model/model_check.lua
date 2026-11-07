@@ -527,6 +527,26 @@ local function check_terminal_normal_keep()
   return out
 end
 
+-- P9: 辞書登録の入れ子から漏れずに戻れる（#189 / 07c）
+--
+-- 深さ 2 以上の P_PROMPT から、P_PROMPT を経ずに insert / normal などへ抜ける遷移を違反とする。
+-- 深さ 2 からは、取り消しか確定で深さ 1 のプロンプトに戻る（insert へは抜けない）。
+-- 深さ 1 から外へ出るのは、取り消し（凍結した外側へ）と確定（insert へ）なので違反にしない。
+local function check_prompt_nesting()
+  local out = {}
+  for _, t in ipairs(model.transitions) do
+    local from = model.states[t.from]
+    local to = model.states[t.to]
+    if from and from.class == "P_PROMPT" and (from.depth or 1) >= 2 and to.class ~= "P_PROMPT" then
+      table.insert(out, {
+        transition = t.id,
+        detail = ("深さ %d のプロンプトから %s（%s）へ直接抜けている"):format(from.depth, t.to, to.class),
+      })
+    end
+  end
+  return out
+end
+
 -- P8: 有効な状態から、必ず無効な状態へ戻れる（enable / disable の往復）
 local function check_recoverable(reachable)
   local out = {}
@@ -878,6 +898,7 @@ local function main(argv)
     P4 = { title = "terminal の t → nt → t で読みと pre-edit が保たれる", run = check_terminal_normal_keep },
     P5 = { title = "1 つのキーを二重に処理しない", run = check_double_commit },
     P10 = { title = "同じ読みを 2 度確定しない", run = check_double_commit },
+    P9 = { title = "辞書登録の入れ子から漏れずに戻れる", run = check_prompt_nesting },
     P13 = { title = "pending（途中の状態）が片付く", run = check_transient_progress },
     P14 = { title = "terminal の Ctrl は確定してからジョブへ渡す", run = check_terminal_ctrl_commit },
     P8 = {
@@ -892,7 +913,7 @@ local function main(argv)
   if section("properties") then
     say("")
     say("== 性質 ==")
-    for _, id in ipairs({ "P1", "P3", "P4", "P5", "P10", "P13", "P14", "P8" }) do
+    for _, id in ipairs({ "P1", "P3", "P4", "P5", "P9", "P10", "P13", "P14", "P8" }) do
       local check = property_checks[id]
       local violations = check.run()
       local unknown, hits, stale = apply_known(id, violations)
