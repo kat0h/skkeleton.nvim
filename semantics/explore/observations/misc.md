@@ -99,7 +99,7 @@ flock /tmp/heavy.lock timeout 600 nvim --headless -u NONE -i NONE \
 7. **guard が確定するキーは、確定してからキーを流す。** `<C-.>`・`<F5>`・`<S-CR>`・`<Left>`・`<C-Left>`・`<S-Up>`・`<S-F1>` で確かめた。`<C-@>` は確定したあと E29 で insert を抜けるので、N_OFF になる（モデルは I_DIRECT にしていたので直した）。
 8. **`<C-a>` は前に挿入した文字が無いと E29 で何も変わらない。** 読みは残る。前に挿入した文字があるときは、その文字が入って読みが捨てられる（keys.md §6）。両方を遷移にした。
 9. **visual / insert-normal からの WinLeave は、観測では mode が niI で無効になった。** モデルには NI_OFF が無いので、N_OFF への遷移のまま `unknown` にし、note に書いた。
-10. **cmdline の WinLeave（#46）は 07a（#187）の範囲。** このモデルは insert / normal / visual / replace だけを書いているので、`oos.cmdline_winleave` にした。
+10. **cmdline の WinLeave（#46）は 07a（#187）で遷移にした。** このモデル（04）は insert / normal / visual / replace だけを書いていたので `oos.cmdline_winleave` にしていたが、07a で `t.C_OFF.winleave` と `t.C_IDLE.winleave` を足した。
 
 ## 過去の issue との対応
 
@@ -107,7 +107,7 @@ flock /tmp/heavy.lock timeout 600 nvim --headless -u NONE -i NONE \
 | ---: | --- | --- |
 | #57 | CLOSED | 貼り付けの遷移は `paste`。undo の区切りは P1–P15 の外なので `oos.paste_undo`。観測では u 1 回で貼り付け以降だけが戻り、打った読みは残った |
 | #125 | CLOSED | `t.I_POINT.paste` と `t.I_SELECT.paste` で、貼る前に確定する（ok）。再現キー列は `replay.paste.point` / `replay.paste.select` |
-| #46 | CLOSED | cmdline の中なので 07a。`oos.cmdline_winleave` |
+| #46 | CLOSED | cmdline の中なので 07a。`t.C_OFF.winleave` / `t.C_IDLE.winleave`（07a で追加） |
 | #47 | CLOSED | マウスの遷移は `mouse_click` / `mouse_select` / `mouse_click_other`。再現の並びは `replay.mouse.47`。インジケータの位置は表示の層なので `oos.mouse_position` |
 | #169 | OPEN | WinLeave / BufLeave / 別ウィンドウのクリックで読みを捨てる。P1 の known（gap） |
 
@@ -117,7 +117,7 @@ flock /tmp/heavy.lock timeout 600 nvim --headless -u NONE -i NONE \
 - 遷移: `paste`（I_DIRECT / I_ROMAJI / I_POINT / I_SELECT / I_OFF）、`mouse_click` と `mouse_click.keep`、`mouse_click_other`、`mouse_select`、`wheel`、`winleave` / `bufleave`（I_* は I_OFF へ）、`guard_special`、`ctrl_at`、`ctrl_a.e29`。
 - 観測: `O-paste-*`、`O-ctrl-at-*`、`O-ctrl-a-e29`、`O-guard-*`、`O-wheel-point`。
 - 再現: `replay.paste.point`、`replay.paste.select`、`replay.paste.57`、`replay.mouse.otherwin`、`replay.mouse.select`、`replay.mouse.47`。
-- 対象外: `oos.cmdline_winleave`、`oos.mouse_position`、`oos.paste_undo`、`oos.mouse_coords`。
+- 対象外: `oos.mouse_position`、`oos.paste_undo`、`oos.mouse_coords`。
 
 ## 掘り残し
 

@@ -187,8 +187,9 @@ guard は `vim.on_key` で、マッピングに消費されずに素通りして
 | `<Tab>` | c | `▽かn` | cmdline が `▽かn` のまま、pre-edit が残る | なし（実測） |
 | `<C-w>` `<C-u>` | c | `▽かn` | cmdline が空、pre-edit が消える | なし（実測） |
 | `<C-a>` `<C-e>` `<C-n>` | c | `▽かn` | cmdline が `▽かn` のまま、pre-edit が残る | なし（実測） |
-| `<C-p>` | c | `▽かn` | cmdline が `かん` になり、pre-edit が消える（読みが確定する） | なし（実測） |
-| `<C-@>` | c | `▽かn` | cmdline が `かん` になり、pre-edit が消える | 未確認（cmdline の `i_CTRL-@` との関係） |
+| `<C-y>` | c | `▽かn` | cmdline が制御文字 `0x19` になり、pre-edit が消える | なし（実測） |
+| `<C-p>` | c | `▽かn` | 一致する cmdline の履歴（`かん`）があるときだけ cmdline が `かん` になり、pre-edit が消える。履歴が無いときは何も変わらない | なし（実測） |
+| `<C-@>` | c | `▽かn` | cmdline が `かん` と改行になり、pre-edit が消える | なし（実測） |
 | `<C-c>` | c | `▽かn` | cmdline を抜けて無効になる | なし（実測） |
 
 補足です。
