@@ -79,7 +79,9 @@ M.initial = { "N_OFF" }
 -- class は人が読む状態クラス。観測（semantics/explore/observe.lua の classify）が
 -- 返す名前と違うときは notes に書く。
 -- 内部で分けた状態（NI_POINT など）は、class にまとめ先を書く。
--- aspect は抱えている相（direct / point / select）。NI / V_PRE / P_PROMPT で使う。
+-- aspect はクラスの中の相や補完の種類を内部で分ける名前。NI / V_PRE / P_PROMPT は
+-- direct / point / select を、IC は builtin / waiting-direct / waiting-romaji / waiting-point /
+-- waiting-select / blink-point を、I_OFF は buffer-menu を持つ。
 -- reading は、その状態が抱えている読み。none / romaji / point / henkan / any。
 --   any は「入り方で変わる」の意味で、性質の検査では読みがあるものとして扱う。
 M.states = {

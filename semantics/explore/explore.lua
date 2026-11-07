@@ -110,7 +110,8 @@ end
 -- BLINK_PATH を設定すれば、そこを使う（テストの .tests/mini.nvim と同じ扱い）
 local BLINK_PATH = os.getenv("BLINK_PATH") or (root .. "/.tests/blink.cmp")
 
--- blink.cmp を子に読み込ませる。利用者の設定（README の blink.cmp）に合わせる
+-- blink.cmp を子に読み込ませる。sources.default は README の静的な一覧ではなく、
+-- #24 の再現用に有効・無効で切り替える関数にする
 ---@param child table
 local function setup_blink(child)
   if not vim.uv.fs_stat(BLINK_PATH) then

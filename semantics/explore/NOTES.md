@@ -116,6 +116,6 @@ nvim --headless -u NONE -i NONE -l semantics/explore/explore.lua --profile blink
 ```
 
 - `completion` は `あいうえお` の次の行から始めます。`<C-n>` / `<C-p>` / `<C-x><C-n>` で `ic` に入り、その時点で pre-edit が消えます。`<C-x>` だけでは `ix` のキー待ちになり、pre-edit は残ります。
-- `blink` は `あいうえお` の次の行から、README と同じ `sources`（有効なら skkeleton、無効なら buffer）で始めます。メニューは `User skkeleton-handled` で開くので、`observe.lua` は blink の浮動ウィンドウの `row` / `col` も残します（#143、#174）。
+- `blink` は `あいうえお` の次の行から始めます。`sources.default` は README の静的な一覧ではなく、#24 の再現用に関数にして（有効なら skkeleton、無効なら buffer）、その関数のまま観測します。メニューは `User skkeleton-handled` で開くので、`observe.lua` は blink の浮動ウィンドウの `row` / `col` も残します（#143、#174）。
 - `blink_buffer` は無効のあいだに buffer のメニューを出したあと、`<C-j>`（`<Plug>(skkeleton-enable)` に割り当て）で有効にします（#24）。
 - blink のメニューはタイマーで開くので、`blink` / `blink_buffer` のプロファイルは 1 キーごとに 100ms 待ってから観測します。
