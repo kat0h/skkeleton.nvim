@@ -1,5 +1,14 @@
 # 観測の一覧
 
+観測のファイル一覧です。
+
+| ファイル | 何の観測か |
+| --- | --- |
+| `cmdline.jsonl` | cmdline（c / cr）の遷移（#187 / 07a） |
+| `completion.jsonl` | 組み込みの補完と blink.cmp（#190 / 07d） |
+| `misc.jsonl` / `misc.md` | 貼り付け・マウス・ホイール・奪わないキー（#191 / 07e） |
+| `terminal.jsonl` / `terminal.md` | terminal（t / nt）の遷移（#188 / 07b） |
+
 cmdline（#187 / 07a）と補完（#190）の観測です。どちらも `semantics/explore/explore.lua` の
 プロファイルで子の nvim から取り、`semantics/model/model.lua` の `M.observations` と
 突き合わせました。
