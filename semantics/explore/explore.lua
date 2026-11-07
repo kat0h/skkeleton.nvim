@@ -107,6 +107,16 @@ local RAW = {
   ["3@a"] = true,
 }
 
+-- 途中で入力待ちになるキーは、まとめて 1 回の入力として流す（#184 の観測の注意）。
+-- 分けて流すと、途中の観測が「入力待ち」の状態になり、モデルの観測と食い違う。
+local TOGETHER = {
+  ["<C-r>a"] = true,
+  ["<C-r><C-r>a"] = true,
+  ["<C-r>=1<CR>"] = true,
+  ["<C-v>065"] = true,
+  ["<C-k>a:"] = true,
+}
+
 -- 文字のキーは、そのまま 1 つの遷移にする
 ---@param name string
 ---@return table
@@ -210,6 +220,8 @@ local PROFILES = {
   },
   cmdline = {
     setup = function(child)
+      -- <C-r>a の観測用。レジスタの中身はモデルの hidden condition（空なら何も変わらない）
+      child.fn.setreg("a", "XYZ")
       helpers.type(child, ":<Plug>(skkeleton-enable)")
     end,
     alphabet = {
@@ -222,9 +234,20 @@ local PROFILES = {
       "<C-c>",
       "<Tab>",
       "<Left>",
+      "<Right>",
       "<CR>",
+      "<Insert>",
+      "<C-u>",
+      "<C-y>",
+      "<C-k>a:",
+      "<C-r>a",
+      "<C-v>065",
+      "<C-r>=1<CR>",
+      "<C-p>",
+      "<C-f>",
       "Kan",
       "KaeRu",
+      "Kan<Space>",
     },
   },
   terminal = {
@@ -376,6 +399,8 @@ function M.alphabet(names)
       out[#out + 1] = { name = name, keys = MACROS[name], macro = true }
     elseif RAW[name] then
       out[#out + 1] = { name = name, keys = name, raw = true }
+    elseif TOGETHER[name] then
+      out[#out + 1] = { name = name, keys = name, together = true }
     else
       out[#out + 1] = token(name)
     end
@@ -553,6 +578,42 @@ end
 local function feed_token(runner, tok, seq, file, write, record)
   local before = runner:observe()
   local from = before.class
+  if tok.together then
+    -- 途中で入力待ちになるキー（<C-r>a など）は、まとめて 1 回で流して 1 回だけ観測する
+    local ok, err = runner:feed(tok.keys)
+    local after
+    if ok then
+      after = runner:observe()
+    else
+      local ok_obs, observed = pcall(runner.observe, runner)
+      if not ok_obs then
+        return nil, err
+      end
+      after = observed
+      after.error = err
+    end
+    if after.class == "BLOCKED" then
+      return nil, after.error
+    end
+    if write then
+      write_jsonl(file, {
+        run = runner.run_id,
+        profile = runner.profile.name,
+        seq = vim.deepcopy(seq),
+        token = tok.name,
+        key = tok.keys,
+        from = before.class,
+        to = after.class,
+        obs = after,
+      })
+      runner.records = runner.records + 1
+    end
+    if record ~= false then
+      runner:record_edge(before.class, tok.keys, after.class)
+      runner:record_token_edge(from, tok.name, after.class)
+    end
+    return after
+  end
   -- raw のトークンは、キー列をまとめて 1 回で送る（`qa` など次の文字を待つもの）
   local keys = tok.raw and { tok.keys } or M.scan_keys(tok.keys)
   for _, key in ipairs(keys) do
@@ -728,6 +789,8 @@ function M.parse_replay(s)
           tokens[#tokens + 1] = { name = part, keys = MACROS[part], macro = true }
         elseif RAW[part] then
           tokens[#tokens + 1] = { name = part, keys = part, raw = true }
+        elseif TOGETHER[part] then
+          tokens[#tokens + 1] = { name = part, keys = part, together = true }
         else
           tokens[#tokens + 1] = { name = part, keys = part }
         end
