@@ -30,7 +30,7 @@
 | R_OFF | Vim のモードが R で、skkeleton は無効 |
 | C_DIRECT | Vim のモードが c。cmdline に pre-edit は無い |
 | C_POINT | Vim のモードが c。cmdline に pre-edit（`▽` / `▼`）が本物の文字として書かれ、`cmdline.remember()` が覚えている |
-| C_REPLACE | Vim のモードが c。書いた pre-edit と今の cmdline がずれている（`cmdline.is_stale()` が真）。`CmdlineChanged` の掃除の対象 |
+| C_REPLACE | Vim のモードが cr（cmdline の置換）。`<Insert>` で c から入り、`<C-j>` で確定しても cr のまま、`<CR>` でコマンドを実行して抜ける。pre-edit の相（direct / romaji / point / select / 無効）はモデルの中で分ける |
 | P_PROMPT | `host.is_in_input()` が真。辞書登録の `input()` のプロンプトの中。外側の相（point / select）は属性で持つ |
 | T_DIRECT / T_POINT / T_NORMAL | terminal（t / nt）。今回の観測の外（#188） |
 
@@ -101,7 +101,7 @@
 | `TextChangedI` | I_DIRECT / I_POINT / I_SELECT | 同上。バッファの変更は `on_bytes`（下）でも拾う | `cleanup.lua:120-147, 283-286` | O6 |
 | `TextChangedP` | I_DIRECT / I_POINT / I_SELECT（補完の popup 中） | 同上 | `cleanup.lua:120-147, 283-286` | O16（イベントを直接起こして確認） |
 | `CompleteDone` | I_DIRECT / I_POINT / I_SELECT（補完の直後） | 同上 | `cleanup.lua:120-147, 283-286` | O16（同上） |
-| `CmdlineChanged` | C_POINT → C_REPLACE | cmdline のときは `cmdline.is_stale` でずれを見る。ずれていれば `clean_cmdline`、`clear_extmark`、`reset_state`、`render`（C_REPLACE から C_DIRECT に戻る） | `cleanup.lua:120-147, 283-286`、`render.lua:280-281`、`render/cmdline.lua:93-99` | O7 |
+| `CmdlineChanged` | C_POINT / C_REPLACE（cmdline に pre-edit を書いているとき） | 「書いた pre-edit と今の cmdline がずれている」ことが遷移の条件。`cmdline.is_stale` が真なら `clean_cmdline`、`clear_extmark`、`reset_state`、`render` で C_DIRECT に戻る。偽なら何もしない | `cleanup.lua:120-147, 283-286`、`render.lua:280-281`、`render/cmdline.lua:93-99` | O7 |
 
 `CmdlineChanged` の片付けは `cmdline.clean()` です（`render/cmdline.lua:111-157`）。覚えている pre-edit（`cmdline.remember`、75–88 行）を、cmdline の今の文字列から探して取り除き、`cmdline.reset()`（160–162 行）で記録を捨てます。見つからないときは記録を残し、次の `CmdlineChanged` でもう一度試します（156 行）。`CmdlineLeave` で記録を捨てます（`cleanup.lua` 168–172 行）。
 
