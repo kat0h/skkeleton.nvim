@@ -38,6 +38,12 @@ cmdline（07a / #187）の 3 つは、次の意味で使います。
 - `C_POINT` は、cmdline に pre-edit を本物の文字として書いている状態です。ローマ字の打ちかけ（`k`）、▽、▼ を、人が読むクラスではまとめます。モデルの中では `C_ROMAJI` / `C_POINT` / `C_SELECT` に分けています。
 - `C_REPLACE` は、cmdline の置換モード（`cr`）です。`<Insert>` で入り、`<C-j>` で確定しても `cr` のまま、`<CR>` でコマンドを実行して抜けます。モデルの中では `<Insert>` の前の相（direct / romaji / point / select / 無効）で分けています。
 
+terminal（07b / #188）の 3 つは、次の意味で使います。
+
+- `T_DIRECT` は、terminal に pre-edit が無い状態です。skk が無効のとき（`terminal` で入っただけ、disable、`<Esc>` のあと）も、観測はこのクラスになります。モデルの中では `T_OFF` / `T_ESCAPE` / `T_DIRECT` に分けています。
+- `T_POINT` は、terminal の行に pre-edit を本物の文字として書いている状態です。ローマ字の打ちかけ、▽、▼ を、人が読むクラスではまとめます。モデルの中では `T_ROMAJI` / `T_POINT` / `T_SELECT` に分けています。
+- `T_NORMAL` は terminal-normal（`nt`）です。`<C-\><C-n>` で移っても skk は有効のままで、読みと pre-edit（端末の行の文字）を抱えたままです。モデルの中では抱えている相と有効・無効で `T_NORMAL_*` に分けています。
+
 ## effects の語彙
 
 遷移の結果（効果）を書くときの動詞です。各タスクは、同じ語で同じ効果を表します。
