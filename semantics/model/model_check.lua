@@ -263,7 +263,8 @@ local function run_keys(keys, config, start)
     local next_paths = {}
     for _, path in ipairs(paths) do
       local list
-      if key:sub(1, 1) == "@" then
+      -- "@名前" はイベント名（User イベントなど）。知らない名前ならキーとして扱う（@a など）
+      if key:sub(1, 1) == "@" and model.events[key:sub(2)] then
         list = transitions_for_event(path.state, key:sub(2), config)
       else
         list = transitions_for_key(path.state, key, config)
@@ -458,7 +459,7 @@ end
 -- P3: normal / visual / select / R では、状態とマッピングが元に戻っている
 local function check_return_to_normal()
   local out = {}
-  local off = { N_OFF = true, I_OFF = true, R_OFF = true }
+  local off = { N_OFF = true, N_KEEP = true, I_OFF = true, R_OFF = true }
   for _, t in ipairs(model.transitions) do
     local from = model.states[t.from]
     if off[t.to] and from.enabled then
@@ -697,6 +698,9 @@ local function replay_replays()
   local out = {}
   for _, r in ipairs(model.replays) do
     local config = copy(model.config)
+    for k, v in pairs(r.config or {}) do
+      config[k] = v
+    end
     local paths, bad_key = run_keys(r.keys, config)
     if not paths then
       table.insert(out, { replay = r, ok = false, why = ("キー %s を処理できない"):format(bad_key) })

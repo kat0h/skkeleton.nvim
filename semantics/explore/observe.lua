@@ -113,6 +113,20 @@ M.snapshot_source = [[(function()
 
   local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
 
+  -- マクロの記録と再生の状態（#192）。状態クラスには出ないが、探索の状態を分けるのに使う
+  local recording, executing = "", ""
+  pcall(function()
+    recording = vim.fn.reg_recording()
+  end)
+  pcall(function()
+    executing = vim.fn.reg_executing()
+  end)
+  local register_a, register_dot = "", ""
+  pcall(function()
+    register_a = vim.fn.getreg("a")
+    register_dot = vim.fn.getreg(".")
+  end)
+
   -- 補完のメニュー。blink.cmp は自分の浮動ウィンドウを出す（filetype は blink-cmp-menu）。
   -- 画面の位置も、外から見える値として取る（#143、#174）
   local completion = { menu = false, row = -1, col = -1 }
@@ -153,6 +167,12 @@ M.snapshot_source = [[(function()
       skk = i_skk + c_skk + t_skk,
     },
     register_depth = depth,
+    registers = {
+      recording = recording,
+      executing = executing,
+      a = register_a,
+      dot = register_dot,
+    },
     windows = #vim.api.nvim_tabpage_list_wins(0),
     buffers = #vim.api.nvim_list_bufs(),
   }
