@@ -143,8 +143,10 @@ function M._on_key(key, typed)
   if key == insert_key then
     return
   end
-  -- feedkeys で流した確定文字列や、補完 UI が流すキーは打鍵ではない
-  if typed == "" then
+  -- feedkeys で流した確定文字列や、補完 UI が流すキーは打鍵ではない。
+  -- ただしマクロの再生（reg_executing が空でない）は Vim が流す打鍵なので打鍵として扱う (#216)。
+  -- 再生中は確定文字列を feedkeys で流さずに同期でバッファへ書くので、区別は要らない。
+  if typed == "" and vim.fn.reg_executing() == "" then
     return
   end
   local mode = vim.api.nvim_get_mode().mode:sub(1, 1)
@@ -181,6 +183,20 @@ function M._on_key(key, typed)
     return
   end
 
+  -- マクロの再生中は、確定文字列を feedkeys で流すとマクロの残りより後ろに回る。
+  -- 同期でバッファへ書き、キーは捨てずにそのまま通す (#216)
+  if vim.fn.reg_executing() ~= "" then
+    local cleanup = require("skkeleton.cleanup")
+    local text = cleanup.commit_preedit_now("insert")
+    require("skkeleton.render").clear()
+    cleanup.update_state_variable()
+    if text and text ~= "" then
+      -- 確定した文字の後ろへカーソルを移す（<Esc> と同じ位置）
+      local row = vim.api.nvim_win_get_cursor(0)[1]
+      vim.api.nvim_win_set_cursor(0, { row, vim.fn.getcurpos()[3] - 1 })
+    end
+    return
+  end
   -- 打った読みを <Esc> と同じ形で確定してから、キーをそのまま流し直す。
   -- いまのキーは捨てるので、確定した文字が先に入り、そのあとキーが動く。
   require("skkeleton.main").commit_preedit()
