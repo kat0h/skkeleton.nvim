@@ -65,7 +65,8 @@ local function validate()
   local effect_ok = {}
   for _, name in ipairs({
     "commit_reading", "commit_candidate", "cancel", "drop", "keep", "reset_state",
-    "restore_mapping", "clear_extmark", "clean_cmdline", "render", "feed_key", "pass_key",
+    "restore_mapping", "install_mapping", "save_mapping", "clear_extmark", "clean_cmdline",
+    "render", "feed_key", "pass_key",
   }) do
     effect_ok[name] = true
   end

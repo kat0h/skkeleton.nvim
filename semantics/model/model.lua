@@ -9,9 +9,10 @@
 --   イベント:   M.events[name] = { kind, keys, modes, refs, notes }
 --   遷移:       { id, from, event, guard, effects, to, status, refs, observed, notes }
 --   性質:       M.properties[i] = { id, kind, title, decided, why }
+--   作者の判断: M.decisions[i] = { id, title, decision, reflected_in }
 --
--- 用語は semantics/GLOSSARY.md に合わせる。GLOSSARY に無い状態クラスは
--- M.proposals に「提案」として書き、PR で作者に決めてもらう。
+-- 用語は semantics/GLOSSARY.md に合わせる。作者の判断は M.decisions に、
+-- このモデルでの反映先と一緒に書く。
 --
 -- 遷移の notes は説明のための欄で、ツール（model_check.lua・SPIN・コード生成）は読まない。
 -- 根拠は refs（ファイル:行、issue、棚卸しの節）と observed（M.observations の id）に書く。
@@ -68,8 +69,10 @@ M.initial = { "N_OFF" }
 
 -- 状態クラス
 --
--- class は観測（semantics/explore/observe.lua の classify）が返す名前。
+-- class は人が読む状態クラス。観測（semantics/explore/observe.lua の classify）が
+-- 返す名前と違うときは notes に書く。
 -- 内部で分けた状態（NI_POINT など）は、class にまとめ先を書く。
+-- aspect は抱えている相（direct / point / select）。NI / V_PRE / P_PROMPT で使う。
 -- reading は、その状態が抱えている読み。none / romaji / point / henkan / any。
 --   any は「入り方で変わる」の意味で、性質の検査では読みがあるものとして扱う。
 M.states = {
@@ -83,7 +86,7 @@ M.states = {
     preedit = "none",
     label = "insert（無効）",
     refs = { "function/disable.lua", "main.lua:129-139", "#38", "#152" },
-    notes = "GLOSSARY に無い。I_DIRECT は有効な insert なので、無効な insert を分けた（M.proposals 1）。",
+    notes = "I_DIRECT は有効な insert なので、無効な insert を分けた（作者の判断 1）。",
   },
   I_DIRECT = {
     class = "I_DIRECT",
@@ -96,8 +99,8 @@ M.states = {
     label = "direct",
     refs = { "semantics/inventory/events.md", "GLOSSARY.md" },
   },
-  I_PENDING = {
-    class = "I_PENDING",
+  I_ROMAJI = {
+    class = "I_ROMAJI",
     layer = "Vim のモードが i、direct でローマ字の打ちかけ（state.feed）がある",
     vim_mode = "i",
     enabled = true,
@@ -106,8 +109,8 @@ M.states = {
     preedit = "romaji",
     label = "direct（打ちかけ）",
     refs = { "state.lua", "semantics/issues.md #41 #42" },
-    notes = "events.md は I_PENDING を render.is_pending() と定義している。観測の classify は"
-      .. "「preedit があって henkan_feed が空」を I_PENDING にしている。2 つの意味が混ざっている（M.proposals 6）。",
+    notes = "ローマ字の打ちかけ（state.feed）がある状態。作者の判断 6 で I_PENDING から改名した。"
+      .. "pending は render.is_pending() の意味だけに使う。",
   },
   I_POINT = {
     class = "I_POINT",
@@ -119,7 +122,7 @@ M.states = {
     preedit = "point",
     label = "▽ / ▽*",
     refs = { "keymap.lua:23-56", "function/input.lua" },
-    notes = "▽ と ▽* はまとめた。今の観測では同じ遷移になり、分ける根拠が無い（M.proposals 7）。",
+    notes = "▽ と ▽* はまとめた。今の観測では同じ遷移になり、分ける根拠が無い（作者の判断 7）。",
   },
   I_SELECT = {
     class = "I_SELECT",
@@ -136,7 +139,6 @@ M.states = {
     class = "I_ESCAPE",
     layer = "state.type が escape。マップされた <Esc> のあと、ModeChanged か SafeState の片付けまで",
     vim_mode = "i",
-    enabled = true,
     phase = "escape",
     enabled = false,
     reading = "none",
@@ -149,6 +151,7 @@ M.states = {
   },
   NI_DIRECT = {
     class = "NI",
+    aspect = "direct",
     layer = "Vim のモードが niI。読みは無い（direct から <C-o>）",
     vim_mode = "ni",
     enabled = true,
@@ -157,9 +160,11 @@ M.states = {
     preedit = "none",
     label = "insert-normal（direct から）",
     refs = { "cleanup.lua:185,215-217", "#117" },
+    notes = "人が読むクラスは NI の 1 つで、相（direct）を aspect に持つ（作者の判断 4）。",
   },
   NI_POINT = {
     class = "NI",
+    aspect = "point",
     layer = "Vim のモードが niI。▽ を抱えたまま",
     vim_mode = "ni",
     enabled = true,
@@ -168,9 +173,11 @@ M.states = {
     preedit = "point",
     label = "insert-normal（▽ から）",
     refs = { "cleanup.lua:185,215-217", "#117" },
+    notes = "人が読むクラスは NI（point）の 1 つ（作者の判断 4）。",
   },
   NI_SELECT = {
     class = "NI",
+    aspect = "select",
     layer = "Vim のモードが niI。▼ を抱えたまま",
     vim_mode = "ni",
     enabled = true,
@@ -179,6 +186,7 @@ M.states = {
     preedit = "henkan",
     label = "insert-normal（▼ から）",
     refs = { "cleanup.lua:185,215-217", "#117" },
+    notes = "人が読むクラスは NI（select）の 1 つ（作者の判断 4）。",
   },
   IC = {
     class = "IC",
@@ -194,25 +202,15 @@ M.states = {
   },
   N_OFF = {
     class = "N_OFF",
-    layer = "Vim のモードが n / v / s / o、skkeleton は無効",
+    layer = "Vim のモードが n / v / s / o、skkeleton は無効。keepState の one-shot 待ちもここ",
     vim_mode = "n|v|s|o",
     enabled = false,
     phase = "input",
     reading = "none",
     preedit = "none",
     label = "normal（無効）",
-  },
-  N_KEEP = {
-    class = "N_OFF",
-    layer = "Vim のモードが n、skkeleton は無効。keepState の one-shot InsertEnter が残っている",
-    vim_mode = "n",
-    enabled = false,
-    phase = "input",
-    reading = "none",
-    preedit = "none",
-    label = "normal（keepState 待ち）",
-    refs = { "host.lua:235-244", "function/disable.lua:21-27", "#152" },
-    notes = "観測は N_OFF に寄せる。設定で分かれるので状態クラスを増やすかは作者に決めてほしい（M.proposals 3）。",
+    refs = { "host.lua:235-244", "#152" },
+    notes = "keepState の one-shot 待ちはクラスを分けず、遷移の guard（config.keepState）で表す（作者の判断 3）。",
   },
   N_WAIT = {
     class = "N_WAIT",
@@ -228,22 +226,8 @@ M.states = {
     refs = { "cleanup.lua:225-248", "#70", "#142" },
     notes = "遷移の途中だけの状態。観測は SafeState のあとの N_OFF になる。",
   },
-  N_LOST = {
-    class = "N_LOST",
-    layer = "Vim のモードが n、skkeleton は有効で、state に preedit が残っているのに extmark が無い",
-    vim_mode = "n",
-    enabled = true,
-    phase = "input",
-    reading = "any",
-    preedit = "lost",
-    reachable = "unknown",
-    label = "normal（state と表示がずれた）",
-    refs = { "observe.lua:classify", "GLOSSARY.md" },
-    notes = "GLOSSARY は「state か pre-edit が残っている」、状態遷移図の n.lost は「読みが消えた」と、"
-      .. "2 つの意味に使われている（M.proposals 5）。今のモデルではこの状態に届く遷移が無い。",
-  },
   V_IDLE = {
-    class = "N_OFF",
+    class = "V_IDLE",
     layer = "Vim のモードが v / s、skkeleton は有効で pre-edit は無い（<C-o>v を direct から）",
     vim_mode = "v|s",
     enabled = true,
@@ -252,11 +236,11 @@ M.states = {
     preedit = "none",
     label = "visual（pre-edit 無し・有効）",
     refs = { "probe:C-o-v-direct" },
-    notes = "観測の classify は N_OFF に寄せる（visual で preedit が無いと N_OFF）。"
-      .. "有効のまま visual にいるので、N_OFF と同じクラスにするかは作者に決めてほしい（M.proposals 2）。",
+    notes = "visual で有効のまま pre-edit が無い状態。N_OFF（無効）とは戻ったあとの結果が違うので分けた（作者の判断 2）。",
   },
   V_PRE_POINT = {
     class = "V_PRE",
+    aspect = "point",
     layer = "Vim のモードが v / s、skkeleton は有効で ▽ が描かれたまま",
     vim_mode = "v|s",
     enabled = true,
@@ -265,11 +249,13 @@ M.states = {
     preedit = "point",
     label = "visual（▽ 付き）",
     refs = { "cleanup.lua:179-190" },
-    notes = "events.md の V_PRE は ModeChanged の確定が走る前の一瞬（ドラッグでは O18 の時点で pre-edit が残る）。"
-      .. "ここは <C-o>v のあと visual の間ずっと pre-edit が残る安定した状態で、同じ V_PRE でも意味が違う（M.proposals 10）。",
+    notes = "V_PRE は <C-o>v で visual / select に入ったあと、pre-edit が描かれたまま残り続ける状態（作者の判断 10）。"
+      .. "人が読むクラスは V_PRE（point）の 1 つで、相を aspect に持つ（作者の判断 4）。"
+      .. "マウスのドラッグで ModeChanged の確定より前に一瞬残るもの（events.md O18）は、状態ではなく遷移の途中として扱う。",
   },
   V_PRE_SELECT = {
     class = "V_PRE",
+    aspect = "select",
     layer = "Vim のモードが v / s、skkeleton は有効で ▼ が描かれたまま",
     vim_mode = "v|s",
     enabled = true,
@@ -278,11 +264,11 @@ M.states = {
     preedit = "henkan",
     label = "visual（▼ 付き）",
     refs = { "cleanup.lua:179-190" },
-    notes = "events.md の V_PRE は ModeChanged の確定が走る前の一瞬（ドラッグでは O18 の時点で pre-edit が残る）。"
-      .. "ここは <C-o>v のあと visual の間ずっと pre-edit が残る安定した状態で、同じ V_PRE でも意味が違う（M.proposals 10）。",
+    notes = "V_PRE は <C-o>v で visual / select に入ったあと、pre-edit が描かれたまま残り続ける状態（作者の判断 10）。"
+      .. "人が読むクラスは V_PRE（select）の 1 つで、相を aspect に持つ（作者の判断 4）。",
   },
   R_MID = {
-    class = "R_MID",
+    class = "R_OFF",
     layer = "i と R の移り変わりの途中（ModeChanged の規則 2）",
     vim_mode = "R",
     enabled = true,
@@ -293,7 +279,7 @@ M.states = {
     reachable = "unknown",
     label = "replace（移り変わりの途中）",
     refs = { "cleanup.lua:183,207-214", "#29", "#156" },
-    notes = "キーを打ったあとの観測には出てこない（遷移の途中だけ）。",
+    notes = "観測のクラスにはしない。キーを打ったあとの観測には出てこない遷移の途中の状態（transient）としてだけ残す（作者の判断 8）。",
   },
   R_OFF = {
     class = "R_OFF",
@@ -306,17 +292,32 @@ M.states = {
     label = "replace（無効）",
     refs = { "#29", "#38", "#156" },
   },
-  P_PROMPT = {
+  P_PROMPT_POINT = {
     class = "P_PROMPT",
-    layer = "辞書登録の input() の中（cmdtype は @）。外側の pre-edit は凍結して残る",
+    aspect = "point",
+    layer = "辞書登録の input() の中（cmdtype は @）。外側の ▽ は凍結して残る",
     vim_mode = "c",
     enabled = true,
     phase = "prompt",
-    reading = "any",
+    reading = "point",
     preedit = "frozen",
-    label = "辞書登録プロンプト",
+    label = "辞書登録プロンプト（▽ から）",
     refs = { "host.lua:175-213", "#144" },
-    notes = "プロンプトの中は #189（07c）。ここでは入口と出口の境界だけを書く。",
+    notes = "人が読むクラスは P_PROMPT（point）の 1 つで、相を aspect に持つ（作者の判断 4）。"
+      .. "プロンプトの中は #189（07c）。ここでは入口と出口の境界だけを書く。",
+  },
+  P_PROMPT_SELECT = {
+    class = "P_PROMPT",
+    aspect = "select",
+    layer = "辞書登録の input() の中（cmdtype は @）。外側の ▼ は凍結して残る",
+    vim_mode = "c",
+    enabled = true,
+    phase = "prompt",
+    reading = "henkan",
+    preedit = "frozen",
+    label = "辞書登録プロンプト（▼ から）",
+    refs = { "host.lua:175-213", "#144" },
+    notes = "人が読むクラスは P_PROMPT（select）の 1 つで、相を aspect に持つ（作者の判断 4）。",
   },
 }
 
@@ -718,27 +719,27 @@ end
 add({
   id = "t.N_OFF.enable",
   from = "N_OFF", event = "enable", to = "I_DIRECT",
-  effects = { "reset_state" },
+  effects = { "save_mapping", "install_mapping", "reset_state" },
   status = "ok", refs = { "main.lua:101-125" }, observed = { "O-enable" },
-  notes = "reset_state のほかに、マッピングを張り直す（GLOSSARY に効果の語が無い）。",
+  notes = "元のマッピングを退避してから、skkeleton のマッピングを張る。",
 })
 add({
   id = "t.I_OFF.enable",
   from = "I_OFF", event = "enable", to = "I_DIRECT",
-  effects = { "reset_state" },
+  effects = { "save_mapping", "install_mapping", "reset_state" },
   status = "ok", refs = { "main.lua:101-125" }, observed = { "O-enable-insert" },
 })
 add({
   id = "t.N_OFF.toggle",
   from = "N_OFF", event = "toggle", to = "I_DIRECT",
-  effects = { "reset_state" },
+  effects = { "save_mapping", "install_mapping", "reset_state" },
   status = "unknown", refs = { "main.lua:169-175" },
   notes = "events.md O15 は API の観測で、キー列では toggle を再生できない。",
 })
 add({
   id = "t.I_OFF.toggle",
   from = "I_OFF", event = "toggle", to = "I_DIRECT",
-  effects = { "reset_state" },
+  effects = { "save_mapping", "install_mapping", "reset_state" },
   status = "ok", refs = { "main.lua:169-175" },
 })
 add({
@@ -748,8 +749,8 @@ add({
   status = "ok", refs = { "main.lua:169-175", "function/disable.lua" },
 })
 add({
-  id = "t.I_PENDING.toggle",
-  from = "I_PENDING", event = "toggle", to = "I_OFF",
+  id = "t.I_ROMAJI.toggle",
+  from = "I_ROMAJI", event = "toggle", to = "I_OFF",
   effects = { "commit_reading", "restore_mapping", "reset_state", "clear_extmark" },
   status = "ok", refs = { "main.lua:169-175", "function/disable.lua" },
 })
@@ -773,8 +774,8 @@ add({
   notes = "events.md O15 は API の観測で、キー列では disable を再生できない。",
 })
 add({
-  id = "t.I_PENDING.disable",
-  from = "I_PENDING", event = "disable", to = "I_OFF",
+  id = "t.I_ROMAJI.disable",
+  from = "I_ROMAJI", event = "disable", to = "I_OFF",
   effects = { "commit_reading", "restore_mapping", "reset_state", "clear_extmark" },
   status = "ok", refs = { "main.lua:129-139", "function/disable.lua:13-18" },
 })
@@ -807,8 +808,8 @@ add({
   status = "ok", refs = { "function/disable.lua:21-27", "cleanup.lua:218-221" }, observed = { "O-esc-idle" },
 })
 add({
-  id = "t.I_PENDING.esc",
-  from = "I_PENDING", event = "esc", to = "I_ESCAPE",
+  id = "t.I_ROMAJI.esc",
+  from = "I_ROMAJI", event = "esc", to = "I_ESCAPE",
   guard = { { "config.keepState", "=", false } },
   effects = { "commit_reading", "restore_mapping", "reset_state", "clear_extmark" },
   status = "ok", refs = { "function/disable.lua:21-27" },
@@ -829,28 +830,28 @@ add({
 })
 add({
   id = "t.I_DIRECT.esc.keepstate",
-  from = "I_DIRECT", event = "esc", to = "N_KEEP",
+  from = "I_DIRECT", event = "esc", to = "N_OFF",
   guard = { { "config.keepState", "=", true } },
   effects = { "restore_mapping", "reset_state", "clear_extmark" },
   status = "ok", refs = { "function/disable.lua:21-27", "host.lua:235-244", "#152" },
 })
 add({
-  id = "t.I_PENDING.esc.keepstate",
-  from = "I_PENDING", event = "esc", to = "N_KEEP",
+  id = "t.I_ROMAJI.esc.keepstate",
+  from = "I_ROMAJI", event = "esc", to = "N_OFF",
   guard = { { "config.keepState", "=", true } },
   effects = { "commit_reading", "restore_mapping", "reset_state", "clear_extmark" },
   status = "ok", refs = { "function/disable.lua:21-27", "#152" },
 })
 add({
   id = "t.I_POINT.esc.keepstate",
-  from = "I_POINT", event = "esc", to = "N_KEEP",
+  from = "I_POINT", event = "esc", to = "N_OFF",
   guard = { { "config.keepState", "=", true } },
   effects = { "commit_reading", "restore_mapping", "reset_state", "clear_extmark" },
   status = "ok", refs = { "function/disable.lua:21-27", "#152" },
 })
 add({
   id = "t.I_SELECT.esc.keepstate",
-  from = "I_SELECT", event = "esc", to = "N_KEEP",
+  from = "I_SELECT", event = "esc", to = "N_OFF",
   guard = { { "config.keepState", "=", true } },
   effects = { "commit_candidate", "restore_mapping", "reset_state", "clear_extmark" },
   status = "ok", refs = { "function/disable.lua:21-27", "#152" },
@@ -863,16 +864,18 @@ add({
   notes = "state.type が escape のときの ModeChanged の分岐。pre-edit はすでに無い。",
 })
 add({
-  id = "t.N_KEEP.insert_enter",
-  from = "N_KEEP", event = "insert_enter", to = "I_DIRECT",
+  id = "t.N_OFF.insert_enter.keepstate",
+  from = "N_OFF", event = "insert_enter", to = "I_DIRECT",
   guard = { { "config.keepState", "=", true } },
-  effects = { "reset_state" },
+  effects = { "save_mapping", "install_mapping", "reset_state" },
   status = "ok", refs = { "host.lua:235-244", "#152" }, observed = { "O152" },
-  notes = "buffer ローカルの one-shot InsertEnter。次に insert へ入ったとき 1 回だけ有効化する。",
+  notes = "buffer ローカルの one-shot InsertEnter。keepState のときは、次に insert へ入ったとき 1 回だけ有効化する。"
+    .. "N_KEEP はクラスにせず、この guard で表す（作者の判断 3）。",
 })
 add({
   id = "t.N_OFF.insert_enter",
   from = "N_OFF", event = "insert_enter", to = "I_OFF",
+  guard = { { "config.keepState", "=", false } },
   effects = { "pass_key" },
   status = "ok", refs = { "events.md O1" }, observed = { "O-esc-then-i" },
 })
@@ -916,7 +919,7 @@ add({
 })
 
 -- insert から normal へ（<C-c> / :stopinsert / マウスで選択 / WinLeave / BufLeave）
-for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
+for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT" }) do
   local has_reading = from ~= "I_DIRECT"
   -- O-ctrlc は I_SELECT に届かない。P1 の破れ（読みを捨てる）は読みを持つ状態だけ。
   local leave_status = has_reading and "gap" or "unknown"
@@ -942,7 +945,8 @@ for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
       or { "reset_state", "restore_mapping", "clear_extmark" },
     status = "unknown", refs = { "cleanup.lua:179-190", "events.md O10", "events.md O18" },
     notes = "i から visual への直接の遷移（マウスで選択）。読みを確定してから無効化する。"
-      .. "ドラッグでは ModeChanged の時点で pre-edit が残る（O18）。04 の観測はマウスを使っていない。",
+      .. "ドラッグでは ModeChanged の確定より前に一瞬 pre-edit が残る（O18）が、"
+      .. "それは遷移の途中なので状態クラスにしない（作者の判断 10）。04 の観測はマウスを使っていない。",
   })
   add({
     id = "t." .. from .. ".winleave",
@@ -968,7 +972,7 @@ add({
 })
 
 -- <Insert> による i → R
-for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
+for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT" }) do
   add({
     id = "t." .. from .. ".insert_key",
     from = from, event = "insert_key", to = "R_MID",
@@ -996,8 +1000,8 @@ add({
   status = "ok", refs = { "#117" }, observed = { "O-ctrl-o-l" },
 })
 add({
-  id = "t.I_PENDING.ctrl_o",
-  from = "I_PENDING", event = "ctrl_o", to = "NI_DIRECT",
+  id = "t.I_ROMAJI.ctrl_o",
+  from = "I_ROMAJI", event = "ctrl_o", to = "NI_DIRECT",
   effects = { "keep" },
   status = "unknown", refs = { "#117" },
   notes = "ローマ字の打ちかけを niI へ持ち越すかは未観測。今のモデルでは持ち越さない。",
@@ -1203,7 +1207,7 @@ add({
 })
 
 -- <C-o>: の戻り（cmdline の中は 07a）
-for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
+for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT" }) do
   add({
     id = "t." .. from .. ".ctrl_o_colon",
     from = from, event = "ctrl_o_colon", to = from,
@@ -1224,22 +1228,22 @@ add({
   notes = "direct でかなテーブルの 1 打が確定する（例: a → あ）。バッファに文字が入る。",
 })
 add({
-  id = "t.I_DIRECT.char.pending",
-  from = "I_DIRECT", event = "char", to = "I_PENDING",
+  id = "t.I_DIRECT.char.romaji",
+  from = "I_DIRECT", event = "char", to = "I_ROMAJI",
   effects = { "feed_key", "render" },
   status = "unknown", refs = { "function/input.lua:85-120" },
   notes = "ローマ字が続く（例: k）。打ちかけが pre-edit に出る。"
     .. "O-k の K はシフト付き（char_shift）なので、小文字から始まる道は観測していない。",
 })
 add({
-  id = "t.I_PENDING.char.keep",
-  from = "I_PENDING", event = "char", to = "I_PENDING",
+  id = "t.I_ROMAJI.char.keep",
+  from = "I_ROMAJI", event = "char", to = "I_ROMAJI",
   effects = { "feed_key", "render" },
   status = "unknown", refs = { "function/input.lua:85-120" },
 })
 add({
-  id = "t.I_PENDING.char.commit",
-  from = "I_PENDING", event = "char", to = "I_DIRECT",
+  id = "t.I_ROMAJI.char.commit",
+  from = "I_ROMAJI", event = "char", to = "I_DIRECT",
   effects = { "feed_key" },
   status = "ok", refs = { "function/input.lua:85-120" }, observed = { "O-ka" },
 })
@@ -1257,8 +1261,8 @@ add({
   notes = "henkan の表に無いキーは、候補を確定してから input として処理し直す。",
 })
 add({
-  id = "t.I_SELECT.char.commit_pending",
-  from = "I_SELECT", event = "char", to = "I_PENDING",
+  id = "t.I_SELECT.char.commit_romaji",
+  from = "I_SELECT", event = "char", to = "I_ROMAJI",
   effects = { "commit_candidate", "feed_key", "render" },
   status = "unknown", refs = { "function/henkan.lua:137-162" },
 })
@@ -1266,7 +1270,7 @@ add({
 -- シフト付きの文字（▽ を開始する）
 add({
   id = "t.I_DIRECT.char_shift",
-  from = "I_DIRECT", event = "char_shift", to = "I_PENDING",
+  from = "I_DIRECT", event = "char_shift", to = "I_ROMAJI",
   effects = { "render" },
   status = "ok", refs = { "function/input.lua:85-120" }, observed = { "O-k" },
   notes = "direct でシフト付きの文字は ▽ を開始する（例: K → ▽k）。",
@@ -1279,8 +1283,8 @@ add({
   notes = "1 打でかなまで確定するシフト付きの文字もある。",
 })
 add({
-  id = "t.I_PENDING.char_shift",
-  from = "I_PENDING", event = "char_shift", to = "I_POINT",
+  id = "t.I_ROMAJI.char_shift",
+  from = "I_ROMAJI", event = "char_shift", to = "I_POINT",
   effects = { "keep", "render" },
   status = "unknown", refs = { "function/input.lua:85-120" },
 })
@@ -1300,7 +1304,7 @@ add({
 -- 文字キーのうち、関数が割り当てられているもの
 add({
   id = "t.I_DIRECT.key_X",
-  from = "I_DIRECT", event = "key_X", to = "I_PENDING",
+  from = "I_DIRECT", event = "key_X", to = "I_ROMAJI",
   effects = { "render" },
   status = "unknown", refs = { "function/input.lua:85-120" },
   notes = "input ではシフト付きの文字として ▽ を開始する。",
@@ -1411,7 +1415,7 @@ add({
 })
 add({
   id = "t.I_POINT.space.register",
-  from = "I_POINT", event = "space", to = "P_PROMPT",
+  from = "I_POINT", event = "space", to = "P_PROMPT_POINT",
   effects = { "keep", "render" },
   status = "ok", refs = { "function/henkan.lua:21-56", "host.lua:175-213", "#144" },
   observed = { "O-space-no-candidate" },
@@ -1425,7 +1429,7 @@ add({
 })
 add({
   id = "t.I_SELECT.space.register",
-  from = "I_SELECT", event = "space", to = "P_PROMPT",
+  from = "I_SELECT", event = "space", to = "P_PROMPT_SELECT",
   effects = { "keep", "render" },
   status = "unknown", refs = { "function/henkan.lua:90-113" },
   notes = "候補の最後でさらに <Space> を押したとき（register_word）。",
@@ -1452,29 +1456,50 @@ add({
 })
 add({
   id = "t.I_SELECT.key_X.register",
-  from = "I_SELECT", event = "key_X", to = "P_PROMPT",
+  from = "I_SELECT", event = "key_X", to = "P_PROMPT_SELECT",
   effects = { "keep", "render" },
   status = "unknown", refs = { "keymap.lua:52", "function/common.lua:89-" },
 })
 add({
-  id = "t.P_PROMPT.register_commit",
-  from = "P_PROMPT", event = "register_commit", to = "I_DIRECT",
-  effects = { "drop", "reset_state", "render" },
+  id = "t.P_PROMPT_POINT.register_commit",
+  from = "P_PROMPT_POINT", event = "register_commit", to = "I_DIRECT",
+  effects = { "commit_reading", "reset_state", "render" },
   status = "unknown", refs = { "host.lua:125-162", "events.md O12" },
-  notes = "語を登録して insert に戻る。読みはもう無い（登録した語は辞書に入る）。"
+  notes = "語を登録して insert に戻る。読みは登録した語として辞書に入る（O12）。"
     .. "O12 はプロンプトに入るところまでで、<CR> の確定はキー列に無い。",
 })
 add({
-  id = "t.P_PROMPT.register_cancel",
-  from = "P_PROMPT", event = "register_cancel", to = "I_POINT",
+  id = "t.P_PROMPT_SELECT.register_commit",
+  from = "P_PROMPT_SELECT", event = "register_commit", to = "I_DIRECT",
+  effects = { "commit_candidate", "reset_state", "render" },
+  status = "unknown", refs = { "host.lua:125-162", "events.md O12" },
+  notes = "▼ から登録したときも、候補を登録して insert に戻る。",
+})
+add({
+  id = "t.P_PROMPT_POINT.register_cancel",
+  from = "P_PROMPT_POINT", event = "register_cancel", to = "I_POINT",
   effects = { "keep", "render" },
   status = "unknown", refs = { "host.lua:166-169,197-204", "#116" },
-  notes = "取り消して、凍結していた外側の ▽ に戻る。▼ から入ったときは I_SELECT に戻る（未観測）。"
+  notes = "取り消して、凍結していた外側の ▽ に戻る。"
     .. "O12 はプロンプトに入るところまでで、取り消しはキー列に無い。",
 })
 add({
-  id = "t.P_PROMPT.winleave",
-  from = "P_PROMPT", event = "winleave", to = "P_PROMPT",
+  id = "t.P_PROMPT_SELECT.register_cancel",
+  from = "P_PROMPT_SELECT", event = "register_cancel", to = "I_SELECT",
+  effects = { "keep", "render" },
+  status = "unknown", refs = { "host.lua:166-169,197-204", "#116" },
+  notes = "取り消して、凍結していた外側の ▼ に戻る（未観測）。",
+})
+add({
+  id = "t.P_PROMPT_POINT.winleave",
+  from = "P_PROMPT_POINT", event = "winleave", to = "P_PROMPT_POINT",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "host.lua:75-92,269-281" },
+  notes = "辞書登録の input() の間は外側の状態を壊さない（WinEnter でフレームのウィンドウへ戻す）。",
+})
+add({
+  id = "t.P_PROMPT_SELECT.winleave",
+  from = "P_PROMPT_SELECT", event = "winleave", to = "P_PROMPT_SELECT",
   effects = { "keep", "render" },
   status = "ok", refs = { "host.lua:75-92,269-281" },
   notes = "辞書登録の input() の間は外側の状態を壊さない（WinEnter でフレームのウィンドウへ戻す）。",
@@ -1488,8 +1513,8 @@ add({
   status = "ok", refs = { "function/common.lua:18-45" },
 })
 add({
-  id = "t.I_PENDING.nl",
-  from = "I_PENDING", event = "nl", to = "I_DIRECT",
+  id = "t.I_ROMAJI.nl",
+  from = "I_ROMAJI", event = "nl", to = "I_DIRECT",
   effects = { "commit_reading", "feed_key" },
   status = "ok", refs = { "function/common.lua:18-45" },
 })
@@ -1512,8 +1537,8 @@ add({
   status = "ok", refs = { "function/common.lua:59-68" },
 })
 add({
-  id = "t.I_PENDING.cr",
-  from = "I_PENDING", event = "cr", to = "I_DIRECT",
+  id = "t.I_ROMAJI.cr",
+  from = "I_ROMAJI", event = "cr", to = "I_DIRECT",
   effects = { "commit_reading", "feed_key" },
   status = "ok", refs = { "function/common.lua:59-68" },
 })
@@ -1536,8 +1561,8 @@ add({
   status = "ok", refs = { "keymap.lua:28" },
 })
 add({
-  id = "t.I_PENDING.cg",
-  from = "I_PENDING", event = "cg", to = "I_DIRECT",
+  id = "t.I_ROMAJI.cg",
+  from = "I_ROMAJI", event = "cg", to = "I_DIRECT",
   effects = { "cancel", "reset_state" },
   status = "ok", refs = { "keymap.lua:28", "function/common.lua:71-86" },
 })
@@ -1567,14 +1592,14 @@ add({
   notes = "読みが空になったとき。",
 })
 add({
-  id = "t.I_PENDING.bs",
-  from = "I_PENDING", event = "bs", to = "I_PENDING",
+  id = "t.I_ROMAJI.bs",
+  from = "I_ROMAJI", event = "bs", to = "I_ROMAJI",
   effects = { "keep", "render" },
   status = "unknown", refs = { "function/input.lua:178-204" },
 })
 add({
-  id = "t.I_PENDING.bs.empty",
-  from = "I_PENDING", event = "bs", to = "I_DIRECT",
+  id = "t.I_ROMAJI.bs.empty",
+  from = "I_ROMAJI", event = "bs", to = "I_DIRECT",
   effects = { "cancel", "reset_state" },
   status = "ok", refs = { "function/input.lua:178-204" },
 })
@@ -1595,7 +1620,7 @@ add({
 
 -- insert の制御キー（guard が確定しないもの）
 local function insert_control(id, event, refs, observed, notes)
-  for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
+  for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT" }) do
     local e, status
     if from == "I_DIRECT" then
       e = { "feed_key" }
@@ -1637,7 +1662,7 @@ insert_control("ctrl_at", "ctrl_at", { "keys.md §4,§6", "#56" }, { "O-ctrl-at"
   "guard が確定してから i_CTRL-@。確定した読みはバッファに入り、E29 で insert を抜ける（keys.md §4）。")
 
 -- <C-w> / <C-u> で消す文字が無いときは pre-edit が残る（同じ from からの別の遷移）
-for _, from in ipairs({ "I_PENDING", "I_POINT", "I_SELECT" }) do
+for _, from in ipairs({ "I_ROMAJI", "I_POINT", "I_SELECT" }) do
   add({
     id = "t." .. from .. ".ctrl_w.keep",
     from = from, event = "ctrl_w", to = from,
@@ -1657,7 +1682,7 @@ for _, from in ipairs({ "I_PENDING", "I_POINT", "I_SELECT" }) do
 end
 
 -- <C-y> / <C-e>（補完のメニューが出ていないときは何もしない）
-for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
+for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT" }) do
   add({
     id = "t." .. from .. ".completion_accept",
     from = from, event = "completion_accept", to = from,
@@ -1678,8 +1703,8 @@ add({
   notes = "pre-edit が無いので、補完はそのまま始まる。",
 })
 add({
-  id = "t.I_PENDING.completion_open",
-  from = "I_PENDING", event = "completion_open", to = "IC",
+  id = "t.I_ROMAJI.completion_open",
+  from = "I_ROMAJI", event = "completion_open", to = "IC",
   effects = { "drop", "clear_extmark" },
   status = "gap", refs = { "keys.md §5", "#19", "#190" },
 })
@@ -1738,7 +1763,7 @@ add({
 
 -- guard が確定するキー・マウス・貼り付け
 local function guard_event(event)
-  for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
+  for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT" }) do
     local e = { "feed_key" }
     if from == "I_SELECT" then
       e = { "commit_candidate", "feed_key", "reset_state", "clear_extmark" }
@@ -1764,7 +1789,7 @@ add({
   status = "unknown", refs = { "#56" },
   notes = "同じウィンドウのクリック。04 の観測はマウスを使っていない。",
 })
-for _, from in ipairs({ "I_PENDING", "I_POINT", "I_SELECT" }) do
+for _, from in ipairs({ "I_ROMAJI", "I_POINT", "I_SELECT" }) do
   add({
     id = "t." .. from .. ".mouse_click",
     from = from, event = "mouse_click", to = "I_DIRECT",
@@ -1774,7 +1799,7 @@ for _, from in ipairs({ "I_PENDING", "I_POINT", "I_SELECT" }) do
     notes = "同じウィンドウのクリックはカーソルが動くので、ずれの検出で確定する。04 の観測はマウスを使っていない。",
   })
 end
-for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
+for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT" }) do
   add({
     id = "t." .. from .. ".wheel",
     from = from, event = "wheel", to = from,
@@ -1783,7 +1808,7 @@ for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
     notes = "guard は確定しない。スクロールだけなので pre-edit が残る。04 の観測は取っていない。",
   })
 end
-for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
+for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT" }) do
   add({
     id = "t." .. from .. ".paste",
     from = from, event = "paste", to = "I_DIRECT",
@@ -1796,7 +1821,7 @@ for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
 end
 
 -- ずれの検出（autocmd）
-for _, from in ipairs({ "I_DIRECT", "I_PENDING", "I_POINT", "I_SELECT" }) do
+for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT" }) do
   add({
     id = "t." .. from .. ".stale.cursor",
     from = from, event = "stale", to = "I_DIRECT",
@@ -1869,7 +1894,7 @@ M.observations = {
   {
     id = "O-k",
     keys = { "<Plug>(skkeleton-enable)", "K" },
-    expect = { "I_PENDING" },
+    expect = { "I_ROMAJI" },
     note = "K → preedit=\"▽k\"（henkan_feed がまだ空）。",
   },
   {
@@ -1967,8 +1992,8 @@ M.observations = {
   {
     id = "O-ctrl-o-v-direct",
     keys = { "<Plug>(skkeleton-enable)", "<C-o>v" },
-    expect = { "N_OFF" },
-    note = "pre-edit が無い visual。mode=v、enabled=true。classify は N_OFF に寄せる。",
+    expect = { "V_IDLE" },
+    note = "pre-edit が無い visual。mode=v、enabled=true。visual で有効な V_IDLE。",
   },
   {
     id = "O-ctrl-o-v-direct-esc",
@@ -2105,7 +2130,7 @@ M.observations = {
   {
     id = "O-bs-empty",
     keys = { "<Plug>(skkeleton-enable)", "K", "<BS>" },
-    expect = { "I_PENDING" },
+    expect = { "I_ROMAJI" },
     note = "K の打ちかけから始めると、読みはまだ無い。",
   },
   {
@@ -2475,19 +2500,19 @@ M.properties = {
 -- 既知の破れ（性質の検査で出るが、issue にしてあるもの）。
 -- transition は遷移の id。refs は issue。
 M.known = {
-  { property = "P1", transition = "t.I_PENDING.bufleave", refs = { "#169" } },
-  { property = "P1", transition = "t.I_PENDING.completion_open", refs = { "#18", "#19", "#190" } },
-  { property = "P1", transition = "t.I_PENDING.ctrl_a", refs = { "keys.md §6" } },
-  { property = "P1", transition = "t.I_PENDING.ctrl_at", refs = { "#56", "keys.md §6" } },
-  { property = "P1", transition = "t.I_PENDING.ctrl_k", refs = { "#8", "#12" } },
-  { property = "P1", transition = "t.I_PENDING.ctrl_r", refs = { "#8", "#12", "#20" } },
-  { property = "P1", transition = "t.I_PENDING.ctrl_t", refs = { "keys.md §6" } },
-  { property = "P1", transition = "t.I_PENDING.ctrl_u", refs = { "#8", "#12" } },
-  { property = "P1", transition = "t.I_PENDING.ctrl_v", refs = { "#8", "#12" } },
-  { property = "P1", transition = "t.I_PENDING.ctrl_w", refs = { "#8", "#12" } },
-  { property = "P1", transition = "t.I_PENDING.stale.buffer", refs = { "#8", "#12" } },
-  { property = "P1", transition = "t.I_PENDING.tab", refs = { "#8", "#12" } },
-  { property = "P1", transition = "t.I_PENDING.winleave", refs = { "#169" } },
+  { property = "P1", transition = "t.I_ROMAJI.bufleave", refs = { "#169" } },
+  { property = "P1", transition = "t.I_ROMAJI.completion_open", refs = { "#18", "#19", "#190" } },
+  { property = "P1", transition = "t.I_ROMAJI.ctrl_a", refs = { "keys.md §6" } },
+  { property = "P1", transition = "t.I_ROMAJI.ctrl_at", refs = { "#56", "keys.md §6" } },
+  { property = "P1", transition = "t.I_ROMAJI.ctrl_k", refs = { "#8", "#12" } },
+  { property = "P1", transition = "t.I_ROMAJI.ctrl_r", refs = { "#8", "#12", "#20" } },
+  { property = "P1", transition = "t.I_ROMAJI.ctrl_t", refs = { "keys.md §6" } },
+  { property = "P1", transition = "t.I_ROMAJI.ctrl_u", refs = { "#8", "#12" } },
+  { property = "P1", transition = "t.I_ROMAJI.ctrl_v", refs = { "#8", "#12" } },
+  { property = "P1", transition = "t.I_ROMAJI.ctrl_w", refs = { "#8", "#12" } },
+  { property = "P1", transition = "t.I_ROMAJI.stale.buffer", refs = { "#8", "#12" } },
+  { property = "P1", transition = "t.I_ROMAJI.tab", refs = { "#8", "#12" } },
+  { property = "P1", transition = "t.I_ROMAJI.winleave", refs = { "#169" } },
   { property = "P1", transition = "t.I_POINT.bufleave", refs = { "#169" } },
   { property = "P1", transition = "t.I_POINT.ctrl_a", refs = { "keys.md §6" } },
   { property = "P1", transition = "t.I_POINT.ctrl_at", refs = { "#56", "keys.md §6" } },
@@ -2513,85 +2538,71 @@ M.known = {
   { property = "P1", transition = "t.V_PRE_SELECT.winleave", refs = { "#169" } },
 }
 
--- GLOSSARY の語彙に対する提案（作者に決めてほしいこと）
-M.proposals = {
+-- 作者の判断（10 点）と、このモデルでの反映先（#204 の 2026-11-06 のコメント）
+M.decisions = {
   {
     id = 1,
-    title = "I_OFF（insert・skk は無効）を足すか",
-    detail = "I_DIRECT は「有効な insert」なので、<Esc> のあと i で戻ったとき、<Insert> を 2 回押したとき、"
-      .. "l キーで無効にしたときを表せない。モデルでは I_OFF を足した。",
-    affects = { "I_OFF", "N_OFF", "R_OFF" },
+    title = "I_OFF（insert・無効）を足す",
+    decision = "足す。無効な insert は、有効な insert と同じキーで結果が違うので分ける。",
+    reflected_in = { "I_OFF" },
   },
   {
     id = 2,
-    title = "V_IDLE（visual・有効・pre-edit 無し）を足すか",
-    detail = "direct から <C-o>v で入った visual は、enabled=true のまま pre-edit が無い。"
-      .. "観測の classify は N_OFF に寄せるが、N_OFF（無効）とは中の状態が違う。",
-    affects = { "V_IDLE", "N_OFF", "V_PRE" },
+    title = "V_IDLE（visual・有効・pre-edit 無し）を足す",
+    decision = "足す。visual で有効のままなのは、N_OFF と戻ったあとの結果が違うので分ける。",
+    reflected_in = { "V_IDLE", "O-ctrl-o-v-direct" },
   },
   {
     id = 3,
-    title = "N_KEEP（normal・無効・keepState の one-shot 待ち）を足すか",
-    detail = "keepState は設定で、<Esc> のあとの最初の InsertEnter で有効に戻る（#152）。"
-      .. "N_OFF に事実として持たせるか、クラスを分けるかで、モデルの見通しが変わる。",
-    affects = { "N_KEEP", "N_OFF" },
+    title = "N_KEEP はクラスにしない",
+    decision = "N_OFF のまま、遷移の guard の config.keepState で表す。",
+    reflected_in = { "N_OFF", "t.N_OFF.insert_enter.keepstate", "t.I_DIRECT.esc.keepstate" },
   },
   {
     id = 4,
-    title = "NI / V_PRE / P_PROMPT を、抱えている読みで分けるか",
-    detail = "モデルでは NI_DIRECT / NI_POINT / NI_SELECT、V_PRE_POINT / V_PRE_SELECT に分けた。"
-      .. "1 つのクラスにまとめると、戻った先が I_DIRECT か I_POINT かをモデルが決められない。"
-      .. "P_PROMPT は外側の読みを凍結して持つので分けていない。"
-      .. "GLOSSARY の 1 クラスのまま、読みを持ち越す状態として書く方法もある。",
-    affects = { "NI", "V_PRE", "P_PROMPT" },
+    title = "NI / V_PRE / P_PROMPT の粒度",
+    decision = "人が読むクラスは 1 つのまま、抱えている相（direct / point / select）を属性で持つ。"
+      .. "モデルの中で NI_POINT などに分けるのは可。仕様書では NI（point）のように書く。",
+    reflected_in = { "NI_DIRECT", "NI_POINT", "NI_SELECT", "V_PRE_POINT", "V_PRE_SELECT",
+      "P_PROMPT_POINT", "P_PROMPT_SELECT" },
   },
   {
     id = 5,
-    title = "N_LOST の意味をどちらにするか",
-    detail = "GLOSSARY と events.md は「state や pre-edit が残っている」、状態遷移図の n.lost は"
-      .. "「読みが消えた」に使っている。今のモデルでは前者にして、後者は P1 の違反として扱った。"
-      .. "前者の N_LOST に届く遷移は、今の実装では見つからなかった。",
-    affects = { "N_LOST", "P1" },
+    title = "N_LOST は状態から外す",
+    decision = "読みが消えるのは遷移の結果なので、effects の drop と P1 の破れで表す。"
+      .. "GLOSSARY と events.md も合わせる。",
+    reflected_in = { "M.known（P1）", "semantics/GLOSSARY.md", "semantics/inventory/events.md" },
   },
   {
     id = 6,
-    title = "I_PENDING の意味をどちらにするか",
-    detail = "events.md は render.is_pending()（確定文字列を流して finish() を待つ）、"
-      .. "観測の classify と issues.md は「ローマ字の打ちかけ」に使っている。"
-      .. "モデルは後者にした（preedit はあるが henkan_feed が空）。",
-    affects = { "I_PENDING" },
+    title = "「ローマ字の打ちかけ」は I_ROMAJI に改名",
+    decision = "pending は render.is_pending() の意味だけに使う。",
+    reflected_in = { "I_ROMAJI" },
   },
   {
     id = 7,
-    title = "▽ と ▽*（okurinasi / okuriari）を分けるか",
-    detail = "モデルでは I_POINT にまとめた。今の遷移では同じクラスで結果が割れなかった。"
-      .. "送り仮名の入力（; と >）を細かく書くなら分けることになる。",
-    affects = { "I_POINT" },
+    title = "▽ と ▽* は今はまとめる",
+    decision = "06 で結果が割れたら分ける。",
+    reflected_in = { "I_POINT" },
   },
   {
     id = 8,
-    title = "R_MID を残すか",
-    detail = "i→R の移り変わりは、キーを打ったあとの観測には出てこない（今は遷移の途中だけ）。"
-      .. "data.js の r.mid は「pre-edit が残る」としていたが、<C-o>R の観測では確定して無効化した。"
-      .. "残すなら遷移の途中の状態として扱い、消すなら R_OFF にまとめる。",
-    affects = { "R_MID", "R_OFF" },
+    title = "R_MID は観測のクラスから外す",
+    decision = "途中の状態（transient）としてだけ残す。",
+    reflected_in = { "R_MID" },
   },
   {
     id = 9,
-    title = "effects の語彙に、マッピングを張る・退避する語を足すか",
-    detail = "GLOSSARY には restore_mapping（戻す）しかない。有効化のときの「マッピングを張る」"
-      .. "「元のマッピングを退避する」を effects に書けないので、今は reset_state だけにして notes に書いた。",
-    affects = { "enable", "effects" },
+    title = "effects に install_mapping と save_mapping を足す",
+    decision = "GLOSSARY にも足す。",
+    reflected_in = { "semantics/GLOSSARY.md", "t.N_OFF.enable", "t.I_OFF.enable", "t.N_OFF.insert_enter.keepstate" },
   },
   {
     id = 10,
-    title = "V_PRE の意味をどちらにするか",
-    detail = "events.md（#203 のあと）は V_PRE を「visual / select で pre-edit がまだ描かれている、"
-      .. "ModeChanged の確定が走る前の一瞬」とし、ドラッグでは ModeChanged の時点で残っていた（O18）としている。"
-      .. "モデルの V_PRE_POINT / V_PRE_SELECT は、<C-o>v のあと visual の間ずっと pre-edit が残る安定した状態で、"
-      .. "同じ V_PRE でも意味が違う。events.md に合わせるなら、<C-o>v の状態を V_POINT / V_SELECT のような別クラスにする。"
-      .. "今のモデルは観測の classify に合わせて V_PRE のままにし、違いを notes に書いた。",
-    affects = { "V_PRE_POINT", "V_PRE_SELECT", "V_IDLE" },
+    title = "V_PRE の意味",
+    decision = "<C-o>v で残り続ける状態の意味にする。マウスのドラッグで ModeChanged の確定より前に"
+      .. "一瞬残るもの（events.md の O18）は、途中の状態として扱う。base を rebase して events.md も合わせる。",
+    reflected_in = { "V_PRE_POINT", "V_PRE_SELECT", "semantics/inventory/events.md" },
   },
 }
 

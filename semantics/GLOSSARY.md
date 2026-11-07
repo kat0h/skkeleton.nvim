@@ -14,7 +14,7 @@ Neovim のモードと skkeleton の入力状態を合わせた「今の」振�
 
 人が読む状態クラスは約 20 個です。親の issue の一覧：
 
-N_OFF、N_WAIT、N_LOST、V_PRE、I_DIRECT、I_POINT、I_SELECT、I_ESCAPE、I_PENDING、NI、IC、R_OFF、R_MID、C_DIRECT、C_POINT、C_REPLACE、P_PROMPT、T_DIRECT、T_POINT、T_NORMAL
+N_OFF、N_WAIT、V_PRE、V_IDLE、I_OFF、I_DIRECT、I_POINT、I_SELECT、I_ESCAPE、I_ROMAJI、NI、IC、R_OFF、C_DIRECT、C_POINT、C_REPLACE、P_PROMPT、T_DIRECT、T_POINT、T_NORMAL
 
 全部の組み合わせは作りません。クラスを増やすのは、次のどちらかに当たるときだけです。
 
@@ -23,7 +23,14 @@ N_OFF、N_WAIT、N_LOST、V_PRE、I_DIRECT、I_POINT、I_SELECT、I_ESCAPE、I_P
 
 粒度は観測で決めます。同じクラスで同じイベントなのに結果が割れたら、クラスを分けます。いつも同じ結果になるクラスはまとめます。
 
-`V_PRE` は、events.md では「visual / select で pre-edit がまだ描かれている、`ModeChanged` の確定が走る前の一瞬」です。ドラッグでは `ModeChanged` の時点で pre-edit が残っていました（O18）。一方、`<C-o>v` のあと visual の間ずっと pre-edit が残る状態も、観測の classify は `V_PRE` と呼びます。同じ `V_PRE` に 2 つの意味があるので、どちらに合わせるかは #179 で決めます。
+- `I_OFF` は insert で skkeleton が無効な状態、`V_IDLE` は visual / select で有効のまま pre-edit が無い状態です。どちらも、同じキーで有効な状態と結果が違うので分けています。
+- `N_OFF` は normal などで無効な状態です。`keepState` の one-shot 待ちも `N_OFF` のままで、遷移の guard（`config.keepState`）で表します。クラスは分けません。
+- `N_LOST` はクラスにしません。読みが消えるのは遷移の結果なので、effects の `drop` と P1 の破れで表します。
+- `R_MID` は観測のクラスではありません。`<Insert>` による insert と replace の移り変わりの途中の状態（transient）としてだけ残します。
+- `NI` / `V_PRE` / `P_PROMPT` は人が読むクラスは 1 つです。抱えている相（direct / point / select）は属性で持つので、仕様書では `NI（point）` のように書きます。モデルの中で `NI_POINT` などに分けてもかまいません。
+- `I_ROMAJI` はローマ字の打ちかけ（`state.feed`）がある状態です。`pending` は `render.is_pending()` の意味だけに使います。
+
+`V_PRE` は、`<C-o>v` で visual / select に入ったあと、pre-edit が描かれたまま残り続ける状態です。マウスのドラッグで `ModeChanged` の確定より前に一瞬残るもの（events.md の O18）は、状態ではなく遷移の途中（transient）として扱います。
 
 ## effects の語彙
 
@@ -36,6 +43,8 @@ N_OFF、N_WAIT、N_LOST、V_PRE、I_DIRECT、I_POINT、I_SELECT、I_ESCAPE、I_P
 - `keep`：読みや候補を残す
 - `reset_state`：skkeleton の内部状態を元に戻す
 - `restore_mapping`：退避したマッピングを元に戻す
+- `install_mapping`：skkeleton のマッピングを張る
+- `save_mapping`：元のマッピングを退避する
 - `clear_extmark`：pre-edit の extmark を消す
 - `clean_cmdline`：cmdline の pre-edit を片付ける
 - `render`：pre-edit を描き直す
