@@ -62,6 +62,10 @@ local function validate()
   for _, obs in ipairs(model.observations) do
     observed_ids[obs.id] = true
   end
+  -- 06 の観測（compare/probe.lua）。observed の id は M.observations と M.probes の両方から引く
+  for _, probe in ipairs(model.probes or {}) do
+    observed_ids[probe.id] = true
+  end
   local effect_ok = {}
   for _, name in ipairs({
     "commit_reading", "commit_candidate", "cancel", "drop", "keep", "reset_state",
@@ -663,6 +667,9 @@ local function check_observed_paths()
   for _, obs in ipairs(model.observations) do
     observations[obs.id] = obs
   end
+  for _, probe in ipairs(model.probes or {}) do
+    observations[probe.id] = probe
+  end
   local bad = {}
   for _, t in ipairs(model.transitions) do
     for _, oid in ipairs(t.observed or {}) do
@@ -915,6 +922,21 @@ local function main(argv)
     ))
     for _, b in ipairs(check_observed_paths()) do
       fail(("observed の取り違え %s ← %s: %s"):format(b.transition, b.observed, b.why))
+    end
+    -- 06 の観測（1 遷移ずつ、前置きから流したキー列）
+    local probe_count, probe_ok, probe_ng = 0, 0, 0
+    for _, probe in ipairs(model.probes or {}) do
+      probe_count = probe_count + 1
+      local ok, why = replay_observation(probe, false)
+      if ok then
+        probe_ok = probe_ok + 1
+      else
+        probe_ng = probe_ng + 1
+        fail(("06 の観測 %s: %s"):format(probe.id, why or ""))
+      end
+    end
+    if probe_count > 0 then
+      say(("06 の観測: %d 件（終わりが一致 %d / 不一致 %d）"):format(probe_count, probe_ok, probe_ng))
     end
   end
 
