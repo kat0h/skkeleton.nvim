@@ -1,4 +1,4 @@
--- insert / normal / visual / replace の状態機械のモデル（#184、親は #179）
+-- insert / normal / visual / replace / cmdline の状態機械のモデル（#184、cmdline は #187、親は #179）
 --
 -- 今の振る舞いだけを書く。望ましい振る舞いは決めない。
 -- このファイルがモデルの唯一のデータ源で、model_check.lua はここだけを読む。
@@ -49,13 +49,14 @@ local M = {}
 
 M.issue = 184
 M.parent = 179
-M.scope = "insert / normal / visual / replace（Vim のモード i / n / v・s / R）"
+M.scope = "insert / normal / visual / replace / cmdline（Vim のモード i / n / v・s / R / c・cr）"
 M.sources = {
   "semantics/GLOSSARY.md",
   "semantics/inventory/keys.md（#181）",
   "semantics/inventory/events.md（#182）",
   "semantics/issues.md（#183）",
   "lua/skkeleton/map.lua、keymap.lua、guard.lua、cleanup.lua、function/",
+  "lua/skkeleton/render.lua、render/cmdline.lua、preedit.lua、host.lua（cmdline、#187）",
   "状態遷移図の下書き（作者の手元の data.js。18 状態・49 遷移）",
 }
 
@@ -319,6 +320,162 @@ M.states = {
     refs = { "host.lua:175-213", "#144" },
     notes = "人が読むクラスは P_PROMPT（select）の 1 つで、相を aspect に持つ（作者の判断 4）。",
   },
+  -- cmdline（c / cr）。#187（07a）。人が読むクラスは C_DIRECT / C_POINT / C_REPLACE の 3 つで、
+  -- 有効・無効、打ちかけ・▽・▼ の相、cr の中の相はモデルの中で分ける（作者の判断 4 と同じ考え）。
+  C_OFF = {
+    class = "C_DIRECT",
+    layer = "Vim のモードが c、skkeleton は無効（cmdline に入っただけ、または disable した）",
+    vim_mode = "c",
+    enabled = false,
+    phase = "input",
+    reading = "none",
+    preedit = "none",
+    label = "cmdline（無効）",
+    refs = { "plugin/skkeleton.lua:20-24", "map.lua:113-139", "events.md" },
+    notes = "観測（observe.classify）は cmdline の有効・無効を区別しないので、class は C_DIRECT にする。"
+      .. "`:` / `/` で cmdline に入っただけの状態と、cmdline で disable した状態。",
+  },
+  C_IDLE = {
+    class = "C_DIRECT",
+    layer = "Vim のモードが c、skk は有効のままだが c のマッピングは無い（visual から入った cmdline）",
+    vim_mode = "c",
+    enabled = true,
+    phase = "input",
+    reading = "none",
+    preedit = "none",
+    label = "cmdline（visual から・マッピング無し）",
+    refs = { "map.lua:113-139", "#28" },
+    notes = "V_IDLE から `:` / `/` で入った cmdline。g:skkeleton#enabled は真のままだが、"
+      .. "c のマッピングは置かれていないので、キーは skk を通らない。"
+      .. "<Esc> で visual に戻ると有効のまま（V_IDLE）。",
+  },
+  C_IDLE_PRE = {
+    class = "C_POINT",
+    aspect = "point",
+    layer = "Vim のモードが c、visual の pre-edit を抱えたまま cmdline に入っている（マッピング無し）",
+    vim_mode = "c",
+    enabled = true,
+    phase = "input:okurinasi|okuriari",
+    reading = "point",
+    preedit = "point",
+    label = "cmdline（visual の ▽ から）",
+    refs = { "render.lua", "#28" },
+    notes = "V_PRE から `:` / `/` で入ったとき。pre-edit はバッファの extmark に残り、cmdline には書かれない。"
+      .. "<Esc> で V_PRE に戻る。",
+  },
+  C_DIRECT = {
+    class = "C_DIRECT",
+    layer = "Vim のモードが c、skk が有効で cmdline に pre-edit が無い",
+    vim_mode = "c",
+    enabled = true,
+    phase = "input",
+    reading = "none",
+    preedit = "none",
+    label = "cmdline（pre-edit 無し）",
+    refs = { "render.lua:396-406", "render/cmdline.lua" },
+  },
+  C_ROMAJI = {
+    class = "C_POINT",
+    aspect = "romaji",
+    layer = "Vim のモードが c、direct でローマ字の打ちかけ（state.feed）を cmdline に書いている",
+    vim_mode = "c",
+    enabled = true,
+    phase = "input:direct",
+    reading = "romaji",
+    preedit = "romaji",
+    label = "cmdline（打ちかけ）",
+    refs = { "state.lua", "render/cmdline.lua" },
+    notes = "人が読むクラスは C_POINT（観測は pre-edit の有無だけを見る）。"
+      .. "cmdline には marker ではなく feed の文字（k など）が書かれる。",
+  },
+  C_POINT = {
+    class = "C_POINT",
+    aspect = "point",
+    layer = "Vim のモードが c、▽ / ▽* を cmdline に書いている",
+    vim_mode = "c",
+    enabled = true,
+    phase = "input:okurinasi|okuriari",
+    reading = "point",
+    preedit = "point",
+    label = "cmdline（▽）",
+    refs = { "render/cmdline.lua", "render.lua:396-406" },
+  },
+  C_SELECT = {
+    class = "C_POINT",
+    aspect = "select",
+    layer = "Vim のモードが c、▼ を cmdline に書いている",
+    vim_mode = "c",
+    enabled = true,
+    phase = "henkan",
+    reading = "henkan",
+    preedit = "henkan",
+    label = "cmdline（▼）",
+    refs = { "function/henkan.lua", "render/cmdline.lua" },
+    notes = "人が読むクラスは C_POINT（07a の観測では ▽ と ▼ を分けない）。",
+  },
+  C_REPLACE_OFF = {
+    class = "C_REPLACE",
+    layer = "Vim のモードが cr（cmdline の置換）、skkeleton は無効",
+    vim_mode = "cr",
+    enabled = false,
+    phase = "input",
+    reading = "none",
+    preedit = "none",
+    label = "cmdline replace（無効）",
+    refs = { "cleanup.lua:183,207-214", "keys.md §1" },
+    notes = "人が読むクラスは C_REPLACE。cmdline で無効のまま <Insert> を押した状態。",
+  },
+  C_REPLACE_DIRECT = {
+    class = "C_REPLACE",
+    layer = "Vim のモードが cr、skk が有効で pre-edit が無い",
+    vim_mode = "cr",
+    enabled = true,
+    phase = "input",
+    reading = "none",
+    preedit = "none",
+    label = "cmdline replace（pre-edit 無し）",
+    refs = { "cleanup.lua:183,207-214", "render/cmdline.lua" },
+    notes = "人が読むクラスは C_REPLACE。cr の中の相（direct）をモデルの中で分ける。",
+  },
+  C_REPLACE_ROMAJI = {
+    class = "C_REPLACE",
+    aspect = "romaji",
+    layer = "Vim のモードが cr、ローマ字の打ちかけがある",
+    vim_mode = "cr",
+    enabled = true,
+    phase = "input:direct",
+    reading = "romaji",
+    preedit = "romaji",
+    label = "cmdline replace（打ちかけ）",
+    refs = { "cleanup.lua:183,207-214", "render/cmdline.lua" },
+    notes = "人が読むクラスは C_REPLACE。cr の中の相（romaji）をモデルの中で分ける。",
+  },
+  C_REPLACE_POINT = {
+    class = "C_REPLACE",
+    aspect = "point",
+    layer = "Vim のモードが cr、▽ / ▽* を cmdline に書いている",
+    vim_mode = "cr",
+    enabled = true,
+    phase = "input:okurinasi|okuriari",
+    reading = "point",
+    preedit = "point",
+    label = "cmdline replace（▽）",
+    refs = { "cleanup.lua:183,207-214", "render/cmdline.lua" },
+    notes = "人が読むクラスは C_REPLACE。cr の中の相（point）をモデルの中で分ける。",
+  },
+  C_REPLACE_SELECT = {
+    class = "C_REPLACE",
+    aspect = "select",
+    layer = "Vim のモードが cr、▼ を cmdline に書いている",
+    vim_mode = "cr",
+    enabled = true,
+    phase = "henkan",
+    reading = "henkan",
+    preedit = "henkan",
+    label = "cmdline replace（▼）",
+    refs = { "cleanup.lua:183,207-214", "render/cmdline.lua" },
+    notes = "人が読むクラスは C_REPLACE。cr の中の相（select）をモデルの中で分ける。",
+  },
 }
 
 -- イベント
@@ -355,7 +512,7 @@ M.events = {
       "!", "\"", "#", "$", "%", "&", "'", "(", ")", ",", ".", ":", "]", "@", "[", "-",
       "^", "\\", "?", "_", "+", "*", "}", "`", "{", "=", "~", "<lt>", "<Bar>",
     },
-    modes = { "i" },
+    modes = { "i", "c", "cr" },
     refs = { "keymap.lua:23-56,64-88", "function/input.lua:85-120", "keys.md §1,§3" },
     notes = "l q ; / L > X は、それぞれ別のイベントにした（関数が割り当てられているため）。",
   },
@@ -365,85 +522,85 @@ M.events = {
       "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "M", "N", "O", "P", "Q", "R",
       "S", "T", "U", "V", "W", "Y", "Z",
     },
-    modes = { "i" },
+    modes = { "i", "c", "cr" },
     refs = { "function/input.lua:85-120", "keys.md §1" },
     notes = "シフト付きの文字。direct では ▽ を開始する（かなテーブルに単独の項目が無いとき）。",
   },
   key_x = {
     kind = "key",
     keys = { "x" },
-    modes = { "i" },
+    modes = { "i", "c" },
     refs = { "keymap.lua:51", "function/henkan.lua:116-133" },
     notes = "input では文字。henkan では候補を 1 つ前へ（henkanBackward）。",
   },
   key_X = {
     kind = "key",
     keys = { "X" },
-    modes = { "i" },
+    modes = { "i", "c" },
     refs = { "keymap.lua:52", "function/common.lua:89-", "keys.md §3" },
     notes = "input では文字（▽ を開始）。henkan では候補の削除（purgeCandidate）。",
   },
   key_L = {
     kind = "key",
     keys = { "L" },
-    modes = { "i" },
+    modes = { "i", "c" },
     refs = { "keymap.lua:41", "function/mode.lua" },
   },
   key_l = {
     kind = "key",
     keys = { "l" },
-    modes = { "i" },
+    modes = { "i", "c" },
     refs = { "keymap.lua:37", "#67", "#87" },
     notes = "既定のかなテーブルのときだけ disable を呼ぶ。",
   },
   key_q = {
     kind = "key",
     keys = { "q" },
-    modes = { "i" },
+    modes = { "i", "c" },
     refs = { "keymap.lua:38", "function/mode.lua" },
   },
   key_semicolon = {
     kind = "key",
     keys = { ";" },
-    modes = { "i" },
+    modes = { "i", "c" },
     refs = { "keymap.lua:39", "function/input.lua:147-" },
   },
   key_slash = {
     kind = "key",
     keys = { "/" },
-    modes = { "i" },
+    modes = { "i", "c" },
     refs = { "keymap.lua:40", "function/mode.lua" },
   },
   key_gt = {
     kind = "key",
     keys = { ">" },
-    modes = { "i" },
+    modes = { "i", "c" },
     refs = { "keymap.lua:34,53", "function/input.lua:206-223" },
     notes = "input では接頭辞・接尾辞、henkan では送り仮名（suffix）。",
   },
   key_cq = {
     kind = "key",
     keys = { "<C-q>" },
-    modes = { "i" },
+    modes = { "i", "c" },
     refs = { "keymap.lua:33", "function/mode.lua" },
   },
   bs = {
     kind = "key",
     keys = { "<BS>", "<C-h>" },
-    modes = { "i" },
+    modes = { "i", "c", "cr" },
     refs = { "keymap.lua:27,29", "function/input.lua:178-204", "keys.md §1" },
     notes = "<C-h> は <bs> に正規化され、keymap.lua:29 の <c-h> の行は引かれない。",
   },
   cr = {
     kind = "key",
     keys = { "<CR>" },
-    modes = { "i" },
+    modes = { "i", "c", "cr" },
     refs = { "keymap.lua:30,48", "function/common.lua:59-68" },
   },
   space = {
     kind = "key",
     keys = { "<Space>" },
-    modes = { "i" },
+    modes = { "i", "c", "cr" },
     refs = { "keymap.lua:35,50", "function/henkan.lua:21-56,90-113" },
   },
   nl = {
@@ -455,13 +612,13 @@ M.events = {
   cg = {
     kind = "key",
     keys = { "<C-g>" },
-    modes = { "i" },
+    modes = { "i", "c", "cr" },
     refs = { "keymap.lua:28,47", "function/common.lua:71-86", "#87" },
   },
   esc = {
     kind = "key",
     keys = { "<Esc>", "<C-[>" },
-    modes = { "i", "n", "v", "R", "ic" },
+    modes = { "i", "n", "v", "R", "ic", "c", "cr" },
     refs = { "keymap.lua:31", "function/disable.lua:21-27", "cleanup.lua:192-251", "#86" },
     notes = "insert では keymap の escape。cmdline から visual へ戻るときなどは ModeChanged の規則 5。",
   },
@@ -480,13 +637,13 @@ M.events = {
   ctrl_c = {
     kind = "key",
     keys = { "<C-c>", "<C-\\><C-n>" },
-    modes = { "i", "t" },
+    modes = { "i", "t", "c", "cr" },
     refs = { "cleanup.lua:187,225-248", "#70", "#142", "#74" },
   },
   ctrl_r = {
     kind = "key",
     keys = { "<C-r>", "<C-r><C-r>", "<C-r>=", "<C-r>{reg}", "<C-r>a", "<C-r>=1<CR>" },
-    modes = { "i" },
+    modes = { "i", "c" },
     refs = { "guard.lua:78-80", "keys.md §5,§6", "#8", "#12", "#20" },
     notes = "レジスタの中身を入れる・式の結果を入れる。guard は確定しないので、"
       .. "バッファが変わったあとの TextChangedI が読みを捨てる。",
@@ -494,19 +651,19 @@ M.events = {
   ctrl_v = {
     kind = "key",
     keys = { "<C-v>", "<C-v>065" },
-    modes = { "i" },
+    modes = { "i", "c" },
     refs = { "guard.lua:78-80", "keys.md §5,§6", "#12" },
   },
   ctrl_k = {
     kind = "key",
     keys = { "<C-k>", "<C-k>a:" },
-    modes = { "i" },
+    modes = { "i", "c" },
     refs = { "guard.lua:78-80", "keys.md §5,§6", "#12" },
   },
   ctrl_t = {
     kind = "key",
     keys = { "<C-t>" },
-    modes = { "i" },
+    modes = { "i", "c" },
     refs = { "guard.lua:78-80", "keys.md §5,§6" },
   },
   tab = {
@@ -519,25 +676,25 @@ M.events = {
   ctrl_w = {
     kind = "key",
     keys = { "<C-w>" },
-    modes = { "i" },
+    modes = { "i", "c" },
     refs = { "guard.lua:78-80", "keys.md §5,§6", "#8", "#12" },
   },
   ctrl_u = {
     kind = "key",
     keys = { "<C-u>" },
-    modes = { "i" },
+    modes = { "i", "c" },
     refs = { "guard.lua:78-80", "keys.md §5,§6", "#8", "#12" },
   },
   ctrl_a = {
     kind = "key",
     keys = { "<C-a>" },
-    modes = { "i" },
+    modes = { "i", "c" },
     refs = { "guard.lua:78-80", "keys.md §6", "NOTES.md 未考慮 7" },
   },
   ctrl_at = {
     kind = "key",
     keys = { "<C-@>" },
-    modes = { "i" },
+    modes = { "i", "c" },
     refs = { "guard.lua:62-65", "keys.md §4,§6", "#56" },
   },
   completion_open = {
@@ -586,7 +743,7 @@ M.events = {
       "<Left>", "<Right>", "<Up>", "<Down>", "<Home>", "<End>", "<PageUp>", "<PageDown>",
       "<Del>", "<S-Tab>", "<F5>", "<C-.>", "<S-CR>",
     },
-    modes = { "i" },
+    modes = { "i", "c", "cr" },
     refs = { "guard.lua:22-37,50-85", "keys.md §4", "#56" },
     notes = "guard が pre-edit を確定してから、キーを流し直す。",
   },
@@ -612,7 +769,7 @@ M.events = {
   winleave = {
     kind = "autocmd",
     keys = {},
-    modes = { "i", "n", "v", "R" },
+    modes = { "i", "n", "v", "R", "c", "cr" },
     refs = { "cleanup.lua:269-281", "events.md", "#169" },
   },
   bufleave = {
@@ -697,6 +854,63 @@ M.events = {
     keys = { "<C-g>@register", "<Esc>@register" },
     modes = { "c" },
     refs = { "host.lua:197-204", "#116", "#189" },
+  },
+  -- cmdline（c / cr）。#187（07a）
+  cmdline_open = {
+    kind = "key",
+    keys = { ":", "/" },
+    modes = { "n", "v", "s" },
+    refs = { "events.md", "keys.md §1", "#28" },
+    notes = "normal / visual から cmdline に入る。skk はまだ c のマッピングを持たない。",
+  },
+  cmdline_insert = {
+    kind = "key",
+    keys = { "<Insert>" },
+    modes = { "c", "cr" },
+    refs = { "cleanup.lua:183,207-214", "keys.md §1", "#38" },
+    notes = "cmdline の insert（c）と置換（cr）を切り替える。skk の状態は変えない。",
+  },
+  cmdline_window = {
+    kind = "key",
+    keys = { "<C-f>" },
+    modes = { "c", "cr" },
+    refs = { "cleanup.lua:254-266", "#54", "#205" },
+    notes = "command-line window を開く。cmdwin を開くときにも CmdlineLeave が来る。",
+  },
+  cmdline_ctrl_n = {
+    kind = "key",
+    keys = { "<C-n>" },
+    modes = { "c" },
+    refs = { "keys.md §6" },
+    notes = "cmdline の履歴・補完。cmdline の文字が変わらないときは pre-edit が残る。",
+  },
+  cmdline_ctrl_p = {
+    kind = "key",
+    keys = { "<C-p>" },
+    modes = { "c" },
+    refs = { "keys.md §6" },
+    notes = "cmdline の履歴。一致する履歴があるときだけ cmdline が変わる。",
+  },
+  cmdline_ctrl_y = {
+    kind = "key",
+    keys = { "<C-y>" },
+    modes = { "c" },
+    refs = { "keys.md §6" },
+    notes = "cmdline では制御文字（0x19）が入る。",
+  },
+  cmdline_ctrl_e = {
+    kind = "key",
+    keys = { "<C-e>" },
+    modes = { "c" },
+    refs = { "keys.md §6" },
+  },
+  visual_entry = {
+    kind = "key",
+    keys = { "v", "V", "<C-v>" },
+    modes = { "n" },
+    refs = { "#28", "cleanup.lua:179-190" },
+    notes = "normal から visual に入る。N_OFF は n / v / s / o をまとめているので、"
+      .. "この遷移は N_OFF のまま（visual で skk は無効）。",
   },
 }
 
@@ -1852,12 +2066,1239 @@ for _, from in ipairs({ "I_DIRECT", "I_ROMAJI", "I_POINT", "I_SELECT" }) do
   })
 end
 
+-- cmdline（c / cr）。#187（07a）
+--
+-- 観測は semantics/explore/ の cmdline プロファイルと、使い捨ての子 nvim で取った。
+-- 1 キーを 1 回の入力として流し、<C-r> や <C-k> のように途中で入力待ちになるキーは
+-- まとめて 1 回で流している（#184 の観測と同じ）。cmdline の pre-edit は本物の文字として
+-- cmdline に書かれ、CmdlineLeave / CmdlineChanged の片付けで取り除かれる。
+local cmdline_known = {}
+
+-- skk を通らずに cmdline を書き換えるキー。pre-edit は CmdlineChanged の片付けで消える
+local cmdline_edit_events = {
+  "ctrl_u", "ctrl_w", "ctrl_k", "ctrl_r", "ctrl_v", "ctrl_t", "ctrl_at", "cmdline_ctrl_y",
+}
+-- 文字が変わらない（か、変わっても pre-edit を消さない）キー
+local cmdline_keep_events = { "ctrl_a", "cmdline_ctrl_e", "cmdline_ctrl_n", "tab" }
+
+local function cmdline_edit_drop(from, to, observed_map)
+  for _, event in ipairs(cmdline_edit_events) do
+    local id = "t." .. from .. "." .. event
+    add({
+      id = id,
+      from = from,
+      event = event,
+      to = to,
+      effects = { "drop", "clean_cmdline", "reset_state", "clear_extmark" },
+      status = "gap",
+      refs = { "keys.md §6", "cleanup.lua:120-147,283-286", "#8", "#12" },
+      observed = (observed_map or {})[event] and { observed_map[event] } or {},
+      notes = "cmdline を skk を通さずに書き換える。CmdlineChanged の片付けが marker と読みを取り除き、"
+        .. "読みは確定しない（P1 の既知の破れ）。",
+    })
+    cmdline_known[#cmdline_known + 1] = { property = "P1", transition = id, refs = { "#8", "#12" } }
+  end
+end
+
+local function cmdline_edit_keep(from, event, observed)
+  add({
+    id = "t." .. from .. "." .. event,
+    from = from,
+    event = event,
+    to = from,
+    effects = { "pass_key" },
+    status = "ok",
+    refs = { "keys.md §6" },
+    observed = observed and { observed } or {},
+    notes = "cmdline の文字が変わらないので、pre-edit が残る。",
+  })
+end
+
+-- cmdline に入る
+add({
+  id = "t.N_OFF.cmdline_open",
+  from = "N_OFF", event = "cmdline_open", to = "C_OFF",
+  effects = {}, status = "ok", refs = { "keys.md §1", "events.md" }, observed = { "O-c-enter" },
+  notes = "normal で `:` / `/`。cmdline には skk のマッピングがまだ無い。",
+})
+add({
+  id = "t.N_OFF.visual_entry",
+  from = "N_OFF", event = "visual_entry", to = "N_OFF",
+  effects = { "pass_key" }, status = "ok", refs = { "#28", "cleanup.lua:179-190" },
+  notes = "normal から visual に入る。skk は無効のまま（N_OFF は n / v / s / o をまとめている）。",
+})
+add({
+  id = "t.V_IDLE.cmdline_open",
+  from = "V_IDLE", event = "cmdline_open", to = "C_IDLE",
+  effects = {}, status = "ok", refs = { "map.lua:113-139", "#28" }, observed = { "O-c-v-idle-enter" },
+  notes = "visual から `:` / `/`。g:skkeleton#enabled は真のままだが、c のマッピングは置かれていない。",
+})
+add({
+  id = "t.V_PRE_POINT.cmdline_open",
+  from = "V_PRE_POINT", event = "cmdline_open", to = "C_IDLE_PRE",
+  effects = { "keep" }, status = "ok", refs = { "render.lua", "#28" }, observed = { "O-c-v-pre-enter" },
+  notes = "visual の ▽ から cmdline に入る。pre-edit はバッファの extmark に残り、cmdline には書かれない。",
+})
+
+-- 有効化・無効化
+add({
+  id = "t.C_OFF.enable",
+  from = "C_OFF", event = "enable", to = "C_DIRECT",
+  effects = { "save_mapping", "install_mapping", "reset_state" },
+  status = "ok", refs = { "main.lua:101-125", "map.lua:113-139" }, observed = { "O-c-enable" },
+})
+add({
+  id = "t.C_IDLE.enable",
+  from = "C_IDLE", event = "enable", to = "C_DIRECT",
+  effects = { "save_mapping", "install_mapping" },
+  status = "ok", refs = { "main.lua:101-125" }, observed = { "O-c-v-idle-enable" },
+  notes = "visual から入った cmdline で有効化する。c のマッピングをここで置く。",
+})
+add({
+  id = "t.C_DIRECT.enable",
+  from = "C_DIRECT", event = "enable", to = "C_DIRECT",
+  effects = { "save_mapping", "install_mapping", "reset_state" },
+  status = "unknown", refs = { "main.lua:101-125" },
+  notes = "すでに有効な cmdline で、もう一度 enable する。",
+})
+add({
+  id = "t.C_IDLE.disable",
+  from = "C_IDLE", event = "disable", to = "C_OFF",
+  effects = { "restore_mapping", "reset_state", "clear_extmark" },
+  status = "unknown", refs = { "main.lua:129-139" },
+})
+add({
+  id = "t.C_DIRECT.disable",
+  from = "C_DIRECT", event = "disable", to = "C_OFF",
+  effects = { "restore_mapping", "reset_state", "clear_extmark" },
+  status = "ok", refs = { "main.lua:129-139" }, observed = { "O-c-disable" },
+  notes = "cmdline は開いたまま、skk だけ無効になる。",
+})
+add({
+  id = "t.C_ROMAJI.disable",
+  from = "C_ROMAJI", event = "disable", to = "C_OFF",
+  effects = { "commit_reading", "restore_mapping", "reset_state", "clear_extmark" },
+  status = "unknown", refs = { "main.lua:129-139" },
+})
+add({
+  id = "t.C_POINT.disable",
+  from = "C_POINT", event = "disable", to = "C_OFF",
+  effects = { "commit_reading", "restore_mapping", "reset_state", "clear_extmark" },
+  status = "ok", refs = { "main.lua:129-139" }, observed = { "O-c-disable-point" },
+  notes = "読みを確定して cmdline に残し、skk を無効にする。",
+})
+add({
+  id = "t.C_SELECT.disable",
+  from = "C_SELECT", event = "disable", to = "C_OFF",
+  effects = { "commit_candidate", "restore_mapping", "reset_state", "clear_extmark" },
+  status = "ok", refs = { "main.lua:129-139" }, observed = { "O-c-disable-select" },
+})
+for _, from in ipairs({ "C_REPLACE_DIRECT", "C_REPLACE_ROMAJI", "C_REPLACE_POINT", "C_REPLACE_SELECT" }) do
+  local commit = from == "C_REPLACE_SELECT" and "commit_candidate"
+    or from ~= "C_REPLACE_DIRECT" and "commit_reading"
+    or nil
+  add({
+    id = "t." .. from .. ".disable",
+    from = from, event = "disable", to = "C_REPLACE_OFF",
+    effects = commit and { commit, "restore_mapping", "reset_state", "clear_extmark" }
+      or { "restore_mapping", "reset_state", "clear_extmark" },
+    status = "unknown", refs = { "main.lua:129-139" },
+    notes = "cr のまま skk だけ無効になる。",
+  })
+end
+
+-- cmdline を抜ける（<Esc> / <CR> / <C-c>）
+local function cmdline_leave(from, event, effects, status, observed, notes)
+  add({
+    id = "t." .. from .. "." .. event,
+    from = from, event = event, to = "N_OFF",
+    effects = effects, status = status,
+    refs = { "cleanup.lua:254-266", "events.md" },
+    observed = observed and { observed } or {},
+    notes = notes,
+  })
+end
+cmdline_leave("C_OFF", "esc", { "pass_key" }, "ok", "O-c-esc-off")
+cmdline_leave("C_OFF", "cr", { "pass_key" }, "unknown")
+cmdline_leave("C_OFF", "ctrl_c", { "pass_key" }, "unknown")
+cmdline_leave("C_DIRECT", "esc",
+  { "reset_state", "restore_mapping", "clean_cmdline", "clear_extmark" }, "ok", "O-c-esc")
+cmdline_leave("C_DIRECT", "cr",
+  { "reset_state", "restore_mapping", "clean_cmdline", "clear_extmark" }, "ok", "O-c-cr-direct",
+  "空の cmdline を <CR> で実行すると normal に戻る。")
+cmdline_leave("C_DIRECT", "ctrl_c",
+  { "cancel", "clean_cmdline", "reset_state", "restore_mapping", "clear_extmark" }, "unknown")
+for _, from in ipairs({ "C_ROMAJI", "C_POINT", "C_SELECT" }) do
+  local commit = from == "C_SELECT" and "commit_candidate"
+    or from == "C_DIRECT" and nil
+    or "commit_reading"
+  cmdline_leave(from, "esc",
+    { commit, "reset_state", "restore_mapping", "clean_cmdline", "clear_extmark" }, "ok",
+    from == "C_POINT" and "O-c-esc" or from == "C_SELECT" and "O-c-esc-select" or nil,
+    "<Esc> は読みを確定して cmdline の履歴に残し、skk を無効にする。")
+  cmdline_leave(from, "cr",
+    { commit, "reset_state", "restore_mapping", "clean_cmdline", "clear_extmark" }, "ok",
+    from == "C_POINT" and "O-c-cr" or from == "C_SELECT" and "O-c-cr-select" or nil,
+    "<CR> は読みを確定してコマンドを実行する。")
+  cmdline_leave(from, "ctrl_c",
+    { "cancel", "clean_cmdline", "reset_state", "restore_mapping", "clear_extmark" }, "unknown",
+    from == "C_POINT" and "O-c-ctrlc" or nil,
+    "<C-c> は読みを確定せずに cmdline を取り消す（履歴にも残らない）。")
+end
+add({
+  id = "t.C_IDLE.esc",
+  from = "C_IDLE", event = "esc", to = "V_IDLE",
+  effects = { "keep", "clean_cmdline" }, status = "ok", refs = { "#28", "map.lua:113-139" },
+  observed = { "O-c-v-idle-esc" },
+  notes = "visual から入った cmdline を <Esc> で抜けると visual に戻る。skk は有効のまま。",
+})
+add({
+  id = "t.C_IDLE_PRE.esc",
+  from = "C_IDLE_PRE", event = "esc", to = "V_PRE_POINT",
+  effects = { "keep", "clean_cmdline" }, status = "ok", refs = { "#28", "render.lua" },
+  observed = { "O-c-v-pre-esc" },
+  notes = "visual の ▽ から入った cmdline を <Esc> で抜けると、pre-edit が残った visual に戻る。",
+})
+add({
+  id = "t.C_IDLE.cr",
+  from = "C_IDLE", event = "cr", to = "N_OFF",
+  effects = { "reset_state", "restore_mapping", "clean_cmdline", "clear_extmark" },
+  status = "unknown", refs = { "cleanup.lua:254-266" },
+})
+add({
+  id = "t.C_IDLE.ctrl_c",
+  from = "C_IDLE", event = "ctrl_c", to = "N_OFF",
+  effects = { "cancel", "clean_cmdline", "reset_state", "restore_mapping", "clear_extmark" },
+  status = "unknown", refs = { "cleanup.lua:254-266" },
+})
+add({
+  id = "t.C_IDLE_PRE.cr",
+  from = "C_IDLE_PRE", event = "cr", to = "N_OFF",
+  effects = { "commit_reading", "reset_state", "restore_mapping", "clean_cmdline", "clear_extmark" },
+  status = "unknown", refs = { "cleanup.lua:254-266" },
+})
+add({
+  id = "t.C_IDLE_PRE.ctrl_c",
+  from = "C_IDLE_PRE", event = "ctrl_c", to = "N_OFF",
+  effects = { "cancel", "clean_cmdline", "reset_state", "restore_mapping", "clear_extmark" },
+  status = "unknown", refs = { "cleanup.lua:254-266" },
+})
+-- cr（置換）から抜ける
+cmdline_leave("C_REPLACE_OFF", "esc", { "pass_key" }, "ok", "O-c-cr-off-esc")
+cmdline_leave("C_REPLACE_OFF", "cr", { "pass_key" }, "unknown")
+cmdline_leave("C_REPLACE_OFF", "ctrl_c", { "pass_key" }, "unknown")
+cmdline_leave("C_REPLACE_DIRECT", "esc",
+  { "reset_state", "restore_mapping", "clean_cmdline", "clear_extmark" }, "ok", "O-c-cr-direct-esc")
+cmdline_leave("C_REPLACE_DIRECT", "cr",
+  { "reset_state", "restore_mapping", "clean_cmdline", "clear_extmark" }, "unknown")
+cmdline_leave("C_REPLACE_DIRECT", "ctrl_c",
+  { "cancel", "clean_cmdline", "reset_state", "restore_mapping", "clear_extmark" }, "unknown")
+for _, from in ipairs({ "C_REPLACE_ROMAJI", "C_REPLACE_POINT", "C_REPLACE_SELECT" }) do
+  local commit = from == "C_REPLACE_SELECT" and "commit_candidate" or "commit_reading"
+  cmdline_leave(from, "esc",
+    { commit, "reset_state", "restore_mapping", "clean_cmdline", "clear_extmark" }, "ok",
+    from == "C_REPLACE_POINT" and "O-c-cr-esc" or nil,
+    "cr のまま <Esc>。読みを確定して cmdline を抜け、skk を無効にする。")
+  cmdline_leave(from, "cr",
+    { commit, "reset_state", "restore_mapping", "clean_cmdline", "clear_extmark" }, "ok",
+    from == "C_REPLACE_POINT" and "O-c-cr-cr" or nil,
+    "cr の <CR> は読みを確定してコマンドを実行する。")
+  cmdline_leave(from, "ctrl_c",
+    { "cancel", "clean_cmdline", "reset_state", "restore_mapping", "clear_extmark" }, "ok",
+    from == "C_REPLACE_POINT" and "O-c-cr-ctrlc" or nil,
+    "cr の <C-c> は読みを確定せずに cmdline を取り消す。")
+end
+
+-- <C-g>（cancel）
+add({
+  id = "t.C_OFF.cg",
+  from = "C_OFF", event = "cg", to = "C_OFF",
+  effects = { "pass_key" }, status = "unknown", refs = { "keys.md §1" },
+})
+add({
+  id = "t.C_IDLE.cg",
+  from = "C_IDLE", event = "cg", to = "C_IDLE",
+  effects = { "pass_key" }, status = "unknown", refs = { "keys.md §1" },
+})
+add({
+  id = "t.C_IDLE_PRE.cg",
+  from = "C_IDLE_PRE", event = "cg", to = "C_IDLE_PRE",
+  effects = { "pass_key" }, status = "unknown", refs = { "keys.md §1" },
+})
+add({
+  id = "t.C_DIRECT.cg",
+  from = "C_DIRECT", event = "cg", to = "N_OFF",
+  effects = { "cancel", "clean_cmdline", "reset_state", "restore_mapping", "clear_extmark" },
+  status = "ok", refs = { "function/common.lua:71-86", "keys.md §1" }, observed = { "O-c-cg-direct" },
+  notes = "direct の <C-g> は 0x03 を流して cmdline を取り消す（common.cancel）。",
+})
+for _, from in ipairs({ "C_ROMAJI", "C_POINT", "C_SELECT" }) do
+  add({
+    id = "t." .. from .. ".cg",
+    from = from, event = "cg", to = "C_DIRECT",
+    effects = { "cancel", "reset_state", "clean_cmdline" },
+    status = "ok", refs = { "function/common.lua:71-86", "keys.md §1" },
+    observed = from == "C_POINT" and { "O-c-cg" } or from == "C_SELECT" and { "O-c-cg-select" } or {},
+    notes = "cmdline は開いたまま、skk の状態だけを direct に戻す。",
+  })
+end
+add({
+  id = "t.C_REPLACE_OFF.cg",
+  from = "C_REPLACE_OFF", event = "cg", to = "C_REPLACE_OFF",
+  effects = { "pass_key" }, status = "ok", refs = { "keys.md §1" }, observed = { "O-c-cr-off-cg" },
+  notes = "無効なので制御文字（0x07）が cmdline に入る。",
+})
+add({
+  id = "t.C_REPLACE_DIRECT.cg",
+  from = "C_REPLACE_DIRECT", event = "cg", to = "N_OFF",
+  effects = { "cancel", "clean_cmdline", "reset_state", "restore_mapping", "clear_extmark" },
+  status = "ok", refs = { "function/common.lua:71-86" }, observed = { "O-c-cr-direct-cg" },
+})
+for _, from in ipairs({ "C_REPLACE_ROMAJI", "C_REPLACE_POINT", "C_REPLACE_SELECT" }) do
+  add({
+    id = "t." .. from .. ".cg",
+    from = from, event = "cg", to = "C_REPLACE_DIRECT",
+    effects = { "cancel", "reset_state", "clean_cmdline" },
+    status = "ok", refs = { "function/common.lua:71-86" },
+    observed = from == "C_REPLACE_POINT" and { "O-c-cr-cg" } or {},
+  })
+end
+
+-- <Insert>（c / cr の切り替え）
+add({
+  id = "t.C_OFF.cmdline_insert",
+  from = "C_OFF", event = "cmdline_insert", to = "C_REPLACE_OFF",
+  effects = { "pass_key" }, status = "ok", refs = { "keys.md §1" }, observed = { "O-c-cr-off-insert" },
+})
+add({
+  id = "t.C_DIRECT.cmdline_insert",
+  from = "C_DIRECT", event = "cmdline_insert", to = "C_REPLACE_DIRECT",
+  effects = { "pass_key" }, status = "ok", refs = { "keys.md §1" }, observed = { "O-c-cr-insert-direct" },
+})
+add({
+  id = "t.C_ROMAJI.cmdline_insert",
+  from = "C_ROMAJI", event = "cmdline_insert", to = "C_REPLACE_ROMAJI",
+  effects = { "keep" }, status = "unknown", refs = { "keys.md §1" },
+})
+add({
+  id = "t.C_POINT.cmdline_insert",
+  from = "C_POINT", event = "cmdline_insert", to = "C_REPLACE_POINT",
+  effects = { "keep" }, status = "ok", refs = { "keys.md §1" }, observed = { "O-c-cr-insert" },
+  notes = "cr に移っても skk の状態と pre-edit はそのまま。",
+})
+add({
+  id = "t.C_SELECT.cmdline_insert",
+  from = "C_SELECT", event = "cmdline_insert", to = "C_REPLACE_SELECT",
+  effects = { "keep" }, status = "ok", refs = { "keys.md §1" }, observed = { "O-c-cr-insert-select" },
+})
+add({
+  id = "t.C_REPLACE_OFF.cmdline_insert",
+  from = "C_REPLACE_OFF", event = "cmdline_insert", to = "C_OFF",
+  effects = { "pass_key" }, status = "ok", refs = { "keys.md §1" }, observed = { "O-c-cr-off-insert-back" },
+})
+add({
+  id = "t.C_REPLACE_DIRECT.cmdline_insert",
+  from = "C_REPLACE_DIRECT", event = "cmdline_insert", to = "C_DIRECT",
+  effects = { "keep" }, status = "unknown", refs = { "keys.md §1" },
+})
+add({
+  id = "t.C_REPLACE_ROMAJI.cmdline_insert",
+  from = "C_REPLACE_ROMAJI", event = "cmdline_insert", to = "C_ROMAJI",
+  effects = { "keep" }, status = "unknown", refs = { "keys.md §1" },
+})
+add({
+  id = "t.C_REPLACE_POINT.cmdline_insert",
+  from = "C_REPLACE_POINT", event = "cmdline_insert", to = "C_POINT",
+  effects = { "keep" }, status = "ok", refs = { "keys.md §1" }, observed = { "O-c-cr-insert-back" },
+})
+add({
+  id = "t.C_REPLACE_SELECT.cmdline_insert",
+  from = "C_REPLACE_SELECT", event = "cmdline_insert", to = "C_SELECT",
+  effects = { "keep" }, status = "unknown", refs = { "keys.md §1" },
+})
+
+-- <C-f>（command-line window）。cmdwin を開くときにも CmdlineLeave が来る
+add({
+  id = "t.C_OFF.cmdline_window",
+  from = "C_OFF", event = "cmdline_window", to = "N_OFF",
+  effects = { "pass_key" }, status = "ok", refs = { "cleanup.lua:254-266" }, observed = { "O-c-window-off" },
+})
+add({
+  id = "t.C_IDLE.cmdline_window",
+  from = "C_IDLE", event = "cmdline_window", to = "N_OFF",
+  effects = { "reset_state", "restore_mapping" }, status = "unknown", refs = { "cleanup.lua:254-266" },
+})
+add({
+  id = "t.C_IDLE_PRE.cmdline_window",
+  from = "C_IDLE_PRE", event = "cmdline_window", to = "N_OFF",
+  effects = { "drop", "reset_state", "restore_mapping" }, status = "gap", refs = { "#205" },
+})
+cmdline_known[#cmdline_known + 1] = {
+  property = "P1",
+  transition = "t.C_IDLE_PRE.cmdline_window",
+  refs = { "#205" },
+}
+add({
+  id = "t.C_DIRECT.cmdline_window",
+  from = "C_DIRECT", event = "cmdline_window", to = "N_OFF",
+  effects = { "reset_state", "restore_mapping", "clean_cmdline", "clear_extmark" },
+  status = "unknown", refs = { "cleanup.lua:254-266" },
+})
+for _, from in ipairs({ "C_ROMAJI", "C_POINT", "C_SELECT" }) do
+  add({
+    id = "t." .. from .. ".cmdline_window",
+    from = from, event = "cmdline_window", to = "N_OFF",
+    effects = { "drop", "clean_cmdline", "reset_state", "restore_mapping", "clear_extmark" },
+    status = "gap", refs = { "cleanup.lua:254-266", "#205" },
+    observed = from == "C_POINT" and { "O-c-window" } or {},
+    notes = "cmdwin を開くときの CmdlineLeave が cmdline から marker と読みを取り除くため、"
+      .. "cmdwin には pre-edit が引き継がれない（#205）。",
+  })
+  cmdline_known[#cmdline_known + 1] = {
+    property = "P1",
+    transition = "t." .. from .. ".cmdline_window",
+    refs = { "#205" },
+  }
+end
+add({
+  id = "t.C_REPLACE_OFF.cmdline_window",
+  from = "C_REPLACE_OFF", event = "cmdline_window", to = "N_OFF",
+  effects = { "pass_key" }, status = "unknown", refs = { "cleanup.lua:254-266" },
+})
+add({
+  id = "t.C_REPLACE_DIRECT.cmdline_window",
+  from = "C_REPLACE_DIRECT", event = "cmdline_window", to = "N_OFF",
+  effects = { "reset_state", "restore_mapping", "clean_cmdline", "clear_extmark" },
+  status = "unknown", refs = { "cleanup.lua:254-266" },
+})
+for _, from in ipairs({ "C_REPLACE_ROMAJI", "C_REPLACE_POINT", "C_REPLACE_SELECT" }) do
+  add({
+    id = "t." .. from .. ".cmdline_window",
+    from = from, event = "cmdline_window", to = "N_OFF",
+    effects = { "drop", "clean_cmdline", "reset_state", "restore_mapping", "clear_extmark" },
+    status = "gap", refs = { "cleanup.lua:254-266", "#205" },
+    observed = from == "C_REPLACE_POINT" and { "O-c-cr-window" } or {},
+  })
+  cmdline_known[#cmdline_known + 1] = {
+    property = "P1",
+    transition = "t." .. from .. ".cmdline_window",
+    refs = { "#205" },
+  }
+end
+
+-- WinLeave / BufLeave。cmdline は開いたまま skk だけ無効になる
+add({
+  id = "t.C_OFF.winleave",
+  from = "C_OFF", event = "winleave", to = "C_OFF",
+  effects = { "pass_key" }, status = "unknown", refs = { "cleanup.lua:269-281" },
+})
+add({
+  id = "t.C_IDLE.winleave",
+  from = "C_IDLE", event = "winleave", to = "C_OFF",
+  effects = { "reset_state", "restore_mapping" }, status = "unknown", refs = { "cleanup.lua:269-281" },
+})
+for _, from in ipairs({ "C_DIRECT", "C_ROMAJI", "C_POINT", "C_SELECT" }) do
+  add({
+    id = "t." .. from .. ".winleave",
+    from = from, event = "winleave", to = "C_OFF",
+    effects = { "cancel", "clean_cmdline", "reset_state", "restore_mapping", "clear_extmark" },
+    status = from == "C_DIRECT" and "unknown" or "ok",
+    refs = { "cleanup.lua:269-281", "#46" },
+    notes = "cmdline の pre-edit を cmdline から取り除き、skk を無効にする。cmdline は開いたまま。",
+  })
+end
+for _, from in ipairs({
+  "C_REPLACE_DIRECT", "C_REPLACE_ROMAJI", "C_REPLACE_POINT", "C_REPLACE_SELECT",
+}) do
+  add({
+    id = "t." .. from .. ".winleave",
+    from = from, event = "winleave", to = "C_REPLACE_OFF",
+    effects = { "cancel", "clean_cmdline", "reset_state", "restore_mapping", "clear_extmark" },
+    status = "unknown", refs = { "cleanup.lua:269-281", "#46" },
+  })
+end
+
+-- 文字（direct の確定・打ちかけ・▽ の継続）
+add({
+  id = "t.C_OFF.char",
+  from = "C_OFF", event = "char", to = "C_OFF",
+  effects = { "pass_key" }, status = "ok", refs = { "keys.md §1" }, observed = { "O-c-off-char" },
+})
+add({
+  id = "t.C_OFF.char_shift",
+  from = "C_OFF", event = "char_shift", to = "C_OFF",
+  effects = { "pass_key" }, status = "unknown", refs = { "keys.md §1" },
+})
+add({
+  id = "t.C_IDLE.char",
+  from = "C_IDLE", event = "char", to = "C_IDLE",
+  effects = { "pass_key" }, status = "unknown", refs = { "keys.md §1" },
+})
+add({
+  id = "t.C_IDLE.char_shift",
+  from = "C_IDLE", event = "char_shift", to = "C_IDLE",
+  effects = { "pass_key" }, status = "unknown", refs = { "keys.md §1" },
+})
+add({
+  id = "t.C_IDLE_PRE.char",
+  from = "C_IDLE_PRE", event = "char", to = "C_IDLE_PRE",
+  effects = { "pass_key" }, status = "unknown", refs = { "keys.md §1" },
+})
+add({
+  id = "t.C_DIRECT.char.keep",
+  from = "C_DIRECT", event = "char", to = "C_DIRECT",
+  effects = { "feed_key" }, status = "ok", refs = { "function/input.lua:85-120" }, observed = { "O-c-char" },
+  notes = "direct でかなテーブルの 1 打が確定し、cmdline に入る。",
+})
+add({
+  id = "t.C_DIRECT.char.romaji",
+  from = "C_DIRECT", event = "char", to = "C_ROMAJI",
+  effects = { "feed_key", "render" }, status = "ok", refs = { "function/input.lua:85-120" },
+  observed = { "O-c-romaji" },
+  notes = "ローマ字が続く（k など）。cmdline には打ちかけの文字が書かれる。",
+})
+add({
+  id = "t.C_ROMAJI.char.keep",
+  from = "C_ROMAJI", event = "char", to = "C_ROMAJI",
+  effects = { "feed_key", "render" }, status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.C_ROMAJI.char.point",
+  from = "C_ROMAJI", event = "char", to = "C_POINT",
+  effects = { "feed_key", "render" }, status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.C_ROMAJI.char.commit",
+  from = "C_ROMAJI", event = "char", to = "C_DIRECT",
+  effects = { "feed_key" }, status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.C_POINT.char",
+  from = "C_POINT", event = "char", to = "C_POINT",
+  effects = { "keep", "render" }, status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.C_SELECT.char.commit",
+  from = "C_SELECT", event = "char", to = "C_DIRECT",
+  effects = { "commit_candidate", "feed_key", "reset_state" },
+  status = "ok", refs = { "function/henkan.lua:137-162" }, observed = { "O-c-select-char" },
+  notes = "henkan の表に無いキーは、候補を確定してから input として処理し直す。",
+})
+add({
+  id = "t.C_SELECT.char.romaji",
+  from = "C_SELECT", event = "char", to = "C_ROMAJI",
+  effects = { "commit_candidate", "feed_key", "reset_state", "render" },
+  status = "unknown", refs = { "function/henkan.lua:137-162" },
+})
+add({
+  id = "t.C_DIRECT.char_shift",
+  from = "C_DIRECT", event = "char_shift", to = "C_ROMAJI",
+  effects = { "render" }, status = "ok", refs = { "function/input.lua:85-120" },
+  observed = { "O-c-romaji-shift" },
+  notes = "シフト付きの文字は ▽ を開始する（K → ▽k）。",
+})
+add({
+  id = "t.C_DIRECT.char_shift.point",
+  from = "C_DIRECT", event = "char_shift", to = "C_POINT",
+  effects = { "render" }, status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.C_ROMAJI.char_shift",
+  from = "C_ROMAJI", event = "char_shift", to = "C_POINT",
+  effects = { "keep", "render" }, status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.C_POINT.char_shift",
+  from = "C_POINT", event = "char_shift", to = "C_POINT",
+  effects = { "keep", "render" }, status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.C_SELECT.char_shift",
+  from = "C_SELECT", event = "char_shift", to = "C_DIRECT",
+  effects = { "commit_candidate", "feed_key", "reset_state" },
+  status = "unknown", refs = { "function/henkan.lua:137-162" },
+})
+
+-- cr の中の文字
+add({
+  id = "t.C_REPLACE_DIRECT.char.keep",
+  from = "C_REPLACE_DIRECT", event = "char", to = "C_REPLACE_DIRECT",
+  effects = { "feed_key" }, status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.C_REPLACE_DIRECT.char.romaji",
+  from = "C_REPLACE_DIRECT", event = "char", to = "C_REPLACE_ROMAJI",
+  effects = { "feed_key", "render" }, status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.C_REPLACE_ROMAJI.char.keep",
+  from = "C_REPLACE_ROMAJI", event = "char", to = "C_REPLACE_ROMAJI",
+  effects = { "feed_key", "render" }, status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.C_REPLACE_ROMAJI.char.point",
+  from = "C_REPLACE_ROMAJI", event = "char", to = "C_REPLACE_POINT",
+  effects = { "feed_key", "render" }, status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.C_REPLACE_ROMAJI.char.commit",
+  from = "C_REPLACE_ROMAJI", event = "char", to = "C_REPLACE_DIRECT",
+  effects = { "feed_key" }, status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.C_REPLACE_POINT.char",
+  from = "C_REPLACE_POINT", event = "char", to = "C_REPLACE_POINT",
+  effects = { "keep", "render" }, status = "ok", refs = { "function/input.lua:85-120" },
+  observed = { "O-c-cr-char" },
+})
+add({
+  id = "t.C_REPLACE_SELECT.char.commit",
+  from = "C_REPLACE_SELECT", event = "char", to = "C_REPLACE_DIRECT",
+  effects = { "commit_candidate", "feed_key", "reset_state" },
+  status = "unknown", refs = { "function/henkan.lua:137-162" },
+})
+add({
+  id = "t.C_REPLACE_DIRECT.char_shift",
+  from = "C_REPLACE_DIRECT", event = "char_shift", to = "C_REPLACE_ROMAJI",
+  effects = { "render" }, status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.C_REPLACE_ROMAJI.char_shift",
+  from = "C_REPLACE_ROMAJI", event = "char_shift", to = "C_REPLACE_POINT",
+  effects = { "keep", "render" }, status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.C_REPLACE_POINT.char_shift",
+  from = "C_REPLACE_POINT", event = "char_shift", to = "C_REPLACE_POINT",
+  effects = { "keep", "render" }, status = "unknown", refs = { "function/input.lua:85-120" },
+})
+add({
+  id = "t.C_REPLACE_SELECT.char_shift",
+  from = "C_REPLACE_SELECT", event = "char_shift", to = "C_REPLACE_DIRECT",
+  effects = { "commit_candidate", "feed_key", "reset_state" },
+  status = "unknown", refs = { "function/henkan.lua:137-162" },
+})
+
+-- 関数が割り当てられている文字キー
+add({
+  id = "t.C_DIRECT.key_X",
+  from = "C_DIRECT", event = "key_X", to = "C_ROMAJI",
+  effects = { "render" }, status = "ok", refs = { "function/input.lua:85-120" }, observed = { "O-c-key-X" },
+})
+add({
+  id = "t.C_DIRECT.key_l",
+  from = "C_DIRECT", event = "key_l", to = "C_OFF",
+  effects = { "restore_mapping", "reset_state", "clear_extmark" },
+  status = "ok", refs = { "keymap.lua:37", "function/disable.lua" }, observed = { "O-c-key-l" },
+  notes = "cmdline の l で skk を無効にする。cmdline は開いたまま。",
+})
+add({
+  id = "t.C_DIRECT.key_q",
+  from = "C_DIRECT", event = "key_q", to = "C_DIRECT",
+  effects = { "render" }, status = "ok", refs = { "keymap.lua:38" }, observed = { "O-c-key-q" },
+})
+add({
+  id = "t.C_DIRECT.key_semicolon",
+  from = "C_DIRECT", event = "key_semicolon", to = "C_POINT",
+  effects = { "render" }, status = "ok", refs = { "keymap.lua:39" }, observed = { "O-c-key-semicolon" },
+  notes = "送り仮名の入力へ。読みが空でも ▽ が cmdline に書かれる。",
+})
+add({
+  id = "t.C_DIRECT.key_slash",
+  from = "C_DIRECT", event = "key_slash", to = "C_POINT",
+  effects = { "render" }, status = "ok", refs = { "keymap.lua:40" }, observed = { "O-c-key-slash" },
+  notes = "abbrev へ。読みが空でも ▽ が cmdline に書かれる。",
+})
+add({
+  id = "t.C_DIRECT.key_L",
+  from = "C_DIRECT", event = "key_L", to = "C_DIRECT",
+  effects = { "render" }, status = "ok", refs = { "keymap.lua:41" }, observed = { "O-c-key-L" },
+})
+add({
+  id = "t.C_DIRECT.key_cq",
+  from = "C_DIRECT", event = "key_cq", to = "C_DIRECT",
+  effects = { "render" }, status = "ok", refs = { "keymap.lua:33" }, observed = { "O-c-key-cq" },
+})
+add({
+  id = "t.C_DIRECT.key_gt",
+  from = "C_DIRECT", event = "key_gt", to = "C_DIRECT",
+  effects = { "feed_key" }, status = "ok", refs = { "keymap.lua:34" }, observed = { "O-c-key-gt" },
+})
+for _, from in ipairs({ "C_ROMAJI", "C_POINT" }) do
+  add({
+    id = "t." .. from .. ".key_X",
+    from = from, event = "key_X", to = from,
+    effects = { "keep", "render" }, status = "unknown", refs = { "function/input.lua:85-120" },
+  })
+  add({
+    id = "t." .. from .. ".key_q",
+    from = from, event = "key_q", to = from,
+    effects = { "keep", "render" }, status = "unknown", refs = { "keymap.lua:38" },
+  })
+  add({
+    id = "t." .. from .. ".key_semicolon",
+    from = from, event = "key_semicolon", to = from,
+    effects = { "keep", "render" }, status = "unknown", refs = { "keymap.lua:39" },
+  })
+  add({
+    id = "t." .. from .. ".key_L",
+    from = from, event = "key_L", to = from,
+    effects = { "keep", "render" }, status = "unknown", refs = { "keymap.lua:41" },
+  })
+  add({
+    id = "t." .. from .. ".key_cq",
+    from = from, event = "key_cq", to = from,
+    effects = { "keep", "render" }, status = "unknown", refs = { "keymap.lua:33" },
+  })
+  if from ~= "C_POINT" then
+    add({
+      id = "t." .. from .. ".key_gt",
+      from = from, event = "key_gt", to = from,
+      effects = { "keep", "render" }, status = "unknown", refs = { "keymap.lua:34" },
+    })
+  end
+end
+add({
+  id = "t.C_POINT.key_l",
+  from = "C_POINT", event = "key_l", to = "C_OFF",
+  effects = { "commit_reading", "restore_mapping", "reset_state", "clear_extmark" },
+  status = "unknown", refs = { "keymap.lua:37" },
+})
+add({
+  id = "t.C_POINT.key_gt",
+  from = "C_POINT", event = "key_gt", to = "C_SELECT",
+  effects = { "keep", "render" }, status = "unknown", refs = { "keymap.lua:53" },
+})
+add({
+  id = "t.C_SELECT.key_gt",
+  from = "C_SELECT", event = "key_gt", to = "C_SELECT",
+  effects = { "keep" }, status = "unknown", refs = { "keymap.lua:53" },
+})
+add({
+  id = "t.C_SELECT.key_X",
+  from = "C_SELECT", event = "key_X", to = "C_SELECT",
+  effects = { "keep", "render" }, status = "unknown", refs = { "keymap.lua:52" },
+})
+
+-- <BS>
+add({
+  id = "t.C_OFF.bs",
+  from = "C_OFF", event = "bs", to = "C_OFF",
+  effects = { "pass_key" }, status = "unknown", refs = { "keys.md §1" },
+})
+add({
+  id = "t.C_IDLE.bs",
+  from = "C_IDLE", event = "bs", to = "C_IDLE",
+  effects = { "pass_key" }, status = "unknown", refs = { "keys.md §1" },
+})
+add({
+  id = "t.C_DIRECT.bs",
+  from = "C_DIRECT", event = "bs", to = "C_DIRECT",
+  effects = { "feed_key" }, status = "ok", refs = { "function/input.lua:178-204" },
+  observed = { "O-c-direct-bs" },
+  notes = "cmdline に文字があるときは 1 文字消す。",
+})
+add({
+  id = "t.C_DIRECT.bs.empty",
+  from = "C_DIRECT", event = "bs", to = "N_OFF",
+  effects = { "feed_key", "reset_state", "restore_mapping", "clean_cmdline", "clear_extmark" },
+  status = "ok", refs = { "function/input.lua:178-204" },
+  observed = { "O-c-direct-bs-empty" },
+  notes = "空の cmdline で <BS> を押すと cmdline を抜ける。",
+})
+add({
+  id = "t.C_ROMAJI.bs",
+  from = "C_ROMAJI", event = "bs", to = "C_ROMAJI",
+  effects = { "keep", "render" }, status = "unknown", refs = { "function/input.lua:178-204" },
+})
+add({
+  id = "t.C_ROMAJI.bs.empty",
+  from = "C_ROMAJI", event = "bs", to = "C_DIRECT",
+  effects = { "cancel", "reset_state" }, status = "unknown", refs = { "function/input.lua:178-204" },
+})
+add({
+  id = "t.C_POINT.bs",
+  from = "C_POINT", event = "bs", to = "C_POINT",
+  effects = { "keep", "render" }, status = "ok", refs = { "function/input.lua:178-204" },
+  observed = { "O-c-bs" },
+})
+add({
+  id = "t.C_POINT.bs.empty",
+  from = "C_POINT", event = "bs", to = "C_DIRECT",
+  effects = { "cancel", "reset_state", "clear_extmark" },
+  status = "unknown", refs = { "function/input.lua:178-204" },
+})
+add({
+  id = "t.C_SELECT.bs",
+  from = "C_SELECT", event = "bs", to = "C_DIRECT",
+  effects = { "commit_candidate", "feed_key", "reset_state" },
+  status = "ok", refs = { "function/henkan.lua:137-162" }, observed = { "O-c-bs-select" },
+  notes = "候補を確定してから 1 文字消す。確定した文字も消えるので cmdline は空になる。",
+})
+add({
+  id = "t.C_REPLACE_DIRECT.bs",
+  from = "C_REPLACE_DIRECT", event = "bs", to = "C_REPLACE_DIRECT",
+  effects = { "feed_key" }, status = "unknown", refs = { "function/input.lua:178-204" },
+})
+add({
+  id = "t.C_REPLACE_ROMAJI.bs",
+  from = "C_REPLACE_ROMAJI", event = "bs", to = "C_REPLACE_ROMAJI",
+  effects = { "keep", "render" }, status = "unknown", refs = { "function/input.lua:178-204" },
+})
+add({
+  id = "t.C_REPLACE_POINT.bs",
+  from = "C_REPLACE_POINT", event = "bs", to = "C_REPLACE_POINT",
+  effects = { "keep", "render" }, status = "ok", refs = { "function/input.lua:178-204" },
+  observed = { "O-c-cr-bs" },
+})
+add({
+  id = "t.C_REPLACE_SELECT.bs",
+  from = "C_REPLACE_SELECT", event = "bs", to = "C_REPLACE_DIRECT",
+  effects = { "commit_candidate", "feed_key", "reset_state" },
+  status = "unknown", refs = { "function/henkan.lua:137-162" },
+})
+
+-- <Space> / x（▽ / ▼）
+add({
+  id = "t.C_OFF.space",
+  from = "C_OFF", event = "space", to = "C_OFF",
+  effects = { "pass_key" }, status = "unknown", refs = { "keys.md §1" },
+})
+add({
+  id = "t.C_IDLE.space",
+  from = "C_IDLE", event = "space", to = "C_IDLE",
+  effects = { "pass_key" }, status = "unknown", refs = { "keys.md §1" },
+})
+add({
+  id = "t.C_POINT.space.select",
+  from = "C_POINT", event = "space", to = "C_SELECT",
+  effects = { "keep", "render" }, status = "ok", refs = { "function/henkan.lua:21-56" },
+  observed = { "O-c-space" },
+})
+add({
+  id = "t.C_POINT.space.register",
+  from = "C_POINT", event = "space", to = "P_PROMPT_POINT",
+  effects = { "keep", "render" }, status = "unknown",
+  refs = { "function/henkan.lua:21-56", "host.lua:175-213", "#189" },
+  notes = "辞書に候補が無いとき。辞書登録のプロンプトの中は 07c（#189）。",
+})
+add({
+  id = "t.C_SELECT.space.next",
+  from = "C_SELECT", event = "space", to = "C_SELECT",
+  effects = { "keep", "render" }, status = "ok", refs = { "function/henkan.lua:90-113" },
+  observed = { "O-c-space-next" },
+})
+add({
+  id = "t.C_SELECT.space.register",
+  from = "C_SELECT", event = "space", to = "P_PROMPT_SELECT",
+  effects = { "keep", "render" }, status = "unknown", refs = { "function/henkan.lua:90-113", "#189" },
+})
+add({
+  id = "t.C_REPLACE_DIRECT.space",
+  from = "C_REPLACE_DIRECT", event = "space", to = "C_REPLACE_DIRECT",
+  effects = { "feed_key" }, status = "unknown", refs = { "keys.md §1" },
+})
+add({
+  id = "t.C_REPLACE_POINT.space",
+  from = "C_REPLACE_POINT", event = "space", to = "C_REPLACE_SELECT",
+  effects = { "keep", "render" }, status = "ok", refs = { "function/henkan.lua:21-56" },
+  observed = { "O-c-cr-space" },
+})
+add({
+  id = "t.C_REPLACE_SELECT.space",
+  from = "C_REPLACE_SELECT", event = "space", to = "C_REPLACE_SELECT",
+  effects = { "keep", "render" }, status = "unknown", refs = { "function/henkan.lua:90-113" },
+})
+add({
+  id = "t.C_SELECT.x.prev",
+  from = "C_SELECT", event = "key_x", to = "C_SELECT",
+  effects = { "keep", "render" }, status = "unknown", refs = { "function/henkan.lua:116-133" },
+})
+add({
+  id = "t.C_SELECT.x.back",
+  from = "C_SELECT", event = "key_x", to = "C_POINT",
+  effects = { "keep", "render" }, status = "ok", refs = { "function/henkan.lua:116-133" },
+  observed = { "O-c-select-x" },
+  notes = "最初の候補で x を押すと ▽ に戻る。",
+})
+add({
+  id = "t.C_REPLACE_SELECT.x.prev",
+  from = "C_REPLACE_SELECT", event = "key_x", to = "C_REPLACE_SELECT",
+  effects = { "keep", "render" }, status = "unknown", refs = { "function/henkan.lua:116-133" },
+})
+add({
+  id = "t.C_REPLACE_SELECT.x.back",
+  from = "C_REPLACE_SELECT", event = "key_x", to = "C_REPLACE_POINT",
+  effects = { "keep", "render" }, status = "unknown", refs = { "function/henkan.lua:116-133" },
+})
+
+-- <C-j>（確定。cmdline は direct のときだけ改行で抜ける）
+add({
+  id = "t.C_OFF.nl",
+  from = "C_OFF", event = "nl", to = "N_OFF",
+  effects = { "pass_key" }, status = "unknown", refs = { "function/common.lua:18-45" },
+})
+add({
+  id = "t.C_IDLE.nl",
+  from = "C_IDLE", event = "nl", to = "N_OFF",
+  effects = { "reset_state", "restore_mapping", "clean_cmdline", "clear_extmark" },
+  status = "unknown", refs = { "function/common.lua:18-45" },
+})
+add({
+  id = "t.C_DIRECT.nl",
+  from = "C_DIRECT", event = "nl", to = "N_OFF",
+  effects = { "reset_state", "restore_mapping", "clean_cmdline", "clear_extmark" },
+  status = "unknown", refs = { "function/common.lua:18-45" },
+  notes = "direct では改行が入り、cmdline を抜ける。",
+})
+for _, from in ipairs({ "C_ROMAJI", "C_POINT", "C_SELECT" }) do
+  local commit = from == "C_SELECT" and "commit_candidate" or "commit_reading"
+  add({
+    id = "t." .. from .. ".nl",
+    from = from, event = "nl", to = "C_DIRECT",
+    effects = { commit, "clean_cmdline" },
+    status = "ok", refs = { "function/common.lua:18-45" },
+    observed = from == "C_POINT" and { "O-c-nl" } or from == "C_SELECT" and { "O-c-nl-select" } or {},
+    notes = "読みを確定して cmdline に残す。cmdline は開いたまま。",
+  })
+end
+add({
+  id = "t.C_REPLACE_OFF.nl",
+  from = "C_REPLACE_OFF", event = "nl", to = "N_OFF",
+  effects = { "pass_key" }, status = "unknown", refs = { "function/common.lua:18-45" },
+})
+add({
+  id = "t.C_REPLACE_DIRECT.nl",
+  from = "C_REPLACE_DIRECT", event = "nl", to = "N_OFF",
+  effects = { "reset_state", "restore_mapping", "clean_cmdline", "clear_extmark" },
+  status = "unknown", refs = { "function/common.lua:18-45" },
+})
+for _, from in ipairs({ "C_REPLACE_ROMAJI", "C_REPLACE_POINT", "C_REPLACE_SELECT" }) do
+  local commit = from == "C_REPLACE_SELECT" and "commit_candidate" or "commit_reading"
+  add({
+    id = "t." .. from .. ".nl",
+    from = from, event = "nl", to = "C_REPLACE_DIRECT",
+    effects = { commit, "clean_cmdline" },
+    status = "ok", refs = { "function/common.lua:18-45" },
+    observed = from == "C_REPLACE_POINT" and { "O-c-cr-nl" } or {},
+  })
+end
+
+-- skk を通さない編集キー（CmdlineChanged の片付け）
+cmdline_edit_drop("C_ROMAJI", "C_DIRECT", nil)
+cmdline_edit_drop("C_POINT", "C_DIRECT", {
+  ctrl_u = "O-c-ctrl-u",
+  ctrl_w = "O-c-ctrl-w",
+  ctrl_k = "O-c-ctrl-k",
+  ctrl_r = "O-c-ctrl-r",
+  ctrl_v = "O-c-ctrl-v",
+  ctrl_t = "O-c-ctrl-t",
+  ctrl_at = "O-c-ctrl-at",
+  cmdline_ctrl_y = "O-c-ctrl-y",
+})
+cmdline_edit_drop("C_SELECT", "C_DIRECT", nil)
+cmdline_edit_drop("C_REPLACE_ROMAJI", "C_REPLACE_DIRECT", nil)
+cmdline_edit_drop("C_REPLACE_POINT", "C_REPLACE_DIRECT", nil)
+cmdline_edit_drop("C_REPLACE_SELECT", "C_REPLACE_DIRECT", nil)
+for _, from in ipairs({ "C_OFF", "C_DIRECT", "C_REPLACE_DIRECT", "C_REPLACE_OFF" }) do
+  for _, event in ipairs(cmdline_edit_events) do
+    add({
+      id = "t." .. from .. "." .. event,
+      from = from, event = event, to = from,
+      effects = { "pass_key" }, status = "unknown", refs = { "keys.md §6" },
+      notes = "pre-edit が無いので、cmdline の文字だけが変わる。",
+    })
+  end
+end
+local cmdline_keep_observed = {
+  ctrl_a = "O-c-ctrl-a",
+  cmdline_ctrl_e = "O-c-ctrl-e",
+  cmdline_ctrl_n = "O-c-ctrl-n",
+  tab = "O-c-tab",
+}
+for _, from in ipairs({ "C_ROMAJI", "C_POINT", "C_SELECT" }) do
+  for _, event in ipairs(cmdline_keep_events) do
+    add({
+      id = "t." .. from .. "." .. event,
+      from = from, event = event, to = from,
+      effects = { "pass_key" }, status = "ok", refs = { "keys.md §6" },
+      observed = from == "C_POINT" and cmdline_keep_observed[event]
+        and { cmdline_keep_observed[event] } or {},
+      notes = "cmdline の文字が変わらないので、pre-edit が残る。",
+    })
+  end
+end
+for _, from in ipairs({ "C_OFF", "C_DIRECT", "C_IDLE", "C_REPLACE_DIRECT", "C_REPLACE_OFF" }) do
+  for _, event in ipairs(cmdline_keep_events) do
+    add({
+      id = "t." .. from .. "." .. event,
+      from = from, event = event, to = from,
+      effects = { "pass_key" }, status = "unknown", refs = { "keys.md §6" },
+    })
+  end
+end
+-- <C-p> は一致する履歴があるときだけ cmdline を書き換える
+add({
+  id = "t.C_POINT.cmdline_ctrl_p.history",
+  from = "C_POINT", event = "cmdline_ctrl_p", to = "C_DIRECT",
+  effects = { "drop", "clean_cmdline", "reset_state", "clear_extmark" },
+  status = "gap", refs = { "keys.md §6", "#12" }, observed = { "O-c-ctrl-p" },
+  notes = "一致する cmdline の履歴があるとき。CmdlineChanged の片付けで読みが消える。",
+})
+cmdline_known[#cmdline_known + 1] = {
+  property = "P1",
+  transition = "t.C_POINT.cmdline_ctrl_p.history",
+  refs = { "#12" },
+}
+for _, from in ipairs({ "C_ROMAJI", "C_POINT", "C_SELECT" }) do
+  add({
+    id = "t." .. from .. ".cmdline_ctrl_p.keep",
+    from = from, event = "cmdline_ctrl_p", to = from,
+    effects = { "pass_key" }, status = "ok", refs = { "keys.md §6" },
+    observed = from == "C_POINT" and { "O-c-ctrl-p-nohist" } or {},
+    notes = "一致する履歴が無いとき。cmdline も pre-edit も変わらない。",
+  })
+end
+add({
+  id = "t.C_DIRECT.cmdline_ctrl_p",
+  from = "C_DIRECT", event = "cmdline_ctrl_p", to = "C_DIRECT",
+  effects = { "pass_key" }, status = "unknown", refs = { "keys.md §6" },
+})
+
+-- <C-r>= は内側の cmdline を抜けるときに記録を捨てるので、marker が cmdline に残る（#206）
+add({
+  id = "t.C_POINT.ctrl_r.eq",
+  from = "C_POINT", event = "ctrl_r", to = "C_DIRECT",
+  effects = { "drop", "clean_cmdline", "reset_state", "clear_extmark" },
+  status = "gap", refs = { "keys.md §6", "render/cmdline.lua:160-162", "#206" },
+  observed = { "O-c-ctrl-r-eq" },
+  notes = "<C-r>= の式の cmdline を抜けるとき CmdlineLeave が記録を捨てるため、"
+    .. "cmdline の文字列から marker と読みを取り除けない（#206）。",
+})
+cmdline_known[#cmdline_known + 1] = {
+  property = "P1",
+  transition = "t.C_POINT.ctrl_r.eq",
+  refs = { "#206" },
+}
+
+-- 未マップの特殊キー（guard）。読みを確定してからキーを流す
+add({
+  id = "t.C_OFF.guard_special",
+  from = "C_OFF", event = "guard_special", to = "C_OFF",
+  effects = { "pass_key" }, status = "unknown", refs = { "guard.lua:50-85" },
+})
+add({
+  id = "t.C_IDLE.guard_special",
+  from = "C_IDLE", event = "guard_special", to = "C_IDLE",
+  effects = { "pass_key" }, status = "unknown", refs = { "guard.lua:50-85" },
+})
+add({
+  id = "t.C_DIRECT.guard_special",
+  from = "C_DIRECT", event = "guard_special", to = "C_DIRECT",
+  effects = { "feed_key" }, status = "ok", refs = { "guard.lua:50-85" }, observed = { "O-c-guard" },
+  notes = "<S-Tab> は cmdline に ~ を入れる。",
+})
+for _, from in ipairs({ "C_ROMAJI", "C_POINT", "C_SELECT" }) do
+  local commit = from == "C_SELECT" and "commit_candidate" or "commit_reading"
+  add({
+    id = "t." .. from .. ".guard_special",
+    from = from, event = "guard_special", to = "C_DIRECT",
+    effects = { commit, "feed_key", "clean_cmdline", "reset_state" },
+    status = "ok", refs = { "guard.lua:50-85", "#56" },
+    observed = from == "C_POINT" and { "O-c-right" } or from == "C_SELECT" and { "O-c-select-right" } or {},
+    notes = "pre-edit を確定してから、キーを cmdline に流す。",
+  })
+end
+add({
+  id = "t.C_REPLACE_DIRECT.guard_special",
+  from = "C_REPLACE_DIRECT", event = "guard_special", to = "C_REPLACE_DIRECT",
+  effects = { "feed_key" }, status = "unknown", refs = { "guard.lua:50-85" },
+})
+for _, from in ipairs({ "C_REPLACE_ROMAJI", "C_REPLACE_POINT", "C_REPLACE_SELECT" }) do
+  local commit = from == "C_REPLACE_SELECT" and "commit_candidate" or "commit_reading"
+  add({
+    id = "t." .. from .. ".guard_special",
+    from = from, event = "guard_special", to = "C_REPLACE_DIRECT",
+    effects = { commit, "feed_key", "clean_cmdline", "reset_state" },
+    status = "ok", refs = { "guard.lua:50-85", "#56" },
+    observed = from == "C_REPLACE_POINT" and { "O-c-cr-right" } or {},
+    notes = "cr のまま、pre-edit を確定してキーを流す。",
+  })
+end
+
 -- 観測の記録（子の nvim、一時ディレクトリの辞書）
 --
 -- 04 の観測。1 つのキーを 1 回の入力として流し、落ち着いてから
 -- 状態クラス（semantics/explore/observe.lua の classify と同じ見方）を読んだ。
 -- start は N_OFF。prefix に <Plug>(skkeleton-enable) を含むものは、そこから数える。
+--
+-- cmdline（#187）の観測は 07a で足した。cmdline の pre-edit は本物の文字として
+-- cmdline に書かれる。<C-r> や <C-k> は途中で入力待ちになるので、まとめて 1 回で流した。
+local cmdline_prefix = { ":", "<Plug>(skkeleton-enable)" }
+local cmdline_off = { ":", "<Plug>(skkeleton-enable)", "<Plug>(skkeleton-disable)" }
+local cmdline_kan = { ":", "<Plug>(skkeleton-enable)", "K", "a", "n" }
+local cmdline_select = { ":", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>" }
+local cmdline_replace = { ":", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Insert>" }
+local cmdline_replace_direct = { ":", "<Plug>(skkeleton-enable)", "<Insert>" }
+local cmdline_visual = { "i", "<Plug>(skkeleton-enable)", "<C-o>v" }
+local cmdline_visual_pre = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-o>v" }
+local function cmd_keys(prefix, ...)
+  local out = {}
+  for _, k in ipairs(prefix) do
+    out[#out + 1] = k
+  end
+  for _, k in ipairs({ ... }) do
+    out[#out + 1] = k
+  end
+  return out
+end
+
 M.observations = {
+  -- cmdline（c / cr）。#187（07a）
+  { id = "O-c-enter", keys = { ":" }, expect = { "C_DIRECT" },
+    note = "normal で `:`。cmdline には skk のマッピングがまだ無い。" },
+  { id = "O-c-enable", keys = cmdline_prefix, expect = { "C_DIRECT" },
+    note = "cmdline で有効化する。c のマッピングが 102 個置かれる。" },
+  { id = "O-c-char", keys = cmd_keys(cmdline_prefix, "a"), expect = { "C_DIRECT" },
+    note = "direct で a → あ が cmdline に入る。" },
+  { id = "O-c-romaji", keys = cmd_keys(cmdline_prefix, "k"), expect = { "C_POINT" },
+    note = "k → cmdline に打ちかけの k が書かれる（preedit=\"k\"）。" },
+  { id = "O-c-romaji-shift", keys = cmd_keys(cmdline_prefix, "K"), expect = { "C_POINT" },
+    note = "K → cmdline に ▽k が書かれる。" },
+  { id = "O-c-key-X", keys = cmd_keys(cmdline_prefix, "X"), expect = { "C_POINT" },
+    note = "input の X はシフト付きの文字として ▽ を開始する。" },
+  { id = "O-c-key-l", keys = cmd_keys(cmdline_prefix, "l"), expect = { "C_DIRECT" },
+    note = "既定のかなテーブルの l は disable。cmdline は開いたまま。" },
+  { id = "O-c-key-q", keys = cmd_keys(cmdline_prefix, "q"), expect = { "C_DIRECT" },
+    note = "q はカタカナ。状態クラスは変わらない。" },
+  { id = "O-c-key-semicolon", keys = cmd_keys(cmdline_prefix, ";"), expect = { "C_POINT" },
+    note = "読みが空でも ▽ が cmdline に書かれる。" },
+  { id = "O-c-key-slash", keys = cmd_keys(cmdline_prefix, "/"), expect = { "C_POINT" },
+    note = "abbrev へ。読みが空でも ▽ が cmdline に書かれる。" },
+  { id = "O-c-key-L", keys = cmd_keys(cmdline_prefix, "L"), expect = { "C_DIRECT" } },
+  { id = "O-c-key-cq", keys = cmd_keys(cmdline_prefix, "<C-q>"), expect = { "C_DIRECT" } },
+  { id = "O-c-key-gt", keys = cmd_keys(cmdline_prefix, ">"), expect = { "C_DIRECT" } },
+  { id = "O-c-direct-bs", keys = cmd_keys(cmdline_prefix, "a", "<BS>"), expect = { "C_DIRECT" },
+    note = "cmdline に文字があるときの <BS> は 1 文字消す。" },
+  { id = "O-c-direct-bs-empty", keys = cmd_keys(cmdline_prefix, "<BS>"), expect = { "N_OFF" },
+    note = "空の cmdline で <BS> を押すと cmdline を抜ける。" },
+  { id = "O-c-bs", keys = cmd_keys(cmdline_kan, "<BS>"), expect = { "C_POINT" },
+    note = "読みの最後の 1 文字を削る（▽かn → ▽か）。" },
+  { id = "O-c-bs-select", keys = cmd_keys(cmdline_select, "<BS>"), expect = { "C_DIRECT" },
+    note = "候補を確定してから 1 文字消すので、cmdline は空になる。" },
+  { id = "O-c-select-char", keys = cmd_keys(cmdline_select, "a"), expect = { "C_DIRECT" },
+    note = "▼ で a。候補 缶 を確定してから あ を入れる。" },
+  { id = "O-c-select-x", keys = cmd_keys(cmdline_select, "x"), expect = { "C_POINT" },
+    note = "最初の候補で x を押すと ▽ に戻る。" },
+  { id = "O-c-space", keys = cmd_keys(cmdline_kan, "<Space>"), expect = { "C_POINT" },
+    note = "▽ から ▼ になる。観測のクラスは C_POINT のまま。" },
+  { id = "O-c-space-next", keys = cmd_keys(cmdline_select, "<Space>"), expect = { "C_POINT" },
+    note = "候補が次へ進む。" },
+  { id = "O-c-nl", keys = cmd_keys(cmdline_kan, "<C-j>"), expect = { "C_DIRECT" },
+    note = "読み かん を確定して cmdline に残す。" },
+  { id = "O-c-nl-select", keys = cmd_keys(cmdline_select, "<C-j>"), expect = { "C_DIRECT" },
+    note = "候補 缶 を確定して cmdline に残す。" },
+  { id = "O-c-cg", keys = cmd_keys(cmdline_kan, "<C-g>"), expect = { "C_DIRECT" },
+    note = "読みを取り消す。cmdline は開いたまま。" },
+  { id = "O-c-cg-select", keys = cmd_keys(cmdline_select, "<C-g>"), expect = { "C_DIRECT" } },
+  { id = "O-c-cg-direct", keys = cmd_keys(cmdline_prefix, "<C-g>"), expect = { "N_OFF" },
+    note = "direct の <C-g> は cmdline を取り消して抜ける。" },
+  { id = "O-c-ctrl-u", keys = cmd_keys(cmdline_kan, "<C-u>"), expect = { "C_DIRECT" },
+    note = "cmdline が空になる。読みは確定せずに消える。" },
+  { id = "O-c-ctrl-w", keys = cmd_keys(cmdline_kan, "<C-w>"), expect = { "C_DIRECT" } },
+  { id = "O-c-ctrl-k", keys = cmd_keys(cmdline_kan, "<C-k>a:"), expect = { "C_DIRECT" },
+    note = "ダイグラフ。cmdline は ä になる。" },
+  { id = "O-c-ctrl-r", keys = cmd_keys(cmdline_kan, "<C-r>a"), expect = { "C_DIRECT" },
+    note = "レジスタ a に XYZ を入れてから。cmdline は XYZ になる。" },
+  { id = "O-c-ctrl-r-eq", keys = cmd_keys(cmdline_kan, "<C-r>=1<CR>"), expect = { "C_DIRECT" },
+    note = "式の結果 1 が入る。cmdline には ▽かn1 が残る（#206）。" },
+  { id = "O-c-ctrl-v", keys = cmd_keys(cmdline_kan, "<C-v>065"), expect = { "C_DIRECT" },
+    note = "cmdline は A になる。" },
+  { id = "O-c-ctrl-t", keys = cmd_keys(cmdline_kan, "<C-t>"), expect = { "C_DIRECT" },
+    note = "cmdline に制御文字（0x14）が入る。" },
+  { id = "O-c-ctrl-at", keys = cmd_keys(cmdline_kan, "<C-@>"), expect = { "C_DIRECT" },
+    note = "cmdline は かん + 改行 になる。" },
+  { id = "O-c-ctrl-y", keys = cmd_keys(cmdline_kan, "<C-y>"), expect = { "C_DIRECT" },
+    note = "cmdline に制御文字（0x19）が入る。" },
+  { id = "O-c-ctrl-a", keys = cmd_keys(cmdline_kan, "<C-a>"), expect = { "C_POINT" },
+    note = "cmdline も pre-edit も変わらない。" },
+  { id = "O-c-ctrl-e", keys = cmd_keys(cmdline_kan, "<C-e>"), expect = { "C_POINT" } },
+  { id = "O-c-ctrl-n", keys = cmd_keys(cmdline_kan, "<C-n>"), expect = { "C_POINT" } },
+  { id = "O-c-tab", keys = cmd_keys(cmdline_kan, "<Tab>"), expect = { "C_POINT" },
+    note = "cmdline の <Tab> は何もしない。pre-edit が残る。" },
+  { id = "O-c-ctrl-p", keys = cmd_keys(cmdline_kan, "<C-p>"), expect = { "C_DIRECT" },
+    note = "一致する cmdline の履歴（かん）があるとき。読みは確定しない（#12）。" },
+  { id = "O-c-ctrl-p-nohist", keys = cmd_keys(cmdline_kan, "<C-p>"), expect = { "C_POINT" },
+    note = "一致する履歴が無いとき。cmdline も pre-edit も変わらない。" },
+  { id = "O-c-right", keys = cmd_keys(cmdline_kan, "<Right>"), expect = { "C_DIRECT" },
+    note = "guard が読みを確定してから <Right> を流す。cmdline は かん。" },
+  { id = "O-c-select-right", keys = cmd_keys(cmdline_select, "<Right>"), expect = { "C_DIRECT" },
+    note = "▼ でも候補を確定してからキーを流す（#115）。" },
+  { id = "O-c-guard", keys = cmd_keys(cmdline_prefix, "<S-Tab>"), expect = { "C_DIRECT" },
+    note = "pre-edit が無いときは、guard は確定せず <S-Tab> をそのまま流す（~ が入る）。" },
+  { id = "O-c-up", keys = cmd_keys(cmdline_kan, "<Up>"), expect = { "C_DIRECT" },
+    note = "guard が読みを確定してから履歴をたどる。" },
+  { id = "O-c-down", keys = cmd_keys(cmdline_kan, "<Down>"), expect = { "C_DIRECT" } },
+  { id = "O-c-esc", keys = cmd_keys(cmdline_kan, "<Esc>"), expect = { "N_OFF" },
+    note = "読みを確定して cmdline の履歴に残し、無効になる。" },
+  { id = "O-c-esc-select", keys = cmd_keys(cmdline_select, "<Esc>"), expect = { "N_OFF" } },
+  { id = "O-c-cr", keys = cmd_keys(cmdline_kan, "<CR>"), expect = { "N_OFF" },
+    note = "読みを確定してコマンドを実行する（かん はコマンドではないので E492）。" },
+  { id = "O-c-cr-select", keys = cmd_keys(cmdline_select, "<CR>"), expect = { "N_OFF" } },
+  { id = "O-c-ctrlc", keys = cmd_keys(cmdline_kan, "<C-c>"), expect = { "N_OFF" },
+    note = "読みを確定せずに cmdline を取り消す。履歴にも残らない。" },
+  { id = "O-c-esc-off", keys = cmd_keys(cmdline_off, "<Esc>"), expect = { "N_OFF" } },
+  { id = "O-c-disable", keys = cmd_keys(cmdline_prefix, "<Plug>(skkeleton-disable)"), expect = { "C_DIRECT" },
+    note = "cmdline は開いたまま、skk だけ無効になる。" },
+  { id = "O-c-disable-point", keys = cmd_keys(cmdline_kan, "<Plug>(skkeleton-disable)"), expect = { "C_DIRECT" },
+    note = "読み かん を確定して cmdline に残す。" },
+  { id = "O-c-disable-select", keys = cmd_keys(cmdline_select, "<Plug>(skkeleton-disable)"), expect = { "C_DIRECT" } },
+  { id = "O-c-off-char", keys = cmd_keys(cmdline_off, "a"), expect = { "C_DIRECT" },
+    note = "無効なので a がそのまま cmdline に入る。" },
+  { id = "O-c-cr-off-insert", keys = cmd_keys(cmdline_off, "<Insert>"), expect = { "C_REPLACE" } },
+  { id = "O-c-cr-off-insert-back", keys = cmd_keys(cmdline_off, "<Insert>", "<Insert>"), expect = { "C_DIRECT" } },
+  { id = "O-c-cr-off-esc", keys = cmd_keys(cmdline_off, "<Insert>", "<Esc>"), expect = { "N_OFF" } },
+  { id = "O-c-cr-off-cg", keys = cmd_keys(cmdline_off, "<Insert>", "<C-g>"), expect = { "C_REPLACE" },
+    note = "無効なので制御文字（0x07）が cmdline に入る。" },
+  { id = "O-c-window-off", keys = cmd_keys(cmdline_off, "<C-f>"), expect = { "N_OFF" },
+    note = "cmdwin が開く。読みは無い。" },
+  { id = "O-c-cr-insert-direct", keys = cmdline_replace_direct, expect = { "C_REPLACE" } },
+  { id = "O-c-cr-insert", keys = cmdline_replace, expect = { "C_REPLACE" },
+    note = "▽かn を抱えたまま cr になる。pre-edit はそのまま。" },
+  { id = "O-c-cr-insert-select", keys = cmd_keys(cmdline_select, "<Space>", "<Insert>"), expect = { "C_REPLACE" } },
+  { id = "O-c-cr-insert-back", keys = cmd_keys(cmdline_replace, "<Insert>"), expect = { "C_POINT" },
+    note = "cr から c に戻る。pre-edit はそのまま。" },
+  { id = "O-c-cr-esc", keys = cmd_keys(cmdline_replace, "<Esc>"), expect = { "N_OFF" } },
+  { id = "O-c-cr-cr", keys = cmd_keys(cmdline_replace, "<CR>"), expect = { "N_OFF" },
+    note = "cr の <CR> は読みを確定してコマンドを実行する。" },
+  { id = "O-c-cr-ctrlc", keys = cmd_keys(cmdline_replace, "<C-c>"), expect = { "N_OFF" } },
+  { id = "O-c-cr-cg", keys = cmd_keys(cmdline_replace, "<C-g>"), expect = { "C_REPLACE" },
+    note = "cr のまま direct に戻る。cmdline は空。" },
+  { id = "O-c-cr-direct-esc", keys = cmd_keys(cmdline_replace_direct, "<Esc>"), expect = { "N_OFF" } },
+  { id = "O-c-cr-direct-cg", keys = cmd_keys(cmdline_replace_direct, "<C-g>"), expect = { "N_OFF" } },
+  { id = "O-c-cr-right", keys = cmd_keys(cmdline_replace, "<Right>"), expect = { "C_REPLACE" },
+    note = "cr のまま読みを確定してキーを流す。cmdline は かん。" },
+  { id = "O-c-cr-window", keys = cmd_keys(cmdline_replace, "<C-f>"), expect = { "N_OFF" } },
+  { id = "O-c-window", keys = cmd_keys(cmdline_kan, "<C-f>"), expect = { "N_OFF" },
+    note = "cmdwin が開く。cmdline の ▽かn は cmdwin に引き継がれない（#205）。" },
+  { id = "O-c-cr-direct", keys = cmd_keys(cmdline_prefix, "<CR>"), expect = { "N_OFF" },
+    note = "空の cmdline を <CR> で実行すると normal に戻る。" },
+  { id = "O-c-cr-space", keys = cmd_keys(cmdline_replace, "<Space>"), expect = { "C_REPLACE" },
+    note = "cr のまま ▼缶 になる。" },
+  { id = "O-c-cr-bs", keys = cmd_keys(cmdline_replace, "<BS>"), expect = { "C_REPLACE" } },
+  { id = "O-c-cr-nl", keys = cmd_keys(cmdline_replace, "<C-j>"), expect = { "C_REPLACE" },
+    note = "cr のまま読みを確定する。cmdline は かん。" },
+  { id = "O-c-cr-char", keys = cmd_keys(cmdline_replace, "a"), expect = { "C_REPLACE" } },
+  { id = "O-c-v-idle-enter", keys = cmd_keys(cmdline_visual, "/"), expect = { "C_DIRECT" },
+    note = "visual から cmdline に入る。enabled は真のままだが、c のマッピングは無い。" },
+  { id = "O-c-v-idle-enable", keys = cmd_keys(cmdline_visual, "/", "<Plug>(skkeleton-enable)"), expect = { "C_DIRECT" } },
+  { id = "O-c-v-idle-esc", keys = cmd_keys(cmdline_visual, "/", "<Esc>"), expect = { "V_IDLE" },
+    note = "visual に戻る。skk は有効のまま（V_IDLE）。探索器の classify は、pre-edit の無い visual を"
+      .. " N_OFF にするので、ここではモデルの V_IDLE を期待する。" },
+  { id = "O-c-v-pre-enter", keys = cmd_keys(cmdline_visual_pre, "/"), expect = { "C_POINT" },
+    note = "visual の ▽ を抱えたまま cmdline に入る。pre-edit はバッファに残る。" },
+  { id = "O-c-v-pre-esc", keys = cmd_keys(cmdline_visual_pre, "/", "<Esc>"), expect = { "V_PRE" } },
+
   {
     id = "O-enable",
     keys = { "<Plug>(skkeleton-enable)" },
@@ -2326,6 +3767,34 @@ M.replays = {
     keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<Esc>" },
     expect = { "N_OFF" },
     note = "読みを確定して無効化する。",
+  },  {
+    id = "replay.cmdline-visual",
+    title = "v / で cmdline に入って有効化し、<Esc> で visual に戻る（#28）",
+    keys = { "v", "/", "<Plug>(skkeleton-enable)", "<Esc>" },
+    expect = { "N_OFF" },
+    note = "visual に戻って skk が無効になる。#28 の再現の cmdline の部分。"
+      .. "そのあとの c,a,K,a,n は insert（04）の範囲。",
+  },
+  {
+    id = "replay.cmdline-115",
+    title = "cmdline の ▼ で候補を出して <Right>（#115）",
+    keys = cmd_keys(cmdline_kan, "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Right>"),
+    expect = { "C_DIRECT" },
+    note = "候補を確定して cmdline に残す（管）。popup が残らないことは状態クラスでは見ない。",
+  },
+  {
+    id = "replay.cmdline-window",
+    title = "cmdline の ▽ で <C-f>（#54 の cmdline 版、#205）",
+    keys = cmd_keys(cmdline_kan, "<C-f>"),
+    expect = { "N_OFF" },
+    note = "cmdwin が開き、cmdline は閉じる。pre-edit が cmdwin に引き継がれない（#205）。",
+  },
+  {
+    id = "replay.cmdline-ctrl-r-eq",
+    title = "cmdline の ▽ で <C-r>=1<CR>（#206）",
+    keys = cmd_keys(cmdline_kan, "<C-r>=1<CR>"),
+    expect = { "C_DIRECT" },
+    note = "状態クラスは C_DIRECT になるが、cmdline の文字には ▽かn1 が残る（#206）。",
   },
 }
 
@@ -2431,7 +3900,7 @@ M.inventory = {
     "<LeftMouse>", "<RightMouse>", "<DragRight>", "<2-LeftMouse>", "<3-LeftMouse>",
     "<ScrollWheelUp>", "<ScrollWheelDown>",
     "<Plug>(skkeleton-enable)", "<Plug>(skkeleton-disable)", "<Plug>(skkeleton-toggle)",
-    "<Paste>", "<Insert>",
+    "<Paste>", "<Insert>", "<C-f>",
   },
   -- events.md の autocmd と API のうち、i / n / v / R に関わるもの
   events = {
@@ -2440,13 +3909,16 @@ M.inventory = {
       "ni_return_drop", "ctrl_o_v", "ctrl_o_R", "mouse_select", "insert_key",
     } },
     { id = "SafeState", covered_by = { "safestate" } },
-    { id = "CmdlineLeave", out_of_scope = "07a（#187）" },
+    { id = "CmdlineLeave", covered_by = { "esc", "cr", "ctrl_c", "cmdline_window", "cg" } },
     { id = "WinLeave", covered_by = { "winleave" } },
     { id = "BufLeave", covered_by = { "bufleave" } },
     { id = "TextChangedI", covered_by = { "stale" } },
     { id = "TextChangedP", covered_by = { "stale" } },
     { id = "CursorMovedI", covered_by = { "stale", "mouse_click" } },
-    { id = "CmdlineChanged", out_of_scope = "07a（#187）" },
+    { id = "CmdlineChanged", covered_by = {
+      "ctrl_u", "ctrl_w", "ctrl_k", "ctrl_r", "ctrl_v", "ctrl_t", "ctrl_at", "cmdline_ctrl_y",
+      "cmdline_ctrl_p",
+    } },
     { id = "CompleteDone", covered_by = { "stale" } },
     { id = "VimLeavePre", out_of_scope = "入力状態を変えない（events.md O14）" },
     { id = "User skkeleton-handled", out_of_scope = "表示だけ（07d #190、インジケータ）" },
@@ -2477,7 +3949,8 @@ M.properties = {
     why = "extmark の数と位置を状態クラスに持っていない（05 の探索器と 06 の比較で見る）。" },
   { id = "P3", title = "n / v / s / R では、状態とマッピングが元に戻っている", decided = true, kind = "return_to_normal" },
   { id = "P4", title = "cmdline / terminal を抜けたら、何も残っていない", decided = false,
-    why = "cmdline は 07a（#187）、terminal は 07b（#188）。" },
+    why = "terminal は 07b（#188）。cmdline は 07a（#187）で遷移にしたが、cmdline に残る文字列は"
+      .. "まだ性質にしていない（#206 の ▽ が残る型は M.known と issue で表している）。" },
   { id = "P5", title = "1 つのキーを二重に処理しない", decided = true, kind = "no_double_commit" },
   { id = "P6", title = "決定的に振る舞う（タイミングに左右されるものには印を付ける）", decided = false,
     why = "モデルの分岐はタイミングではなく、辞書・バッファ・設定という持っていない条件。"
@@ -2537,6 +4010,10 @@ M.known = {
   { property = "P1", transition = "t.V_PRE_POINT.winleave", refs = { "#169" } },
   { property = "P1", transition = "t.V_PRE_SELECT.winleave", refs = { "#169" } },
 }
+-- cmdline（#187）の P1 の既知の破れ。遷移の定義のそばで集めたものをここに足す
+for _, k in ipairs(cmdline_known) do
+  M.known[#M.known + 1] = k
+end
 
 -- 作者の判断（10 点）と、このモデルでの反映先（#204 の 2026-11-06 のコメント）
 M.decisions = {

@@ -32,6 +32,12 @@ N_OFF、N_WAIT、V_PRE、V_IDLE、I_OFF、I_DIRECT、I_POINT、I_SELECT、I_ESCA
 
 `V_PRE` は、`<C-o>v` で visual / select に入ったあと、pre-edit が描かれたまま残り続ける状態です。マウスのドラッグで `ModeChanged` の確定より前に一瞬残るもの（events.md の O18）は、状態ではなく遷移の途中（transient）として扱います。
 
+cmdline（07a / #187）の 3 つは、次の意味で使います。
+
+- `C_DIRECT` は、cmdline に pre-edit が無い状態です。skk が有効でない（`:` で入っただけ、disable した）ときも、c のマッピングが無い（visual から入った）ときも、観測はこのクラスになります。モデルの中では `C_OFF` / `C_IDLE` に分けています。
+- `C_POINT` は、cmdline に pre-edit を本物の文字として書いている状態です。ローマ字の打ちかけ（`k`）、▽、▼ を、人が読むクラスではまとめます。モデルの中では `C_ROMAJI` / `C_POINT` / `C_SELECT` に分けています。
+- `C_REPLACE` は、cmdline の置換モード（`cr`）です。`<Insert>` で入り、`<C-j>` で確定しても `cr` のまま、`<CR>` でコマンドを実行して抜けます。モデルの中では `<Insert>` の前の相（direct / romaji / point / select / 無効）で分けています。
+
 ## effects の語彙
 
 遷移の結果（効果）を書くときの動詞です。各タスクは、同じ語で同じ効果を表します。
