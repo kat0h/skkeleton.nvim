@@ -67,4 +67,6 @@ P6（決定的に振る舞う）は、同じ (状態, イベント) で結果が
 
 `check.lua` は P1/P3/P5/P10/P13 を `model_check.lua` と同じ規則で数え、P1 の違反遷移ごとに「その遷移に届くか」の LTL（`[] (last != N)`）を SPIN で調べる。SPIN が見つけた P1 の遷移は 36 件で、Lua の 36 件と一致した。知らない違反は無い。
 
-P1 の反例の遷移列は `counterexamples.md` に書いた。実機で再生したところ、`M.known` のうち一部は今の `model.lua` の遷移（drop）と実機の振る舞い（読みを残す）が違った。モデルの誤りとして `counterexamples.md` に残す。`model.lua` はこのタスクでは直さない（04 の持ち物）。
+P1 の反例の遷移列は `counterexamples.md` に書いた。実機で再生したところ、`M.known` のうち `<C-n>`（`I_POINT.completion_open`）は今の `model.lua` の遷移（drop + clear_extmark）と実機の振る舞い（pre-edit を残す）が違った。これはモデルの誤りとして `counterexamples.md` に残す。`model.lua` はこのタスクでは直さない（04 の持ち物）。
+
+`<C-w>` / `<C-u>` はバッファに消す文字があるかで結果が分かれるが、どちらも `model.lua` の遷移どおりだった（空バッファは `ctrl_w.keep` / `ctrl_u.keep`、文字があると drop）。`<C-a>` は入れる文字があると drop の遷移どおりで、入れる文字が無いときの keep の遷移がモデルに無い。この 3 つはモデルの誤りではない。
