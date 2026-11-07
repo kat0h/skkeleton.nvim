@@ -3,3 +3,5 @@
 /doc/tags
 nvim.log
 /.claude/worktrees/
+# 06 の観測の生成物（semantics/compare/probe.lua が作る）
+/semantics/compare/probe.jsonl
