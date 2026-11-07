@@ -482,6 +482,55 @@ local function check_transient_progress()
   return out
 end
 
+-- P14: terminal でジョブへ渡すキーは、読みを確定してから渡す（#121）
+--
+-- pass_key（skk が奪わずにジョブへ渡す）の効果がある遷移で、読みを捨てていて
+-- commit_reading / commit_candidate が無いものを違反とする。guard は確定してから
+-- キーを流し直すので、この形になる。
+local function check_terminal_ctrl_commit()
+  local out = {}
+  for _, t in ipairs(model.transitions) do
+    local from = model.states[t.from]
+    local to = model.states[t.to]
+    if from.vim_mode == "t" and READING[from.reading] then
+      local set = effect_set(t)
+      if set.pass_key and to.reading == "none" and not (set.commit_reading or set.commit_candidate) then
+        table.insert(out, {
+          transition = t.id,
+          detail = "terminal でジョブへ渡すのに、読みを確定していない",
+        })
+      end
+    end
+  end
+  return out
+end
+
+-- P4: terminal の t → nt → t で、読みと pre-edit が保たれる（#74）
+--
+-- t の pre-edit は端末の行に本物の文字として書くので、t → nt で読みを消すと
+-- 状態と端末の行が食い違う。nt を経ても読みが同じまま残り、戻ったときに続きから
+-- 打てることを見る。
+local function check_terminal_normal_keep()
+  local out = {}
+  for _, t in ipairs(model.transitions) do
+    local from = model.states[t.from]
+    local to = model.states[t.to]
+    if from.vim_mode == "t" and to.vim_mode == "nt" and from.reading ~= "none" and to.reading ~= from.reading then
+      table.insert(out, {
+        transition = t.id,
+        detail = ("t → nt で読み %s が %s になる"):format(from.reading, to.reading),
+      })
+    end
+    if from.vim_mode == "nt" and to.vim_mode == "t" and from.reading ~= "none" and to.reading ~= from.reading then
+      table.insert(out, {
+        transition = t.id,
+        detail = ("nt → t で読み %s が %s になる"):format(from.reading, to.reading),
+      })
+    end
+  end
+  return out
+end
+
 -- P8: 有効な状態から、必ず無効な状態へ戻れる（enable / disable の往復）
 local function check_recoverable(reachable)
   local out = {}
@@ -833,9 +882,11 @@ local function main(argv)
   local property_checks = {
     P1 = { title = "読みが黙って消えない", run = check_no_silent_loss },
     P3 = { title = "n / v / s / R では状態とマッピングが元に戻っている", run = check_return_to_normal },
+    P4 = { title = "terminal の t → nt → t で読みと pre-edit が保たれる", run = check_terminal_normal_keep },
     P5 = { title = "1 つのキーを二重に処理しない", run = check_double_commit },
     P10 = { title = "同じ読みを 2 度確定しない", run = check_double_commit },
     P13 = { title = "pending（途中の状態）が片付く", run = check_transient_progress },
+    P14 = { title = "terminal の Ctrl は確定してからジョブへ渡す", run = check_terminal_ctrl_commit },
     P8 = {
       title = "enable のあと disable すると元に戻る（戻れる）",
       run = function()
@@ -848,7 +899,7 @@ local function main(argv)
   if section("properties") then
     say("")
     say("== 性質 ==")
-    for _, id in ipairs({ "P1", "P3", "P5", "P10", "P13", "P8" }) do
+    for _, id in ipairs({ "P1", "P3", "P4", "P5", "P10", "P13", "P14", "P8" }) do
       local check = property_checks[id]
       local violations = check.run()
       local unknown, hits, stale = apply_known(id, violations)
