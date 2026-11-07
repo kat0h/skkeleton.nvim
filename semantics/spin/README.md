@@ -13,7 +13,7 @@
 
 ## 動かし方
 
-SPIN（6.5.3 で確認）が要る。Fedora の dnf には spin のパッケージが無かったので、ソースからビルドして入れた。
+SPIN（6.5.3 で確認）が要る。dnf には spin のパッケージが無かったので、ソースからビルドして入れた。
 
 ```sh
 git clone --depth 1 https://github.com/nimble-code/Spin.git /tmp/Spin
