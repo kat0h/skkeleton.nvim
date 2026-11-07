@@ -58,7 +58,7 @@ M.parent = 179
 M.scope = "insert / normal / visual / replace / cmdline / terminal"
   .. "（Vim のモード i / n / v・s / R / c・cr / t・nt）と、"
   .. "組み込み・blink.cmp の補完、貼り付け・マウス・ホイール・WinLeave / BufLeave・"
-  .. "skkeleton が奪わないキー（#191）、マクロ（q 記録・@ 実行）と `.`（#192）"
+  .. "skkeleton が奪わないキー（#191）、辞書登録のプロンプト（@、入れ子。#189）、マクロと `.`（#192）"
 M.sources = {
   "semantics/GLOSSARY.md",
   "semantics/inventory/keys.md（#181）",
@@ -70,6 +70,7 @@ M.sources = {
   "lua/skkeleton/completion/init.lua、completion/blink.lua（#190）",
   "semantics/explore/explore.lua の terminal プロファイル（#188 の観測）",
   "semantics/explore/observations/misc.jsonl（#191）",
+  "semantics/explore/register.lua、semantics/explore/observations/register.jsonl（#189）",
   "semantics/explore/repeat.lua、semantics/explore/observations/repeat.jsonl（#192）",
   "lua/skkeleton/render.lua の feed（#36 の修正）",
   "semantics/explore/observations/cmdline.jsonl（#187 の観測）",
@@ -443,32 +444,127 @@ M.states = {
     label = "replace（無効）",
     refs = { "#29", "#38", "#156" },
   },
+  -- 辞書登録のプロンプト（#189 / 07c）。人が読むクラスは P_PROMPT の 1 つで、
+  -- aspect に外側の読みの相（point / select）、depth に入れ子の深さ（1 / 2）を持つ（作者の判断 4）。
+  -- reading はプロンプトの中の読み。外側の読みは aspect に持つ（凍結している）。
   P_PROMPT_POINT = {
     class = "P_PROMPT",
     aspect = "point",
-    layer = "辞書登録の input() の中（cmdtype は @）。外側の ▽ は凍結して残る",
+    depth = 1,
+    layer = "辞書登録の input() の中（cmdtype は @）、プロンプトの中は直接入力。外側の ▽ は凍結",
     vim_mode = "c",
     enabled = true,
     phase = "prompt",
+    reading = "none",
+    preedit = "frozen",
+    label = "辞書登録プロンプト（▽ から・深さ 1）",
+    refs = { "host.lua:175-213", "#144", "#189" },
+    notes = "人が読むクラスは P_PROMPT（point）の 1 つで、相を aspect に持つ（作者の判断 4）。"
+      .. "外側の pre-edit は凍結した extmark として見えている（#144 の観測）。"
+      .. "プロンプトの中の読みは次の P_PROMPT_*_READING に分ける。",
+  },
+  P_PROMPT_POINT_READING = {
+    class = "P_PROMPT",
+    aspect = "point",
+    depth = 1,
+    layer = "辞書登録の input() の中（cmdtype は @）、プロンプトの中に ▽ / ▽* / ▼ がある",
+    vim_mode = "c",
+    enabled = true,
+    phase = "prompt:reading",
     reading = "point",
     preedit = "frozen",
-    label = "辞書登録プロンプト（▽ から）",
-    refs = { "host.lua:175-213", "#144" },
-    notes = "人が読むクラスは P_PROMPT（point）の 1 つで、相を aspect に持つ（作者の判断 4）。"
-      .. "プロンプトの中は #189（07c）。ここでは入口と出口の境界だけを書く。",
+    label = "辞書登録プロンプト（▽ から・中の読み）",
+    refs = { "host.lua:175-213", "function/henkan.lua", "#189" },
+    notes = "プロンプトの中の打ちかけ・▽・▼ はまとめた。どのキーで確定しても、"
+      .. "登録される語は欄の中の文字列で、状態クラスは変わらない。外側の ▽ は凍結したまま。",
   },
   P_PROMPT_SELECT = {
     class = "P_PROMPT",
     aspect = "select",
-    layer = "辞書登録の input() の中（cmdtype は @）。外側の ▼ は凍結して残る",
+    depth = 1,
+    layer = "辞書登録の input() の中（cmdtype は @）、プロンプトの中は直接入力。外側の ▼ は凍結",
     vim_mode = "c",
     enabled = true,
     phase = "prompt",
-    reading = "henkan",
+    reading = "none",
     preedit = "frozen",
-    label = "辞書登録プロンプト（▼ から）",
-    refs = { "host.lua:175-213", "#144" },
+    label = "辞書登録プロンプト（▼ から・深さ 1）",
+    refs = { "host.lua:175-213", "#144", "#189" },
     notes = "人が読むクラスは P_PROMPT（select）の 1 つで、相を aspect に持つ（作者の判断 4）。",
+  },
+  P_PROMPT_SELECT_READING = {
+    class = "P_PROMPT",
+    aspect = "select",
+    depth = 1,
+    layer = "辞書登録の input() の中（cmdtype は @）、プロンプトの中に ▽ / ▽* / ▼ がある",
+    vim_mode = "c",
+    enabled = true,
+    phase = "prompt:reading",
+    reading = "point",
+    preedit = "frozen",
+    label = "辞書登録プロンプト（▼ から・中の読み）",
+    refs = { "host.lua:175-213", "function/henkan.lua", "#189" },
+    notes = "プロンプトの中の読みを、外側の ▼ と分けて持つ。確定の行き先は同じで、"
+      .. "取り消すと凍結していた ▼ に戻る。",
+  },
+  P_PROMPT_POINT_NESTED = {
+    class = "P_PROMPT",
+    aspect = "point",
+    depth = 2,
+    layer = "辞書登録の入れ子（深さ 2）の中、中のプロンプトは直接入力。外側のプロンプトの ▽ は凍結",
+    vim_mode = "c",
+    enabled = true,
+    phase = "prompt",
+    reading = "none",
+    preedit = "frozen",
+    label = "辞書登録プロンプト（入れ子・▽ から・深さ 2）",
+    refs = { "host.lua:96-162", "#12", "#13", "#116", "#154", "#189" },
+    notes = "プロンプトの中で読みを入れて候補が無いと、register_word がもう一度 input() を呼び、"
+      .. "深さ 2 になる。取り消すと外側のプロンプト（深さ 1）の読みに戻り、確定すると"
+      .. "その語を外側のプロンプトの欄へ入れて深さ 1 に戻る。深さ 2 から insert へ直接は抜けない。",
+  },
+  P_PROMPT_POINT_NESTED_READING = {
+    class = "P_PROMPT",
+    aspect = "point",
+    depth = 2,
+    layer = "辞書登録の入れ子（深さ 2）の中に ▽ / ▼ がある",
+    vim_mode = "c",
+    enabled = true,
+    phase = "prompt:reading",
+    reading = "point",
+    preedit = "frozen",
+    label = "辞書登録プロンプト（入れ子・▽ から・中の読み）",
+    refs = { "host.lua:96-162", "#189" },
+    notes = "深さ 2 の中で打った読み。確定すると外側のプロンプトの欄へ入り、"
+      .. "取り消すと外側のプロンプトの読みに戻る。",
+  },
+  P_PROMPT_SELECT_NESTED = {
+    class = "P_PROMPT",
+    aspect = "select",
+    depth = 2,
+    layer = "辞書登録の入れ子（深さ 2）の中、中のプロンプトは直接入力。外側のプロンプトの ▼ は凍結",
+    vim_mode = "c",
+    enabled = true,
+    phase = "prompt",
+    reading = "none",
+    preedit = "frozen",
+    label = "辞書登録プロンプト（入れ子・▼ から・深さ 2）",
+    refs = { "host.lua:96-162", "#12", "#13", "#116", "#154", "#189" },
+    notes = "外側のプロンプトが ▼ のときの入れ子。取り消すと深さ 1 の ▼ に戻る。",
+  },
+  P_PROMPT_SELECT_NESTED_READING = {
+    class = "P_PROMPT",
+    aspect = "select",
+    depth = 2,
+    layer = "辞書登録の入れ子（深さ 2）の中に ▽ / ▼ がある",
+    vim_mode = "c",
+    enabled = true,
+    phase = "prompt:reading",
+    reading = "point",
+    preedit = "frozen",
+    label = "辞書登録プロンプト（入れ子・▼ から・中の読み）",
+    refs = { "host.lua:96-162", "#189" },
+    notes = "外側のプロンプトが ▼ のときの、深さ 2 の中の読み。",
   },
   -- cmdline（c / cr）。#187（07a）。人が読むクラスは C_DIRECT / C_POINT / C_REPLACE の 3 つで、
   -- 有効・無効、打ちかけ・▽・▼ の相、cr の中の相はモデルの中で分ける（作者の判断 4 と同じ考え）。
@@ -1312,18 +1408,47 @@ M.events = {
     refs = { "Vim 本体（normal の移動）", "#192" },
     notes = "マクロの再生や `.` の前後で使う移動。skk の状態は変えない。",
   },
+  -- 辞書登録のプロンプト（#189 / 07c）。キーは普通の表記で書く（プロンプトの状態にだけ遷移を置く）
   register_commit = {
     kind = "key",
-    keys = { "<CR>@register" },
+    keys = { "<CR>" },
     modes = { "c" },
     refs = { "host.lua:125-162,175-213", "events.md O12", "#189" },
+    notes = "プロンプトの <CR>。欄に入力があれば語として確定し、空なら取り消し（host.input が空文字を返す）。"
+      .. "空のときは register_commit の遷移を分けて書く（状態クラスに欄の中身を持っていないため）。",
   },
   register_cancel = {
     kind = "key",
-    -- `@register` は cmdtype の注記。実際に打つのは <Esc> / <C-g>
-    keys = { "<C-g>@register", "<Esc>@register", "<Esc>", "<C-g>" },
+    -- `@register` は cmdtype の注記。実際に打つのは <Esc> / <C-g> / <C-c>
+    keys = { "<C-g>@register", "<Esc>@register", "<Esc>", "<C-g>", "<C-c>" },
     modes = { "c" },
-    refs = { "host.lua:197-204", "#116", "#189" },
+    refs = { "host.lua:166-169,197-204", "#116", "#154", "#189" },
+    notes = "プロンプトの間は、<Esc> / <C-g> / <C-c> が host.cancel_input に差し替えられている"
+      .. "（CmdlineEnter の one-shot。host.lua:197-204）。取り消して外側の状態に戻る。",
+  },
+  cmdline_move = {
+    kind = "key",
+    keys = { "<Left>", "<Right>", "<Home>", "<End>" },
+    modes = { "c" },
+    refs = { "keys.md §5", "cleanup.lua:120-165,283-286", "host.lua:175-213", "#12", "#189" },
+    notes = "プロンプトの欄のカーソル移動。skk はキーを奪わず、CmdlineChanged のずれの検出で"
+      .. "プロンプトの中の読みを捨てる（#12）。欄の文字は残る。",
+  },
+  prompt_winenter = {
+    kind = "autocmd",
+    keys = {},
+    modes = { "c" },
+    refs = { "host.lua:70-93", "events.md WinEnter", "#13", "#54", "#189" },
+    notes = "プロンプトの間だけの WinEnter。cmdwin（getcmdwintype が空でない）なら何もせず、"
+      .. "そうでなければフレームのウィンドウへ戻す。状態クラスは変えない（#54）。",
+  },
+  prompt_cmdlineenter = {
+    kind = "autocmd",
+    keys = {},
+    modes = { "c" },
+    refs = { "host.lua:194-204", "events.md CmdlineEnter", "#116", "#189" },
+    notes = "プロンプトに入ったときの CmdlineEnter（one-shot）。skk の cmdline マッピングを張り、"
+      .. "<Esc> / <C-g> / <C-c> を取り消しに差し替える。状態クラスは変えない。",
   },
   -- terminal（t / nt）。#188（07b）
   --
@@ -2490,10 +2615,11 @@ add({
 add({
   id = "t.I_POINT.space.register",
   from = "I_POINT", event = "space", to = "P_PROMPT_POINT",
-  effects = { "keep", "render" },
-  status = "ok", refs = { "function/henkan.lua:21-56", "host.lua:175-213", "#144" },
-  observed = { "O-space-no-candidate" },
-  notes = "辞書に候補が無いとき。外側の pre-edit は凍結して残る。",
+  effects = { "keep", "save_mapping", "install_mapping", "render" },
+  status = "ok", refs = { "function/henkan.lua:21-56", "host.lua:175-213", "#144", "#189" },
+  observed = { "O-space-no-candidate", "O-register-open-point" },
+  notes = "辞書に候補が無いとき。外側の pre-edit は凍結して残る（#144）。"
+    .. "cmdline のマッピングを退避して、プロンプト用に張り直す。",
 })
 add({
   id = "t.I_SELECT.space.next",
@@ -2504,9 +2630,11 @@ add({
 add({
   id = "t.I_SELECT.space.register",
   from = "I_SELECT", event = "space", to = "P_PROMPT_SELECT",
-  effects = { "keep", "render" },
-  status = "unknown", refs = { "function/henkan.lua:90-113" },
-  notes = "候補の最後でさらに <Space> を押したとき（register_word）。",
+  effects = { "keep", "save_mapping", "install_mapping", "render" },
+  status = "ok", refs = { "function/henkan.lua:90-113", "host.lua:175-213", "#189" },
+  observed = { "O-register-open-select" },
+  notes = "候補の最後でさらに <Space> を押したとき（register_word）。"
+    .. "候補は凍結して残り、取り消すと ▼ に戻る。",
 })
 add({
   id = "t.I_SELECT.x.prev",
@@ -2528,58 +2656,698 @@ add({
   effects = { "keep", "render" },
   status = "unknown", refs = { "keymap.lua:52", "#129" },
 })
+-- 辞書登録のプロンプト（#189 / 07c）
+--
+-- 人が読むクラスは P_PROMPT の 1 つ。aspect に外側の読みの相、depth に入れ子の深さを持つ。
+-- プロンプトの中の打ちかけ・▽・▼ は P_PROMPT_*_READING にまとめた。
+-- 入れ子は深さ 2 まで書く。深さ 3 以上は同じ入れ子の繰り返しなので、M.out_of_scope に理由を書く。
+
 add({
-  id = "t.I_SELECT.key_X.register",
-  from = "I_SELECT", event = "key_X", to = "P_PROMPT_SELECT",
-  effects = { "keep", "render" },
-  status = "unknown", refs = { "keymap.lua:52", "function/common.lua:89-" },
-  notes = "06 の観測では、候補の最後で X を打っても辞書登録のプロンプトに入らなかった（I_SELECT のまま）。"
-    .. "どういう条件で登録に入るかは未観測。",
+  id = "t.P_PROMPT_POINT.char",
+  from = "P_PROMPT_POINT", event = "char", to = "P_PROMPT_POINT",
+  effects = { "render" },
+  status = "ok", refs = { "host.lua:175-213", "function/input.lua", "#189" },
+  observed = { "O-register-char" },
+  notes = "直接入力の文字は、そのまま欄に入る（▽ は出ない）。",
 })
+
 add({
-  id = "t.P_PROMPT_POINT.register_commit",
+  id = "t.P_PROMPT_POINT.char_shift",
+  from = "P_PROMPT_POINT", event = "char_shift", to = "P_PROMPT_POINT_READING",
+  effects = { "render" },
+  status = "ok", refs = { "host.lua:175-213", "function/input.lua", "#189" },
+  observed = { "O-register-typing" },
+  notes = "大文字は ▽ を開く（プロンプトの中の読み）。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_READING.char",
+  from = "P_PROMPT_POINT_READING", event = "char", to = "P_PROMPT_POINT_READING",
+  effects = { "render" },
+  status = "ok", refs = { "function/input.lua", "#189" },
+  notes = "打ちかけ・▽ の続き。読みのまま。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_READING.char_shift",
+  from = "P_PROMPT_POINT_READING", event = "char_shift", to = "P_PROMPT_POINT_READING",
+  effects = { "render" },
+  status = "ok", refs = { "function/input.lua", "#189" },
+  notes = "打ちかけ・▽ の続き。読みのまま。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_READING.char",
+  from = "P_PROMPT_SELECT_READING", event = "char", to = "P_PROMPT_SELECT_READING",
+  effects = { "render" },
+  status = "ok", refs = { "function/input.lua", "#189" },
+  notes = "打ちかけ・▽ の続き。読みのまま。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_READING.char_shift",
+  from = "P_PROMPT_SELECT_READING", event = "char_shift", to = "P_PROMPT_SELECT_READING",
+  effects = { "render" },
+  status = "ok", refs = { "function/input.lua", "#189" },
+  notes = "打ちかけ・▽ の続き。読みのまま。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_NESTED_READING.char",
+  from = "P_PROMPT_POINT_NESTED_READING", event = "char", to = "P_PROMPT_POINT_NESTED_READING",
+  effects = { "render" },
+  status = "ok", refs = { "function/input.lua", "#189" },
+  notes = "打ちかけ・▽ の続き。読みのまま。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_NESTED_READING.char_shift",
+  from = "P_PROMPT_POINT_NESTED_READING", event = "char_shift", to = "P_PROMPT_POINT_NESTED_READING",
+  effects = { "render" },
+  status = "ok", refs = { "function/input.lua", "#189" },
+  notes = "打ちかけ・▽ の続き。読みのまま。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_NESTED_READING.char",
+  from = "P_PROMPT_SELECT_NESTED_READING", event = "char", to = "P_PROMPT_SELECT_NESTED_READING",
+  effects = { "render" },
+  status = "ok", refs = { "function/input.lua", "#189" },
+  notes = "打ちかけ・▽ の続き。読みのまま。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_NESTED_READING.char_shift",
+  from = "P_PROMPT_SELECT_NESTED_READING", event = "char_shift", to = "P_PROMPT_SELECT_NESTED_READING",
+  effects = { "render" },
+  status = "ok", refs = { "function/input.lua", "#189" },
+  notes = "打ちかけ・▽ の続き。読みのまま。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT.char",
+  from = "P_PROMPT_SELECT", event = "char", to = "P_PROMPT_SELECT",
+  effects = { "render" },
+  status = "ok", refs = { "host.lua:175-213", "function/input.lua", "#189" },
+  notes = "直接入力の文字は、そのまま欄に入る。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT.char_shift",
+  from = "P_PROMPT_SELECT", event = "char_shift", to = "P_PROMPT_SELECT_READING",
+  effects = { "render" },
+  status = "ok", refs = { "host.lua:175-213", "function/input.lua", "#189" },
+  notes = "大文字は ▽ を開く。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_NESTED.char",
+  from = "P_PROMPT_POINT_NESTED", event = "char", to = "P_PROMPT_POINT_NESTED",
+  effects = { "render" },
+  status = "ok", refs = { "host.lua:96-162", "#189" },
+  observed = { "O-register-nested-commit" },
+  notes = "入れ子の中の直接入力。欄に入る。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_NESTED.char_shift",
+  from = "P_PROMPT_POINT_NESTED", event = "char_shift", to = "P_PROMPT_POINT_NESTED_READING",
+  effects = { "render" },
+  status = "ok", refs = { "host.lua:96-162", "#189" },
+  notes = "入れ子の中の ▽。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_NESTED.char",
+  from = "P_PROMPT_SELECT_NESTED", event = "char", to = "P_PROMPT_SELECT_NESTED",
+  effects = { "render" },
+  status = "ok", refs = { "host.lua:96-162", "#189" },
+  notes = "入れ子の中の直接入力。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_NESTED.char_shift",
+  from = "P_PROMPT_SELECT_NESTED", event = "char_shift", to = "P_PROMPT_SELECT_NESTED_READING",
+  effects = { "render" },
+  status = "ok", refs = { "host.lua:96-162", "#189" },
+  notes = "入れ子の中の ▽。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT.space",
+  from = "P_PROMPT_POINT", event = "space", to = "P_PROMPT_POINT",
+  effects = { "render" },
+  status = "ok", refs = { "function/henkan.lua:21-56", "#189" },
+  observed = { "O-register-space-direct" },
+  notes = "読みが無いときの <Space> は、欄に空白を入れるだけ。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_READING.space",
+  from = "P_PROMPT_POINT_READING", event = "space", to = "P_PROMPT_POINT_READING",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "function/henkan.lua:21-56,90-113", "#189" },
+  observed = { "O-register-select" },
+  notes = "プロンプトの中で ▼ を進める。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_READING.space_register",
+  from = "P_PROMPT_POINT_READING", event = "space", to = "P_PROMPT_POINT_NESTED",
+  effects = { "keep", "save_mapping", "install_mapping", "render" },
+  status = "ok", refs = { "function/henkan.lua:90-113", "host.lua:96-162", "#12", "#189" },
+  observed = { "O-register-nested-open" },
+  notes = "候補が無いので register_word がもう一度 input() を呼ぶ（入れ子）。外側のプロンプトの読みは凍結して残る。辞書に候補があるかで分かれる（同じ状態・イベントの組）。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT.space",
+  from = "P_PROMPT_SELECT", event = "space", to = "P_PROMPT_SELECT",
+  effects = { "render" },
+  status = "ok", refs = { "function/henkan.lua:21-56", "#189" },
+  notes = "読みが無いときの <Space> は、欄に空白を入れるだけ。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_READING.space",
+  from = "P_PROMPT_SELECT_READING", event = "space", to = "P_PROMPT_SELECT_READING",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "function/henkan.lua:21-56,90-113", "#189" },
+  observed = { "O-register-select-space" },
+  notes = "プロンプトの中で ▼ を進める。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_READING.space_register",
+  from = "P_PROMPT_SELECT_READING", event = "space", to = "P_PROMPT_SELECT_NESTED",
+  effects = { "keep", "save_mapping", "install_mapping", "render" },
+  status = "ok", refs = { "function/henkan.lua:90-113", "host.lua:96-162", "#12", "#189" },
+  observed = { "O-register-select-nested" },
+  notes = "候補の最後で register_word。入れ子になる。辞書に候補があるかで分かれる。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_NESTED.space",
+  from = "P_PROMPT_POINT_NESTED", event = "space", to = "P_PROMPT_POINT_NESTED",
+  effects = { "render" },
+  status = "ok", refs = { "function/henkan.lua:21-56", "#189" },
+  notes = "入れ子の中の読みが無いときの <Space> は、欄に空白を入れるだけ。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_NESTED_READING.space",
+  from = "P_PROMPT_POINT_NESTED_READING", event = "space", to = "P_PROMPT_POINT_NESTED_READING",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "function/henkan.lua:21-56,90-113", "#189" },
+  notes = "深さ 2 の中の ▼ を進める。深さ 3 は対象外。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_NESTED.space",
+  from = "P_PROMPT_SELECT_NESTED", event = "space", to = "P_PROMPT_SELECT_NESTED",
+  effects = { "render" },
+  status = "ok", refs = { "function/henkan.lua:21-56", "#189" },
+  notes = "入れ子の中の読みが無いときの <Space>。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_NESTED_READING.space",
+  from = "P_PROMPT_SELECT_NESTED_READING", event = "space", to = "P_PROMPT_SELECT_NESTED_READING",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "function/henkan.lua:21-56,90-113", "#189" },
+  notes = "深さ 2 の中の ▼ を進める。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT.commit",
   from = "P_PROMPT_POINT", event = "register_commit", to = "I_DIRECT",
-  effects = { "commit_reading", "reset_state", "render" },
-  status = "unknown", refs = { "host.lua:125-162", "events.md O12" },
-  notes = "語を登録して insert に戻る。読みは登録した語として辞書に入る（O12）。"
-    .. "O12 はプロンプトに入るところまでで、<CR> の確定はキー列に無い。",
+  effects = { "commit_reading", "reset_state", "restore_mapping", "render" },
+  status = "ok", refs = { "host.lua:125-162", "events.md O12", "#189" },
+  observed = { "O-register-commit-text" },
+  notes = "欄に文字があるとき。語を登録して insert に戻る。",
 })
+
 add({
-  id = "t.P_PROMPT_SELECT.register_commit",
+  id = "t.P_PROMPT_POINT.commit_empty",
+  from = "P_PROMPT_POINT", event = "register_commit", to = "I_POINT",
+  effects = { "cancel", "keep", "restore_mapping", "render" },
+  status = "ok", refs = { "host.lua:125-162,166-169", "#189" },
+  observed = { "O-register-empty-cr-point" },
+  notes = "欄が空の <CR>。host.input が空文字を返すので、語を登録せず凍結した外側の ▽ に戻る。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_READING.commit",
+  from = "P_PROMPT_POINT_READING", event = "register_commit", to = "I_DIRECT",
+  effects = { "commit_reading", "reset_state", "restore_mapping", "render" },
+  status = "ok", refs = { "host.lua:125-162", "events.md O12", "#189" },
+  observed = { "O-register-commit-point" },
+  notes = "欄の読みを確定して、外側の読みをその語で登録する。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT.tab",
+  from = "P_PROMPT_POINT", event = "tab", to = "P_PROMPT_POINT",
+  effects = { "render" },
+  status = "ok", refs = { "keys.md §5", "host.lua:175-213", "#189" },
+  notes = "読みが無いときの <Tab> は、欄にタブを入れるだけ。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT.tab",
+  from = "P_PROMPT_SELECT", event = "tab", to = "P_PROMPT_SELECT",
+  effects = { "render" },
+  status = "ok", refs = { "keys.md §5", "host.lua:175-213", "#189" },
+  notes = "読みが無いときの <Tab> は、欄にタブを入れるだけ。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT.commit",
   from = "P_PROMPT_SELECT", event = "register_commit", to = "I_DIRECT",
-  effects = { "commit_candidate", "reset_state", "render" },
-  status = "unknown", refs = { "host.lua:125-162", "events.md O12" },
-  notes = "▼ から登録したときも、候補を登録して insert に戻る。",
+  effects = { "commit_reading", "reset_state", "restore_mapping", "render" },
+  status = "ok", refs = { "host.lua:125-162", "#189" },
+  observed = { "O-register-commit-select-text" },
+  notes = "欄に文字があるとき。語を登録して insert に戻る。",
 })
+
 add({
-  id = "t.P_PROMPT_POINT.register_cancel",
+  id = "t.P_PROMPT_SELECT.commit_empty",
+  from = "P_PROMPT_SELECT", event = "register_commit", to = "I_SELECT",
+  effects = { "cancel", "keep", "restore_mapping", "render" },
+  status = "ok", refs = { "host.lua:125-162,166-169", "#189" },
+  observed = { "O-register-empty-cr-select" },
+  notes = "欄が空の <CR>。登録せず凍結した外側の ▼ に戻る。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_READING.commit",
+  from = "P_PROMPT_SELECT_READING", event = "register_commit", to = "I_DIRECT",
+  effects = { "commit_reading", "reset_state", "restore_mapping", "render" },
+  status = "ok", refs = { "host.lua:125-162", "#189" },
+  observed = { "O-register-commit-select-reading" },
+  notes = "欄の読みを確定して、外側の読みをその語で登録する（選んでいた候補は使わない）。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_NESTED.commit",
+  from = "P_PROMPT_POINT_NESTED", event = "register_commit", to = "P_PROMPT_POINT",
+  effects = { "commit_reading", "reset_state", "restore_mapping", "render" },
+  status = "ok", refs = { "host.lua:96-162", "#189" },
+  observed = { "O-register-nested-commit" },
+  notes = "入れ子で打った語を、外側のプロンプトの欄へ入れて深さ 1 に戻る。insert へは抜けない。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_NESTED.commit_empty",
+  from = "P_PROMPT_POINT_NESTED", event = "register_commit", to = "P_PROMPT_POINT_READING",
+  effects = { "cancel", "keep", "restore_mapping", "render" },
+  status = "ok", refs = { "host.lua:96-162,166-169", "#189" },
+  observed = { "O-register-nested-empty" },
+  notes = "入れ子の欄が空の <CR>。入れ子を取り消して、外側のプロンプトの読みに戻る。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_NESTED_READING.commit",
+  from = "P_PROMPT_POINT_NESTED_READING", event = "register_commit", to = "P_PROMPT_POINT",
+  effects = { "commit_reading", "reset_state", "restore_mapping", "render" },
+  status = "ok", refs = { "host.lua:96-162", "#189" },
+  observed = { "O-register-nested-reading-commit" },
+  notes = "入れ子の読みを確定して、外側のプロンプトの欄へ入れる。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_NESTED.commit",
+  from = "P_PROMPT_SELECT_NESTED", event = "register_commit", to = "P_PROMPT_SELECT",
+  effects = { "commit_reading", "reset_state", "restore_mapping", "render" },
+  status = "ok", refs = { "host.lua:96-162", "#189" },
+  notes = "入れ子の語を外側のプロンプトの欄へ入れる。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_NESTED.commit_empty",
+  from = "P_PROMPT_SELECT_NESTED", event = "register_commit", to = "P_PROMPT_SELECT_READING",
+  effects = { "cancel", "keep", "restore_mapping", "render" },
+  status = "ok", refs = { "host.lua:96-162,166-169", "#189" },
+  notes = "入れ子の欄が空の <CR>。外側のプロンプトの ▼ に戻る。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_NESTED_READING.commit",
+  from = "P_PROMPT_SELECT_NESTED_READING", event = "register_commit", to = "P_PROMPT_SELECT",
+  effects = { "commit_reading", "reset_state", "restore_mapping", "render" },
+  status = "ok", refs = { "host.lua:96-162", "#189" },
+  notes = "入れ子の読みを確定して、外側のプロンプトの欄へ入れる。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT.cancel",
   from = "P_PROMPT_POINT", event = "register_cancel", to = "I_POINT",
-  effects = { "keep", "render" },
-  status = "unknown", refs = { "host.lua:166-169,197-204", "#116" },
-  notes = "取り消して、凍結していた外側の ▽ に戻る。"
-    .. "O12 はプロンプトに入るところまでで、取り消しはキー列に無い。",
+  effects = { "cancel", "keep", "restore_mapping", "render" },
+  status = "ok", refs = { "host.lua:166-169,197-204", "events.md O12", "#116", "#154", "#189" },
+  observed = { "O-register-cancel-esc" },
+  notes = "<Esc> / <C-g> / <C-c> の取り消し。凍結した外側の ▽ に戻る（#154 の 1 回目の <C-c>）。",
 })
+
 add({
-  id = "t.P_PROMPT_SELECT.register_cancel",
-  from = "P_PROMPT_SELECT", event = "register_cancel", to = "I_SELECT",
-  effects = { "keep", "render" },
-  status = "unknown", refs = { "host.lua:166-169,197-204", "#116" },
-  notes = "取り消して、凍結していた外側の ▼ に戻る（未観測）。",
+  id = "t.P_PROMPT_POINT_READING.cancel",
+  from = "P_PROMPT_POINT_READING", event = "register_cancel", to = "I_POINT",
+  effects = { "cancel", "keep", "restore_mapping", "render" },
+  status = "ok", refs = { "host.lua:166-169,197-204", "#116", "#154", "#189" },
+  observed = { "O-register-cancel-reading" },
+  notes = "欄の読みを捨てて、凍結した外側の ▽ に戻る。外側の読みは残る。",
 })
+
+add({
+  id = "t.P_PROMPT_SELECT.cancel",
+  from = "P_PROMPT_SELECT", event = "register_cancel", to = "I_SELECT",
+  effects = { "cancel", "keep", "restore_mapping", "render" },
+  status = "ok", refs = { "host.lua:166-169,197-204", "#116", "#189" },
+  observed = { "O-register-cancel-select" },
+  notes = "<Esc> / <C-g> / <C-c> の取り消し。凍結した外側の ▼ に戻る。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_READING.cancel",
+  from = "P_PROMPT_SELECT_READING", event = "register_cancel", to = "I_SELECT",
+  effects = { "cancel", "keep", "restore_mapping", "render" },
+  status = "ok", refs = { "host.lua:166-169,197-204", "#116", "#189" },
+  observed = { "O-register-cancel-select-reading" },
+  notes = "欄の読みを捨てて、凍結した外側の ▼ に戻る。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_NESTED.cancel",
+  from = "P_PROMPT_POINT_NESTED", event = "register_cancel", to = "P_PROMPT_POINT_READING",
+  effects = { "cancel", "keep", "restore_mapping", "render" },
+  status = "ok", refs = { "host.lua:96-162,166-169,197-204", "#12", "#116", "#154", "#189" },
+  observed = { "O-register-nested-cancel" },
+  notes = "入れ子を取り消すと、外側のプロンプト（深さ 1）の読みに戻る。insert へは抜けない（P9）。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_NESTED_READING.cancel",
+  from = "P_PROMPT_POINT_NESTED_READING", event = "register_cancel", to = "P_PROMPT_POINT_READING",
+  effects = { "cancel", "keep", "restore_mapping", "render" },
+  status = "ok", refs = { "host.lua:96-162,166-169,197-204", "#189" },
+  observed = { "O-register-nested-reading-cancel" },
+  notes = "入れ子の中の読みを捨てて、外側のプロンプトの読みに戻る。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_NESTED.cancel",
+  from = "P_PROMPT_SELECT_NESTED", event = "register_cancel", to = "P_PROMPT_SELECT_READING",
+  effects = { "cancel", "keep", "restore_mapping", "render" },
+  status = "ok", refs = { "host.lua:96-162,166-169,197-204", "#189" },
+  observed = { "O-register-select-nested-cancel" },
+  notes = "入れ子を取り消すと、外側のプロンプト（深さ 1）の ▼ に戻る。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_NESTED_READING.cancel",
+  from = "P_PROMPT_SELECT_NESTED_READING", event = "register_cancel", to = "P_PROMPT_SELECT_READING",
+  effects = { "cancel", "keep", "restore_mapping", "render" },
+  status = "ok", refs = { "host.lua:96-162,166-169,197-204", "#189" },
+  notes = "入れ子の中の読みを捨てて、外側のプロンプトの ▼ に戻る。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_READING.move",
+  from = "P_PROMPT_POINT_READING", event = "cmdline_move", to = "P_PROMPT_POINT",
+  effects = { "drop", "render" },
+  status = "gap", refs = { "keys.md §5", "cleanup.lua:120-165,283-286", "#12", "#189" },
+  observed = { "O-register-left" },
+  notes = "欄でカーソルを動かすと、CmdlineChanged のずれの検出で欄の読みが捨てられる（P1 の既知。#12）。欄の文字は残る。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_READING.ctrl_w",
+  from = "P_PROMPT_POINT_READING", event = "ctrl_w", to = "P_PROMPT_POINT",
+  effects = { "drop", "render" },
+  status = "gap", refs = { "keys.md §6", "cleanup.lua:120-165,283-286", "#12", "#116", "#189" },
+  observed = { "O-register-ctrl-w" },
+  notes = "<C-w> で欄の文字が変わると、ずれの検出で読みが捨てられる（P1 の既知。#116）。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_READING.ctrl_u",
+  from = "P_PROMPT_POINT_READING", event = "ctrl_u", to = "P_PROMPT_POINT",
+  effects = { "drop", "render" },
+  status = "gap", refs = { "keys.md §6", "cleanup.lua:120-165,283-286", "#12", "#189" },
+  observed = { "O-register-ctrl-u" },
+  notes = "<C-u> で欄の文字が変わると、ずれの検出で読みが捨てられる（P1 の既知）。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_READING.tab",
+  from = "P_PROMPT_POINT_READING", event = "tab", to = "P_PROMPT_POINT",
+  effects = { "drop", "render" },
+  status = "gap", refs = { "keys.md §5", "cleanup.lua:120-165,283-286", "#12", "#189" },
+  observed = { "O-register-tab" },
+  notes = "<Tab> は欄にタブを入れ、ずれの検出で読みが捨てられる（P1 の既知）。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_READING.ctrl_r",
+  from = "P_PROMPT_POINT_READING", event = "ctrl_r", to = "P_PROMPT_POINT",
+  effects = { "drop", "render" },
+  status = "gap", refs = { "keys.md §5", "cleanup.lua:120-165,283-286", "#12", "#189" },
+  observed = { "O-register-ctrl-r" },
+  notes = "<C-r> でレジスタを入れて欄の文字が変わると、読みが捨てられる（P1 の既知）。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_READING.ctrl_r_empty",
+  from = "P_PROMPT_POINT_READING", event = "ctrl_r", to = "P_PROMPT_POINT_READING",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "keys.md §5", "#189" },
+  observed = { "O-register-ctrl-r-empty" },
+  notes = "レジスタが空で欄が変わらないときは、読みが残る。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_READING.move",
+  from = "P_PROMPT_SELECT_READING", event = "cmdline_move", to = "P_PROMPT_SELECT",
+  effects = { "drop", "render" },
+  status = "gap", refs = { "keys.md §5", "cleanup.lua:120-165,283-286", "#12", "#189" },
+  notes = "欄でカーソルを動かすと、CmdlineChanged のずれの検出で欄の読みが捨てられる（P1 の既知。#12）。欄の文字は残る。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_READING.ctrl_w",
+  from = "P_PROMPT_SELECT_READING", event = "ctrl_w", to = "P_PROMPT_SELECT",
+  effects = { "drop", "render" },
+  status = "gap", refs = { "keys.md §6", "cleanup.lua:120-165,283-286", "#12", "#116", "#189" },
+  notes = "<C-w> で欄の文字が変わると、ずれの検出で読みが捨てられる（P1 の既知。#116）。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_READING.ctrl_u",
+  from = "P_PROMPT_SELECT_READING", event = "ctrl_u", to = "P_PROMPT_SELECT",
+  effects = { "drop", "render" },
+  status = "gap", refs = { "keys.md §6", "cleanup.lua:120-165,283-286", "#12", "#189" },
+  notes = "<C-u> で欄の文字が変わると、ずれの検出で読みが捨てられる（P1 の既知）。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_READING.tab",
+  from = "P_PROMPT_SELECT_READING", event = "tab", to = "P_PROMPT_SELECT",
+  effects = { "drop", "render" },
+  status = "gap", refs = { "keys.md §5", "cleanup.lua:120-165,283-286", "#12", "#189" },
+  notes = "<Tab> は欄にタブを入れ、ずれの検出で読みが捨てられる（P1 の既知）。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_READING.ctrl_r",
+  from = "P_PROMPT_SELECT_READING", event = "ctrl_r", to = "P_PROMPT_SELECT",
+  effects = { "drop", "render" },
+  status = "gap", refs = { "keys.md §5", "cleanup.lua:120-165,283-286", "#12", "#189" },
+  notes = "<C-r> でレジスタを入れて欄の文字が変わると、読みが捨てられる（P1 の既知）。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_READING.ctrl_r_empty",
+  from = "P_PROMPT_SELECT_READING", event = "ctrl_r", to = "P_PROMPT_SELECT_READING",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "keys.md §5", "#189" },
+  notes = "レジスタが空で欄が変わらないときは、読みが残る。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT.move",
+  from = "P_PROMPT_POINT", event = "cmdline_move", to = "P_PROMPT_POINT",
+  effects = { "render" },
+  status = "ok", refs = { "keys.md §5", "#189" },
+  notes = "読みが無いときのカーソル移動。欄の文字だけが動く。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT.move",
+  from = "P_PROMPT_SELECT", event = "cmdline_move", to = "P_PROMPT_SELECT",
+  effects = { "render" },
+  status = "ok", refs = { "keys.md §5", "#189" },
+  notes = "読みが無いときのカーソル移動。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT.ctrl_r",
+  from = "P_PROMPT_POINT", event = "ctrl_r", to = "P_PROMPT_POINT",
+  effects = { "render" },
+  status = "ok", refs = { "keys.md §5", "#189" },
+  notes = "読みが無いときの <C-r>。欄に文字が入るだけ。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT.ctrl_r",
+  from = "P_PROMPT_SELECT", event = "ctrl_r", to = "P_PROMPT_SELECT",
+  effects = { "render" },
+  status = "ok", refs = { "keys.md §5", "#189" },
+  notes = "読みが無いときの <C-r>。",
+})
+
 add({
   id = "t.P_PROMPT_POINT.winleave",
   from = "P_PROMPT_POINT", event = "winleave", to = "P_PROMPT_POINT",
   effects = { "keep", "render" },
-  status = "ok", refs = { "host.lua:75-92,269-281" },
+  status = "ok", refs = { "host.lua:70-93,269-281", "cleanup.lua:269-281", "events.md WinLeave", "#13", "#189" },
   notes = "辞書登録の input() の間は外側の状態を壊さない（WinEnter でフレームのウィンドウへ戻す）。",
 })
+
+add({
+  id = "t.P_PROMPT_POINT.bufleave",
+  from = "P_PROMPT_POINT", event = "bufleave", to = "P_PROMPT_POINT",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "host.lua:70-93,269-281", "cleanup.lua:269-281", "events.md BufLeave", "#13", "#189" },
+  notes = "辞書登録の input() の間は外側の状態を壊さない。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_READING.winleave",
+  from = "P_PROMPT_POINT_READING", event = "winleave", to = "P_PROMPT_POINT_READING",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "host.lua:70-93,269-281", "cleanup.lua:269-281", "events.md WinLeave", "#13", "#189" },
+  notes = "辞書登録の input() の間は外側の状態を壊さない（WinEnter でフレームのウィンドウへ戻す）。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_READING.bufleave",
+  from = "P_PROMPT_POINT_READING", event = "bufleave", to = "P_PROMPT_POINT_READING",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "host.lua:70-93,269-281", "cleanup.lua:269-281", "events.md BufLeave", "#13", "#189" },
+  notes = "辞書登録の input() の間は外側の状態を壊さない。",
+})
+
 add({
   id = "t.P_PROMPT_SELECT.winleave",
   from = "P_PROMPT_SELECT", event = "winleave", to = "P_PROMPT_SELECT",
   effects = { "keep", "render" },
-  status = "ok", refs = { "host.lua:75-92,269-281" },
+  status = "ok", refs = { "host.lua:70-93,269-281", "cleanup.lua:269-281", "events.md WinLeave", "#13", "#189" },
   notes = "辞書登録の input() の間は外側の状態を壊さない（WinEnter でフレームのウィンドウへ戻す）。",
 })
+
+add({
+  id = "t.P_PROMPT_SELECT.bufleave",
+  from = "P_PROMPT_SELECT", event = "bufleave", to = "P_PROMPT_SELECT",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "host.lua:70-93,269-281", "cleanup.lua:269-281", "events.md BufLeave", "#13", "#189" },
+  notes = "辞書登録の input() の間は外側の状態を壊さない。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_READING.winleave",
+  from = "P_PROMPT_SELECT_READING", event = "winleave", to = "P_PROMPT_SELECT_READING",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "host.lua:70-93,269-281", "cleanup.lua:269-281", "events.md WinLeave", "#13", "#189" },
+  notes = "辞書登録の input() の間は外側の状態を壊さない（WinEnter でフレームのウィンドウへ戻す）。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_READING.bufleave",
+  from = "P_PROMPT_SELECT_READING", event = "bufleave", to = "P_PROMPT_SELECT_READING",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "host.lua:70-93,269-281", "cleanup.lua:269-281", "events.md BufLeave", "#13", "#189" },
+  notes = "辞書登録の input() の間は外側の状態を壊さない。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_NESTED.winleave",
+  from = "P_PROMPT_POINT_NESTED", event = "winleave", to = "P_PROMPT_POINT_NESTED",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "host.lua:70-93,269-281", "cleanup.lua:269-281", "events.md WinLeave", "#13", "#189" },
+  notes = "辞書登録の input() の間は外側の状態を壊さない（WinEnter でフレームのウィンドウへ戻す）。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_NESTED.bufleave",
+  from = "P_PROMPT_POINT_NESTED", event = "bufleave", to = "P_PROMPT_POINT_NESTED",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "host.lua:70-93,269-281", "cleanup.lua:269-281", "events.md BufLeave", "#13", "#189" },
+  notes = "辞書登録の input() の間は外側の状態を壊さない。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_NESTED_READING.winleave",
+  from = "P_PROMPT_POINT_NESTED_READING", event = "winleave", to = "P_PROMPT_POINT_NESTED_READING",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "host.lua:70-93,269-281", "cleanup.lua:269-281", "events.md WinLeave", "#13", "#189" },
+  notes = "辞書登録の input() の間は外側の状態を壊さない（WinEnter でフレームのウィンドウへ戻す）。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT_NESTED_READING.bufleave",
+  from = "P_PROMPT_POINT_NESTED_READING", event = "bufleave", to = "P_PROMPT_POINT_NESTED_READING",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "host.lua:70-93,269-281", "cleanup.lua:269-281", "events.md BufLeave", "#13", "#189" },
+  notes = "辞書登録の input() の間は外側の状態を壊さない。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_NESTED.winleave",
+  from = "P_PROMPT_SELECT_NESTED", event = "winleave", to = "P_PROMPT_SELECT_NESTED",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "host.lua:70-93,269-281", "cleanup.lua:269-281", "events.md WinLeave", "#13", "#189" },
+  notes = "辞書登録の input() の間は外側の状態を壊さない（WinEnter でフレームのウィンドウへ戻す）。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_NESTED.bufleave",
+  from = "P_PROMPT_SELECT_NESTED", event = "bufleave", to = "P_PROMPT_SELECT_NESTED",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "host.lua:70-93,269-281", "cleanup.lua:269-281", "events.md BufLeave", "#13", "#189" },
+  notes = "辞書登録の input() の間は外側の状態を壊さない。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_NESTED_READING.winleave",
+  from = "P_PROMPT_SELECT_NESTED_READING", event = "winleave", to = "P_PROMPT_SELECT_NESTED_READING",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "host.lua:70-93,269-281", "cleanup.lua:269-281", "events.md WinLeave", "#13", "#189" },
+  notes = "辞書登録の input() の間は外側の状態を壊さない（WinEnter でフレームのウィンドウへ戻す）。",
+})
+
+add({
+  id = "t.P_PROMPT_SELECT_NESTED_READING.bufleave",
+  from = "P_PROMPT_SELECT_NESTED_READING", event = "bufleave", to = "P_PROMPT_SELECT_NESTED_READING",
+  effects = { "keep", "render" },
+  status = "ok", refs = { "host.lua:70-93,269-281", "cleanup.lua:269-281", "events.md BufLeave", "#13", "#189" },
+  notes = "辞書登録の input() の間は外側の状態を壊さない。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT.winenter",
+  from = "P_PROMPT_POINT", event = "prompt_winenter", to = "P_PROMPT_POINT",
+  effects = { "keep" },
+  status = "ok", refs = { "host.lua:70-93", "events.md WinEnter", "#13", "#54", "#189" },
+  notes = "フレームのウィンドウへ戻す。状態クラスは変えない。深さ 2 でも同じ。",
+})
+
+add({
+  id = "t.P_PROMPT_POINT.cmdlineenter",
+  from = "P_PROMPT_POINT", event = "prompt_cmdlineenter", to = "P_PROMPT_POINT",
+  effects = { "install_mapping" },
+  status = "ok", refs = { "host.lua:194-204", "events.md CmdlineEnter", "#116", "#189" },
+  notes = "cmdline のマッピングを張り、<Esc> / <C-g> / <C-c> を取り消しに差し替える。状態クラスは変えない。",
+})
+
 
 -- 確定・取消
 add({
@@ -6649,6 +7417,265 @@ M.observations = {
     note = "▼缶 の候補 缶 を確定してからカーソルを動かす。",
   },
   {
+    id = "O-register-open-point",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>" },
+    expect = { "P_PROMPT" },
+    note = "▽ぬる に候補が無いので、辞書登録のプロンプトが開く。mode=c、cmdtype=@、register_depth=1、外側の pre-edit は extmark で凍結して見えている（#144）。",
+  },
+
+  {
+    id = "O-register-open-select",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>" },
+    expect = { "P_PROMPT" },
+    note = "▼ で候補を最後まで送ってさらに <Space> を押すと、プロンプトが開く（register_word）。▼ は凍結して残る。",
+  },
+
+  {
+    id = "O-register-char",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "a" },
+    expect = { "P_PROMPT" },
+    note = "プロンプトの直接入力では、文字はそのまま欄に入る（▽ は出ない）。",
+  },
+
+  {
+    id = "O-register-typing",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "K" },
+    expect = { "P_PROMPT" },
+    note = "プロンプトの中で K を打つと、欄に ▽k が出る（プロンプトの中の読み）。",
+  },
+
+  {
+    id = "O-register-select",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "K", "<Space>" },
+    expect = { "P_PROMPT" },
+    note = "プロンプトの中で <Space> を押すと、欄の読みが ▼ になる。",
+  },
+
+  {
+    id = "O-register-space-direct",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "<Space>" },
+    expect = { "P_PROMPT" },
+    note = "読みの無いプロンプトで <Space> を押すと、欄に空白が入るだけ（入れ子にはならない）。",
+  },
+
+  {
+    id = "O-register-commit-text",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "a", "<CR>" },
+    expect = { "I_DIRECT" },
+    note = "欄に直接入力した文字を <CR> で確定する。insert に戻り、バッファにその文字が入る。",
+  },
+
+  {
+    id = "O-register-commit-point",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "K", "a", "n", "<CR>" },
+    expect = { "I_DIRECT" },
+    note = "欄の ▽かん を <CR> で確定する。insert に戻り、バッファに かん が入る。",
+  },
+
+  {
+    id = "O-register-commit-select-text",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "a", "<CR>" },
+    expect = { "I_DIRECT" },
+    note = "▼ から開いたプロンプトに文字を入れて <CR>。insert に戻る。",
+  },
+
+  {
+    id = "O-register-commit-select-reading",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "K", "a", "n", "<CR>" },
+    expect = { "I_DIRECT" },
+    note = "▼ から開いたプロンプトで かん を打って <CR>。バッファに入るのは欄の文字で、凍結していた候補 管 は使わない。",
+  },
+
+  {
+    id = "O-register-empty-cr-point",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "<CR>" },
+    expect = { "I_POINT" },
+    note = "欄が空の <CR> は取り消し。凍結していた ▽ぬる に戻る。",
+  },
+
+  {
+    id = "O-register-empty-cr-select",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<CR>" },
+    expect = { "I_SELECT" },
+    note = "欄が空の <CR> は取り消し。凍結していた ▼管 に戻る。",
+  },
+
+  {
+    id = "O-register-cancel-esc",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "<Esc>" },
+    expect = { "I_POINT" },
+    note = "プロンプトの <Esc> は取り消し。▽ぬる に戻る。",
+  },
+
+  {
+    id = "O-register-cancel-reading",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "K", "a", "n", "<Esc>" },
+    expect = { "I_POINT" },
+    note = "欄に ▽かん を打ってから <Esc>。欄の読みを捨てて ▽ぬる に戻る。",
+  },
+
+  {
+    id = "O-register-cancel-cg",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "K", "a", "n", "<C-g>" },
+    expect = { "I_POINT" },
+    note = "プロンプトの <C-g> は取り消し（CmdlineEnter の差し替え）。",
+  },
+
+  {
+    id = "O-register-cancel-cc",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "K", "a", "n", "<C-c>" },
+    expect = { "I_POINT" },
+    note = "プロンプトの <C-c> は取り消し（#154 の 1 回目）。",
+  },
+
+  {
+    id = "O-register-cancel-select",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Esc>" },
+    expect = { "I_SELECT" },
+    note = "▼ から開いたプロンプトの取り消し。▼管 に戻る。",
+  },
+
+  {
+    id = "O-register-cancel-select-reading",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "K", "a", "n", "<Esc>" },
+    expect = { "I_SELECT" },
+    note = "▼ から開いたプロンプトで かん を打ってから <Esc>。▼管 に戻る。",
+  },
+
+  {
+    id = "O-register-select-space",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "K", "a", "n", "<Space>" },
+    expect = { "P_PROMPT" },
+    note = "▼ から開いたプロンプトの欄で <Space>。欄の候補が進む。",
+  },
+
+  {
+    id = "O-register-nested-open",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "N", "u", "r", "u", "<Space>" },
+    expect = { "P_PROMPT" },
+    note = "プロンプトの中で ぬる を打って <Space>。候補が無いので、もう一度 input() が走って入れ子（深さ 2）になる。",
+  },
+
+  {
+    id = "O-register-nested-empty",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "N", "u", "r", "u", "<Space>", "<CR>" },
+    expect = { "P_PROMPT" },
+    note = "入れ子の欄が空の <CR> は、入れ子の取り消し。外側のプロンプト（▽ぬる）に戻る。",
+  },
+
+  {
+    id = "O-register-nested-cancel",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "N", "u", "r", "u", "<Space>", "<Esc>" },
+    expect = { "P_PROMPT" },
+    note = "入れ子を <Esc> で取り消すと、深さ 1 のプロンプトの ▽ぬる に戻る。insert へは抜けない。",
+  },
+
+  {
+    id = "O-register-nested-cancel2",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "N", "u", "r", "u", "<Space>", "<Esc>", "<Esc>" },
+    expect = { "I_POINT" },
+    note = "入れ子を取り消してから、外側のプロンプトも取り消す。▽ぬる に戻る（#154 の 2 回の <C-c> の形）。",
+  },
+
+  {
+    id = "O-register-nested-commit",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "N", "u", "r", "u", "<Space>", "a", "<CR>" },
+    expect = { "P_PROMPT" },
+    note = "入れ子の欄に あ を入れて <CR>。外側のプロンプトの欄に あ が入り、深さ 1 に戻る。",
+  },
+
+  {
+    id = "O-register-nested-commit2",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "N", "u", "r", "u", "<Space>", "a", "<CR>", "<CR>" },
+    expect = { "I_DIRECT" },
+    note = "入れ子で入れた あ を、外側のプロンプトの <CR> で確定する。バッファに あ が入る。",
+  },
+
+  {
+    id = "O-register-nested-reading-commit",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "N", "u", "r", "u", "<Space>", "K", "a", "n", "<CR>" },
+    expect = { "P_PROMPT" },
+    note = "入れ子の欄の ▽かん を <CR> で確定し、外側のプロンプトの欄に入れる。",
+  },
+
+  {
+    id = "O-register-nested-reading-cancel",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "N", "u", "r", "u", "<Space>", "K", "a", "n", "<Esc>" },
+    expect = { "P_PROMPT" },
+    note = "入れ子の欄の ▽かん を取り消して、外側のプロンプトの ▽ぬる に戻る。",
+  },
+
+  {
+    id = "O-register-left",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "K", "a", "n", "<Left>" },
+    expect = { "P_PROMPT" },
+    note = "欄で <Left> を押すと、CmdlineChanged のずれの検出で欄の読みが捨てられる（#12）。欄の文字は残る。",
+  },
+
+  {
+    id = "O-register-ctrl-w",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "K", "a", "n", "<C-w>" },
+    expect = { "P_PROMPT" },
+    note = "欄で <C-w> を押すと、欄の文字が変わって読みが捨てられる（#116）。",
+  },
+
+  {
+    id = "O-register-ctrl-u",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "K", "a", "n", "<C-u>" },
+    expect = { "P_PROMPT" },
+    note = "欄で <C-u> を押すと、欄の文字が変わって読みが捨てられる。",
+  },
+
+  {
+    id = "O-register-tab",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "K", "a", "n", "<Tab>" },
+    expect = { "P_PROMPT" },
+    note = "欄で <Tab> を押すと、タブが欄に入り、読みは捨てられる。",
+  },
+
+  {
+    id = "O-register-ctrl-r",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "K", "a", "n", "<C-r>a" },
+    expect = { "P_PROMPT" },
+    note = "レジスタ a に XYZ を入れてから欄で <C-r>a。欄が XYZ になり、読みは捨てられる（#12 と同じ形）。",
+  },
+
+  {
+    id = "O-register-ctrl-r-empty",
+    keys = { "<Plug>(skkeleton-enable)", "N", "u", "r", "u", "<Space>", "K", "a", "n", "<C-r>a" },
+    expect = { "P_PROMPT" },
+    uncertain = true,
+    note = "レジスタ a が空のときの <C-r>a。欄が変わらないので、読みは残る。",
+  },
+
+  {
+    id = "O-register-select-nested",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "K", "a", "n", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>" },
+    expect = { "P_PROMPT" },
+    note = "▼ から開いたプロンプトで かん を打ち、候補を最後まで送って <Space>。入れ子（深さ 2）になる。",
+  },
+
+  {
+    id = "O-register-select-nested-cancel",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "K", "a", "n", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Esc>" },
+    expect = { "P_PROMPT" },
+    note = "▼ からの入れ子を取り消すと、深さ 1 のプロンプトの ▼管 に戻る。",
+  },
+
+  {
+    id = "O-register-select-nested-reading-commit",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "K", "a", "n", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "K", "a", "n", "<CR>" },
+    expect = { "P_PROMPT" },
+    note = "▼ からの入れ子の欄の ▽かん を確定し、外側のプロンプトの欄に入れる。",
+  },
+
+  {
+    id = "O-register-select-nested-reading-cancel",
+    keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "K", "a", "n", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "K", "a", "n", "<Esc>" },
+    expect = { "P_PROMPT" },
+    note = "▼ からの入れ子の欄の ▽かん を取り消し、外側のプロンプトの ▼管 に戻る。",
+  },
+  {
     id = "O-wheel-point",
     keys = { "<Plug>(skkeleton-enable)", "K", "a", "n", "<ScrollWheelUp>" },
     expect = { "I_POINT" },
@@ -7007,6 +8034,48 @@ M.replays = {
     expect = { "N_OFF" },
     note = "マウスの遷移だけを再生する。インジケータの位置は表示の層なので対象外。",
   },
+  -- 辞書登録のプロンプト（#189 / 07c）。NOTES の register プロファイルの 4 本。
+  -- プロファイルの準備（Kan のあと <Space> 6 回）をキー列に開いて書いた。
+  {
+    id = "replay.register.open",
+    title = "Kan → <Space>×6（NOTES の e.register）",
+    keys = {
+      "<Plug>(skkeleton-enable)", "K", "a", "n",
+      "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>",
+    },
+    expect = { "P_PROMPT" },
+    note = "▼ の候補を最後まで送って、辞書登録のプロンプトが開く。",
+  },
+  {
+    id = "replay.register.tab",
+    title = "register → <Tab>（NOTES の e.p.edit）",
+    keys = {
+      "<Plug>(skkeleton-enable)", "K", "a", "n",
+      "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Tab>",
+    },
+    expect = { "P_PROMPT" },
+    note = "欄にタブが入る。読みが無いので、状態クラスは P_PROMPT のまま。",
+  },
+  {
+    id = "replay.register.cr",
+    title = "register → <CR>（NOTES の e.p.ok・欄が空）",
+    keys = {
+      "<Plug>(skkeleton-enable)", "K", "a", "n",
+      "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<CR>",
+    },
+    expect = { "I_SELECT" },
+    note = "欄が空の <CR> は取り消し。凍結した ▼ に戻る。",
+  },
+  {
+    id = "replay.register.esc",
+    title = "register → <Esc>（NOTES の e.p.cancel）",
+    keys = {
+      "<Plug>(skkeleton-enable)", "K", "a", "n",
+      "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Space>", "<Esc>",
+    },
+    expect = { "I_SELECT" },
+    note = "取り消して、凍結した ▼ に戻る。",
+  },
   {
     id = "replay.macro",
     title = "#36 のマクロ（qa A ... q → @a）",
@@ -7164,10 +8233,58 @@ M.out_of_scope = {
   },
   {
     id = "oos.register",
-    what = "辞書登録のプロンプトの中の遷移（入力の書き換え、入れ子、履歴）",
-    why = "07c（#189）。ここでは入口と出口の境界だけを書いた。",
+    what = "辞書登録のプロンプトの中の、次のもの以外の遷移",
+    why = "07c（#189）で、プロンプトの開閉・<CR>・空の <CR>・<Esc> / <C-g> / <C-c>・"
+      .. "<C-r>・<Tab>・<C-w> / <C-u>・<C-f> 以外のカーソル移動・入れ子（深さ 2）までを遷移にした。"
+      .. "残りは下の項目（cmdwin・履歴・purge の確認・深さ 3 以上・cmdline の補完キー）に分けた。",
     refs = { "#189" },
     keys = {},
+  },
+  {
+    id = "oos.register_cmdwin",
+    what = "辞書登録の欄の <C-f>（cmdline window）の中の編集",
+    why = "07c（#189）の対象外。いまは <C-f> で cmdline window が開き（mode=n、win が 1 つ増える）、"
+      .. "登録の input() は待ったままになる（#54 の直し）。cmdline window の中は Neovim の "
+      .. "cmdline window の状態機械で、このモデルの状態クラスを持っていない。"
+      .. "観測は semantics/explore/observations/register.jsonl の register.cmdwin。",
+    refs = { "#54", "#189", "events.md" },
+    keys = { "<C-f>" },
+  },
+  {
+    id = "oos.register_history",
+    what = "辞書登録の欄の <Up> / <Down>（input() の履歴）",
+    why = "07c（#189）の対象外。履歴は Vim の input() が持ち、P_PROMPT の状態クラスを変えない。"
+      .. "#44 で、取り消した欄の文字列が履歴に残らないようマーカーを掃除している。",
+    refs = { "#44", "#189" },
+    keys = { "<Up>", "<Down>" },
+  },
+  {
+    id = "oos.register_purge_confirm",
+    what = "▼ の X（purgeCandidate）の確認ダイアログ",
+    why = "07c（#189）の対象外。X は辞書登録ではなく、host.confirm の確認ダイアログを開く（#129）。"
+      .. "06 の観測でも、候補の最後で X を打っても辞書登録には入らなかった"
+      .. "（semantics/compare/README.md）。確認のあとの状態は、辞書の purge の層で扱う。",
+    refs = { "#129", "#189" },
+    keys = { "X" },
+  },
+  {
+    id = "oos.register_depth",
+    what = "辞書登録の入れ子の深さ 3 以上",
+    why = "07c（#189）では深さ 2 までを遷移にした。深さ 3 以上は同じ入れ子の繰り返しで、"
+      .. "外側のプロンプトがもう 1 段増えるだけ。観測では深さ 3 でも <Esc> が 1 段ずつ戻る"
+      .. "（semantics/explore/observations/register.jsonl の register.depth3）。"
+      .. "深さを無制限にすると状態クラスが増え続けるので、モデルでは深さ 2 までにした。",
+    refs = { "#189" },
+    keys = {},
+  },
+  {
+    id = "oos.register_cmdline_keys",
+    what = "辞書登録の欄の中の、cmdline の補完・レジスタ・マウスのキー",
+    why = "07c（#189）の対象外。欄は cmdline（cmdtype は @）なので、<C-n> / <C-p> / <C-y> / <C-e>、"
+      .. "<C-v> / <C-k> / <C-t> / <C-a> / <C-@>、<Insert>、マウス、ホイールは Neovim の cmdline の動きになる。"
+      .. "pre-edit のずれは CmdlineChanged の掃除で直り、読みは捨てられる（P1 の既知。#12）。",
+    refs = { "#12", "#189", "keys.md §5" },
+    keys = { "<C-n>", "<C-p>", "<C-y>", "<C-e>", "<C-v>", "<C-k>", "<C-t>", "<C-a>", "<C-@>", "<Insert>" },
   },
   {
     id = "oos.completion",
@@ -7316,7 +8433,7 @@ M.inventory = {
       "ni_return_drop", "ctrl_o_v", "ctrl_o_R", "mouse_select", "insert_key", "t_normal",
     } },
     { id = "SafeState", covered_by = { "safestate" } },
-    { id = "CmdlineLeave", covered_by = { "esc", "cr", "ctrl_c", "cmdline_window", "cg" } },
+    { id = "CmdlineLeave", covered_by = { "esc", "cr", "ctrl_c", "cmdline_window", "cg", "register_commit", "register_cancel" } },
     { id = "WinLeave", covered_by = { "winleave" } },
     { id = "BufLeave", covered_by = { "bufleave" } },
     { id = "TextChangedI", covered_by = { "stale" } },
@@ -7333,8 +8450,8 @@ M.inventory = {
     { id = "User skkeleton-disable-post", covered_by = { "blink_hide" } },
     { id = "User BlinkCmpMenuOpen", covered_by = { "blink_menu_open" } },
     { id = "User BlinkCmpMenuClose", covered_by = { "blink_menu_close" } },
-    { id = "WinEnter", out_of_scope = "07c（#189、host.input のフレーム）" },
-    { id = "CmdlineEnter", out_of_scope = "07c（#189、host.input のフレーム）" },
+    { id = "WinEnter", covered_by = { "prompt_winenter" } },
+    { id = "CmdlineEnter", covered_by = { "prompt_cmdlineenter" } },
     { id = "InsertEnter", covered_by = { "insert_enter" } },
     { id = "enable", covered_by = { "enable" } },
     { id = "disable", covered_by = { "disable" } },
@@ -7372,7 +8489,8 @@ M.properties = {
   { id = "P7", title = "片付けは何度やっても同じ結果になる", decided = false,
     why = "同じ片付けを 2 度流す遷移の対を持っていない（reset_state の自己遷移を足せば見られる）。" },
   { id = "P8", title = "enable のあと disable すると元に戻る", decided = true, kind = "recoverable" },
-  { id = "P9", title = "辞書登録の入れ子から漏れずに戻れる", decided = false, why = "07c（#189）。" },
+  { id = "P9", title = "辞書登録の入れ子から漏れずに戻れる", decided = true, kind = "prompt_nesting",
+    why = "07c（#189）で決めた。深さ 2 以上のプロンプトから insert / normal へ直接は抜けず、取り消しか確定で深さ 1 に戻る。深さ 1 のプロンプトは、取り消すと凍結した外側の ▽ / ▼ に、確定すると insert に戻る。" },
   { id = "P10", title = "同じ読みを 2 度確定しない", decided = true, kind = "no_double_commit" },
   { id = "P11", title = "g:skkeleton#mode が中の状態と一致する", decided = false,
     why = "かなモード（hira / kata / ...）を状態クラスに持っていない。" },
@@ -7438,6 +8556,18 @@ M.known = {
   { property = "P1", transition = "t.V_PRE_POINT.winleave", refs = { "#169" } },
   { property = "P1", transition = "t.V_PRE_POINT.mouse_click_other", refs = { "#47", "#169" } },
   { property = "P1", transition = "t.V_PRE_SELECT.winleave", refs = { "#169" } },
+  -- 辞書登録のプロンプトの中の読み（#189 / 07c）。欄の文字が変わると、CmdlineChanged の
+  -- ずれの検出でプロンプトの中の読みが捨てられる。issue の再現の形は #12 / #116。
+  { property = "P1", transition = "t.P_PROMPT_POINT_READING.move", refs = { "#12" } },
+  { property = "P1", transition = "t.P_PROMPT_POINT_READING.ctrl_w", refs = { "#12", "#116" } },
+  { property = "P1", transition = "t.P_PROMPT_POINT_READING.ctrl_u", refs = { "#12" } },
+  { property = "P1", transition = "t.P_PROMPT_POINT_READING.tab", refs = { "#12" } },
+  { property = "P1", transition = "t.P_PROMPT_POINT_READING.ctrl_r", refs = { "#12" } },
+  { property = "P1", transition = "t.P_PROMPT_SELECT_READING.move", refs = { "#12" } },
+  { property = "P1", transition = "t.P_PROMPT_SELECT_READING.ctrl_w", refs = { "#12", "#116" } },
+  { property = "P1", transition = "t.P_PROMPT_SELECT_READING.ctrl_u", refs = { "#12" } },
+  { property = "P1", transition = "t.P_PROMPT_SELECT_READING.tab", refs = { "#12" } },
+  { property = "P1", transition = "t.P_PROMPT_SELECT_READING.ctrl_r", refs = { "#12" } },
   { property = "P1", transition = "t.V_PRE_SELECT.mouse_click_other", refs = { "#47", "#169" } },
   { property = "P1", transition = "t.NI_POINT.bufleave", refs = { "#169" } },
   { property = "P1", transition = "t.NI_SELECT.bufleave", refs = { "#169" } },
