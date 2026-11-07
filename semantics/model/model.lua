@@ -127,7 +127,8 @@ M.states = {
     preedit = "point",
     label = "▽ / ▽*",
     refs = { "keymap.lua:23-56", "function/input.lua" },
-    notes = "▽ と ▽* はまとめた。今の観測では同じ遷移になり、分ける根拠が無い（作者の判断 7）。",
+    notes = "▽ と ▽* はまとめた。06 の観測で `a` は I_POINT と I_SELECT、`<Space>` は I_SELECT と P_PROMPT に割れ、"
+      .. "作者の判断 7 の条件が成立した。分ける作業は #194 と #193 で扱う。",
   },
   I_SELECT = {
     class = "I_SELECT",
@@ -4741,7 +4742,9 @@ M.probes = {
   { id = "P.t.I_DIRECT.space", transition = "t.I_DIRECT.space", keys = { "i", "<Plug>(skkeleton-enable)", "<Space>" }, expect = { "I_DIRECT" } },
   { id = "P.t.I_DIRECT.tab", transition = "t.I_DIRECT.tab", keys = { "i", "<Plug>(skkeleton-enable)", "<Tab>" }, expect = { "I_DIRECT" } },
   { id = "P.t.I_DIRECT.toggle", transition = "t.I_DIRECT.toggle", keys = { "i", "<Plug>(skkeleton-enable)", "<Plug>(skkeleton-toggle)" }, expect = { "I_OFF" } },
+  { id = "P.t.I_OFF.ctrl_at", transition = "t.I_OFF.ctrl_at", keys = { "i", "<Plug>(skkeleton-enable)", "<Esc>", "i", "<C-@>" }, expect = { "N_OFF" } },
   { id = "P.t.I_OFF.esc", transition = "t.I_OFF.esc", keys = { "i", "<Plug>(skkeleton-enable)", "<Esc>", "i", "<Esc>" }, expect = { "N_OFF" } },
+  { id = "P.t.I_OFF.guard_special", transition = "t.I_OFF.guard_special", keys = { "i", "<Plug>(skkeleton-enable)", "<Esc>", "i", "<S-Tab>" }, expect = { "I_OFF" } },
   { id = "P.t.I_OFF.insert_key", transition = "t.I_OFF.insert_key", keys = { "i", "<Plug>(skkeleton-enable)", "<Esc>", "i", "<Insert>" }, expect = { "R_OFF" } },
   { id = "P.t.I_POINT.bs", transition = "t.I_POINT.bs", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<BS>" }, expect = { "I_POINT" } },
   { id = "P.t.I_POINT.bs.empty", transition = "t.I_POINT.bs.empty", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "<BS>" }, expect = { "I_ROMAJI" } },

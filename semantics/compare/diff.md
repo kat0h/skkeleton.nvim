@@ -1,10 +1,10 @@
 # モデルと観測の差（`probe.lua` の結果）
 
-- 観測: 614 件（一致 176 / 不一致 0 / 観測できず 36）
-- モデルにだけある遷移: 70
-- 観測にだけある遷移: 330（説明付き 330 / 説明なし 0）
+- 観測: 616 件（一致 178 / 不一致 0 / 観測できず 38）
+- モデルにだけある遷移: 332
+- 観測にだけある遷移: 328（説明付き 328 / 説明なし 0）
 - effects の食い違い: 0
-- 非決定: 25 組
+- 非決定: 36 組
 
 ## 未確定（モデルが決めていない遷移）
 
@@ -17,6 +17,8 @@
 
 | 観測 | 前 | キー | 後 | 説明 |
 |---|---|---|---|---|
+| `c.feed.I_ROMAJI._Space_` | `I_ROMAJI` | `<Space>` | `I_ROMAJI` | モデルに無い自己遷移（観測では何も変わらない） |
+| `c.feed.I_ROMAJI_EMPTY._Space_` | `I_ROMAJI` | `<Space>` | `I_ROMAJI` | モデルに無い自己遷移（観測では何も変わらない） |
 | `c.idle.N_OFF._` | `N_OFF` | `:` | `C_DIRECT` | cmdline の中（07a #187） |
 | `c.idle.N_OFF._C_g_` | `N_OFF` | `<C-g>` | `N_OFF` | モデルに無い自己遷移（観測では何も変わらない） |
 | `c.idle.N_OFF._C_j_` | `N_OFF` | `<C-j>` | `N_OFF` | モデルに無い自己遷移（観測では何も変わらない） |
@@ -104,8 +106,6 @@
 | `x.I_OFF._C_v_065` | `I_OFF` | `<C-v>065` | `I_OFF` | skk が無効な insert / replace。キーは Vim がそのまま処理する（モデルは無効な状態からのキー入力を書いていない） |
 | `x.I_OFF._C_w_` | `I_OFF` | `<C-w>` | `I_OFF` | モデルに無い自己遷移（観測では何も変わらない） |
 | `x.I_OFF._C_y_` | `I_OFF` | `<C-y>` | `I_OFF` | モデルに無い自己遷移（観測では何も変わらない） |
-| `x.I_OFF._Left_` | `I_OFF` | `<Left>` | `I_OFF` | モデルに無い自己遷移（観測では何も変わらない） |
-| `x.I_OFF._S_Tab_` | `I_OFF` | `<S-Tab>` | `I_OFF` | skk が無効な insert / replace。キーは Vim がそのまま処理する（モデルは無効な状態からのキー入力を書いていない） |
 | `x.I_OFF._Space_` | `I_OFF` | `<Space>` | `I_OFF` | skk が無効な insert / replace。キーは Vim がそのまま処理する（モデルは無効な状態からのキー入力を書いていない） |
 | `x.I_OFF._Tab_` | `I_OFF` | `<Tab>` | `I_OFF` | skk が無効な insert / replace。キーは Vim がそのまま処理する（モデルは無効な状態からのキー入力を書いていない） |
 | `x.I_OFF.a` | `I_OFF` | `a` | `I_OFF` | skk が無効な insert / replace。キーは Vim がそのまま処理する（モデルは無効な状態からのキー入力を書いていない） |
@@ -345,33 +345,31 @@
 | `x.V_PRE_SELECT._Tab_` | `V_PRE` | `<Tab>` | `V_PRE` | モデルに無い自己遷移（観測では何も変わらない） |
 | `x.V_PRE_SELECT.l` | `V_PRE` | `l` | `V_PRE` | モデルに無い自己遷移（観測では何も変わらない） |
 | `x.V_PRE_SELECT.x` | `V_PRE` | `x` | `I_SELECT` | visual / select の Vim のコマンド。モデルは <Esc> で insert に戻る道だけを書いている |
-| `c.feed.I_ROMAJI_EMPTY._Space_` | `I_ROMAJI` | `<Space>` | `I_ROMAJI` | モデルに無い自己遷移（観測では何も変わらない） |
-| `c.feed.I_ROMAJI._Space_` | `I_ROMAJI` | `<Space>` | `I_ROMAJI` | モデルに無い自己遷移（観測では何も変わらない） |
 
 ## モデルにだけある遷移
 
 | 遷移 | 確かめなかった理由 |
 |---|---|
-| `t.N_OFF.enable` | 到達しない状態からの遷移 |
-| `t.I_OFF.enable` | 到達しない状態からの遷移 |
-| `t.N_OFF.toggle` | 到達しない状態からの遷移 |
-| `t.I_OFF.toggle` | 到達しない状態からの遷移 |
+| `t.N_OFF.enable` | 観測していない |
+| `t.I_OFF.enable` | 観測していない |
+| `t.N_OFF.toggle` | 観測していない |
+| `t.I_OFF.toggle` | 観測していない |
 | `t.I_ESCAPE.cleanup` | 遷移の途中（internal）。キーで観測できない |
 | `t.N_OFF.insert_enter.keepstate` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
 | `t.N_OFF.insert_enter` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
-| `t.I_DIRECT.stopinsert` | 到達しない状態からの遷移 |
+| `t.I_DIRECT.stopinsert` | 観測していない |
 | `t.I_DIRECT.mouse_select` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
 | `t.I_DIRECT.winleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
 | `t.I_DIRECT.bufleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
-| `t.I_ROMAJI.stopinsert` | 到達しない状態からの遷移 |
+| `t.I_ROMAJI.stopinsert` | 観測していない |
 | `t.I_ROMAJI.mouse_select` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
 | `t.I_ROMAJI.winleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
 | `t.I_ROMAJI.bufleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
-| `t.I_POINT.stopinsert` | 到達しない状態からの遷移 |
+| `t.I_POINT.stopinsert` | 観測していない |
 | `t.I_POINT.mouse_select` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
 | `t.I_POINT.winleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
 | `t.I_POINT.bufleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
-| `t.I_SELECT.stopinsert` | 到達しない状態からの遷移 |
+| `t.I_SELECT.stopinsert` | 観測していない |
 | `t.I_SELECT.mouse_select` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
 | `t.I_SELECT.winleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
 | `t.I_SELECT.bufleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
@@ -383,33 +381,59 @@
 | `t.V_PRE_POINT.winleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
 | `t.V_PRE_SELECT.winleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
 | `t.V_IDLE.winleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
-| `t.I_SELECT.key_X.register` | 到達しない状態からの遷移 |
-| `t.P_PROMPT_POINT.register_commit` | 到達しない状態からの遷移 |
-| `t.P_PROMPT_SELECT.register_commit` | 到達しない状態からの遷移 |
+| `t.V_IDLE.bufleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
+| `t.V_PRE_POINT.bufleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
+| `t.V_PRE_SELECT.bufleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
+| `t.NI_DIRECT.bufleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
+| `t.NI_POINT.bufleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
+| `t.NI_SELECT.bufleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
+| `t.I_OFF.winleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
+| `t.I_OFF.bufleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
+| `t.IC.bufleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
+| `t.I_SELECT.key_X.register` | 観測していない |
+| `t.P_PROMPT_POINT.register_commit` | 観測していない |
+| `t.P_PROMPT_SELECT.register_commit` | 観測していない |
 | `t.P_PROMPT_POINT.winleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
 | `t.P_PROMPT_SELECT.winleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
-| `t.I_DIRECT.ctrl_a` | 到達しない状態からの遷移 |
-| `t.I_ROMAJI.ctrl_a` | 到達しない状態からの遷移 |
-| `t.I_POINT.ctrl_a` | 到達しない状態からの遷移 |
-| `t.I_SELECT.ctrl_a` | 到達しない状態からの遷移 |
-| `t.I_DIRECT.ctrl_at` | 到達しない状態からの遷移 |
-| `t.I_ROMAJI.ctrl_at` | 到達しない状態からの遷移 |
-| `t.I_POINT.ctrl_at` | 到達しない状態からの遷移 |
-| `t.I_SELECT.ctrl_at` | 到達しない状態からの遷移 |
+| `t.I_DIRECT.ctrl_a` | 観測できず（BLOCKED）。probe では観測できなかった |
+| `t.I_ROMAJI.ctrl_a` | 観測できず（BLOCKED）。probe では観測できなかった |
+| `t.I_POINT.ctrl_a` | 観測できず（BLOCKED）。probe では観測できなかった |
+| `t.I_SELECT.ctrl_a` | 観測できず（BLOCKED）。probe では観測できなかった |
+| `t.I_ROMAJI.ctrl_a.e29` | 観測できず（BLOCKED）。probe では観測できなかった |
+| `t.I_POINT.ctrl_a.e29` | 観測できず（BLOCKED）。probe では観測できなかった |
+| `t.I_DIRECT.ctrl_at` | 観測できず（BLOCKED）。probe では観測できなかった |
+| `t.I_ROMAJI.ctrl_at` | 観測できず（BLOCKED）。probe では観測できなかった |
+| `t.I_POINT.ctrl_at` | 観測できず（BLOCKED）。probe では観測できなかった |
+| `t.I_SELECT.ctrl_at` | 観測できず（BLOCKED）。probe では観測できなかった |
 | `t.IC.stale` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
 | `t.IC.winleave` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
 | `t.I_DIRECT.mouse_click` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
+| `t.I_OFF.mouse_click` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
+| `t.N_OFF.mouse_click` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
 | `t.I_ROMAJI.mouse_click` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
+| `t.I_ROMAJI.mouse_click.keep` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
 | `t.I_POINT.mouse_click` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
+| `t.I_POINT.mouse_click.keep` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
 | `t.I_SELECT.mouse_click` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
+| `t.I_SELECT.mouse_click.keep` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
+| `t.I_ROMAJI.mouse_click_other` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
+| `t.I_POINT.mouse_click_other` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
+| `t.I_SELECT.mouse_click_other` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
+| `t.I_DIRECT.mouse_click_other` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
+| `t.I_OFF.mouse_click_other` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
+| `t.V_PRE_POINT.mouse_click_other` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
+| `t.V_PRE_SELECT.mouse_click_other` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
+| `t.I_OFF.mouse_select` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
 | `t.I_DIRECT.wheel` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
 | `t.I_ROMAJI.wheel` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
 | `t.I_POINT.wheel` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
 | `t.I_SELECT.wheel` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
+| `t.I_OFF.wheel` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
 | `t.I_DIRECT.paste` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
 | `t.I_ROMAJI.paste` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
 | `t.I_POINT.paste` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
 | `t.I_SELECT.paste` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
+| `t.I_OFF.paste` | 入力（マウス・貼り付け）。キーで観測できない（07e #191） |
 | `t.I_DIRECT.stale.cursor` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
 | `t.I_DIRECT.stale.buffer` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
 | `t.I_DIRECT.stale.none` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
@@ -422,6 +446,242 @@
 | `t.I_SELECT.stale.cursor` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
 | `t.I_SELECT.stale.buffer` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
 | `t.I_SELECT.stale.none` | autocmd。キーで観測できない（probe では stale / winleave を打っていない） |
+| `t.N_OFF.term_open` | 観測していない |
+| `t.T_OFF.enable` | 観測していない |
+| `t.T_OFF.toggle` | 観測していない |
+| `t.T_ESCAPE.enable` | 観測していない |
+| `t.T_DIRECT.disable` | 観測していない |
+| `t.T_DIRECT.toggle` | 観測していない |
+| `t.T_DIRECT.esc` | 観測していない |
+| `t.T_ROMAJI.disable` | 観測していない |
+| `t.T_ROMAJI.toggle` | 観測していない |
+| `t.T_ROMAJI.esc` | 観測していない |
+| `t.T_POINT.disable` | 観測していない |
+| `t.T_POINT.toggle` | 観測していない |
+| `t.T_POINT.esc` | 観測していない |
+| `t.T_SELECT.disable` | 観測していない |
+| `t.T_SELECT.toggle` | 観測していない |
+| `t.T_SELECT.esc` | 観測していない |
+| `t.T_DIRECT.t_normal` | 観測していない |
+| `t.T_ROMAJI.t_normal` | 観測していない |
+| `t.T_POINT.t_normal` | 観測していない |
+| `t.T_SELECT.t_normal` | 観測していない |
+| `t.T_OFF.t_normal` | 観測していない |
+| `t.T_ESCAPE.t_normal` | 観測していない |
+| `t.T_NORMAL_DIRECT.nt_insert` | 観測していない |
+| `t.T_NORMAL_ROMAJI.nt_insert` | 観測していない |
+| `t.T_NORMAL_POINT.nt_insert` | 観測していない |
+| `t.T_NORMAL_SELECT.nt_insert` | 観測していない |
+| `t.T_NORMAL_OFF.nt_insert` | 観測していない |
+| `t.T_NORMAL_DIRECT.nt_edit` | 観測していない |
+| `t.T_NORMAL_DIRECT.t_normal_again` | 観測していない |
+| `t.T_NORMAL_DIRECT.esc` | 観測していない |
+| `t.T_NORMAL_DIRECT.ctrl_c` | 観測していない |
+| `t.T_NORMAL_ROMAJI.nt_edit` | 観測していない |
+| `t.T_NORMAL_ROMAJI.t_normal_again` | 観測していない |
+| `t.T_NORMAL_ROMAJI.esc` | 観測していない |
+| `t.T_NORMAL_ROMAJI.ctrl_c` | 観測していない |
+| `t.T_NORMAL_POINT.nt_edit` | 観測していない |
+| `t.T_NORMAL_POINT.t_normal_again` | 観測していない |
+| `t.T_NORMAL_POINT.esc` | 観測していない |
+| `t.T_NORMAL_POINT.ctrl_c` | 観測していない |
+| `t.T_NORMAL_SELECT.nt_edit` | 観測していない |
+| `t.T_NORMAL_SELECT.t_normal_again` | 観測していない |
+| `t.T_NORMAL_SELECT.esc` | 観測していない |
+| `t.T_NORMAL_SELECT.ctrl_c` | 観測していない |
+| `t.T_NORMAL_OFF.nt_edit` | 観測していない |
+| `t.T_NORMAL_OFF.t_normal_again` | 観測していない |
+| `t.T_NORMAL_OFF.esc` | 観測していない |
+| `t.T_NORMAL_OFF.ctrl_c` | 観測していない |
+| `t.T_OFF.char` | 観測していない |
+| `t.T_OFF.char_shift` | 観測していない |
+| `t.T_OFF.key_x` | 観測していない |
+| `t.T_OFF.key_X` | 観測していない |
+| `t.T_OFF.key_L` | 観測していない |
+| `t.T_OFF.key_l` | 観測していない |
+| `t.T_OFF.key_q` | 観測していない |
+| `t.T_OFF.key_semicolon` | 観測していない |
+| `t.T_OFF.key_slash` | 観測していない |
+| `t.T_OFF.key_gt` | 観測していない |
+| `t.T_OFF.key_cq` | 観測していない |
+| `t.T_OFF.bs` | 観測していない |
+| `t.T_OFF.cr` | 観測していない |
+| `t.T_OFF.space` | 観測していない |
+| `t.T_OFF.nl` | 観測していない |
+| `t.T_OFF.cg` | 観測していない |
+| `t.T_OFF.esc` | 観測していない |
+| `t.T_OFF.insert_key` | 観測していない |
+| `t.T_OFF.ctrl_o` | 観測していない |
+| `t.T_OFF.ctrl_r` | 観測していない |
+| `t.T_OFF.ctrl_v` | 観測していない |
+| `t.T_OFF.ctrl_k` | 観測していない |
+| `t.T_OFF.ctrl_t` | 観測していない |
+| `t.T_OFF.tab` | 観測していない |
+| `t.T_OFF.ctrl_w` | 観測していない |
+| `t.T_OFF.ctrl_u` | 観測していない |
+| `t.T_OFF.ctrl_a` | 観測していない |
+| `t.T_OFF.ctrl_at` | 観測していない |
+| `t.T_OFF.completion_open` | 観測していない |
+| `t.T_OFF.completion_accept` | 観測していない |
+| `t.T_OFF.guard_special` | 観測していない |
+| `t.T_ESCAPE.char` | 観測していない |
+| `t.T_ESCAPE.char_shift` | 観測していない |
+| `t.T_ESCAPE.key_x` | 観測していない |
+| `t.T_ESCAPE.key_X` | 観測していない |
+| `t.T_ESCAPE.key_L` | 観測していない |
+| `t.T_ESCAPE.key_l` | 観測していない |
+| `t.T_ESCAPE.key_q` | 観測していない |
+| `t.T_ESCAPE.key_semicolon` | 観測していない |
+| `t.T_ESCAPE.key_slash` | 観測していない |
+| `t.T_ESCAPE.key_gt` | 観測していない |
+| `t.T_ESCAPE.key_cq` | 観測していない |
+| `t.T_ESCAPE.bs` | 観測していない |
+| `t.T_ESCAPE.cr` | 観測していない |
+| `t.T_ESCAPE.space` | 観測していない |
+| `t.T_ESCAPE.nl` | 観測していない |
+| `t.T_ESCAPE.cg` | 観測していない |
+| `t.T_ESCAPE.esc` | 観測していない |
+| `t.T_ESCAPE.insert_key` | 観測していない |
+| `t.T_ESCAPE.ctrl_o` | 観測していない |
+| `t.T_ESCAPE.ctrl_r` | 観測していない |
+| `t.T_ESCAPE.ctrl_v` | 観測していない |
+| `t.T_ESCAPE.ctrl_k` | 観測していない |
+| `t.T_ESCAPE.ctrl_t` | 観測していない |
+| `t.T_ESCAPE.tab` | 観測していない |
+| `t.T_ESCAPE.ctrl_w` | 観測していない |
+| `t.T_ESCAPE.ctrl_u` | 観測していない |
+| `t.T_ESCAPE.ctrl_a` | 観測していない |
+| `t.T_ESCAPE.ctrl_at` | 観測していない |
+| `t.T_ESCAPE.completion_open` | 観測していない |
+| `t.T_ESCAPE.completion_accept` | 観測していない |
+| `t.T_ESCAPE.guard_special` | 観測していない |
+| `t.T_DIRECT.char.keep` | 観測していない |
+| `t.T_DIRECT.char.romaji` | 観測していない |
+| `t.T_DIRECT.char_shift` | 観測していない |
+| `t.T_DIRECT.char_shift.point` | 観測していない |
+| `t.T_DIRECT.key_X` | 観測していない |
+| `t.T_DIRECT.key_l` | 観測していない |
+| `t.T_DIRECT.key_q` | 観測していない |
+| `t.T_DIRECT.key_semicolon` | 観測していない |
+| `t.T_DIRECT.key_slash` | 観測していない |
+| `t.T_DIRECT.key_L` | 観測していない |
+| `t.T_DIRECT.key_cq` | 観測していない |
+| `t.T_DIRECT.key_gt` | 観測していない |
+| `t.T_DIRECT.space` | 観測していない |
+| `t.T_DIRECT.bs` | 観測していない |
+| `t.T_DIRECT.cr` | 観測していない |
+| `t.T_DIRECT.nl` | 観測していない |
+| `t.T_DIRECT.cg` | 観測していない |
+| `t.T_DIRECT.insert_key` | 観測していない |
+| `t.T_DIRECT.ctrl_c` | 観測していない |
+| `t.T_DIRECT.ctrl_o` | 観測していない |
+| `t.T_DIRECT.ctrl_r` | 観測していない |
+| `t.T_DIRECT.ctrl_a` | 観測していない |
+| `t.T_DIRECT.ctrl_v` | 観測していない |
+| `t.T_DIRECT.ctrl_k` | 観測していない |
+| `t.T_DIRECT.ctrl_t` | 観測していない |
+| `t.T_DIRECT.tab` | 観測していない |
+| `t.T_DIRECT.ctrl_w` | 観測していない |
+| `t.T_DIRECT.ctrl_u` | 観測していない |
+| `t.T_DIRECT.ctrl_at` | 観測していない |
+| `t.T_DIRECT.completion_open` | 観測していない |
+| `t.T_DIRECT.completion_accept` | 観測していない |
+| `t.T_DIRECT.guard_special` | 観測していない |
+| `t.T_ROMAJI.char.keep` | 観測していない |
+| `t.T_ROMAJI.char.commit` | 観測していない |
+| `t.T_ROMAJI.char_shift` | 観測していない |
+| `t.T_ROMAJI.key_X` | 観測していない |
+| `t.T_ROMAJI.key_l` | 観測していない |
+| `t.T_ROMAJI.key_q` | 観測していない |
+| `t.T_ROMAJI.key_semicolon` | 観測していない |
+| `t.T_ROMAJI.key_slash` | 観測していない |
+| `t.T_ROMAJI.key_L` | 観測していない |
+| `t.T_ROMAJI.key_cq` | 観測していない |
+| `t.T_ROMAJI.key_gt` | 観測していない |
+| `t.T_ROMAJI.space` | 観測していない |
+| `t.T_ROMAJI.bs` | 観測していない |
+| `t.T_ROMAJI.cr` | 観測していない |
+| `t.T_ROMAJI.nl` | 観測していない |
+| `t.T_ROMAJI.cg` | 観測していない |
+| `t.T_ROMAJI.insert_key` | 観測していない |
+| `t.T_ROMAJI.tab` | 観測していない |
+| `t.T_ROMAJI.ctrl_c` | 観測していない |
+| `t.T_ROMAJI.ctrl_o` | 観測していない |
+| `t.T_ROMAJI.ctrl_a` | 観測していない |
+| `t.T_ROMAJI.ctrl_r` | 観測していない |
+| `t.T_ROMAJI.ctrl_v` | 観測していない |
+| `t.T_ROMAJI.ctrl_k` | 観測していない |
+| `t.T_ROMAJI.ctrl_t` | 観測していない |
+| `t.T_ROMAJI.ctrl_w` | 観測していない |
+| `t.T_ROMAJI.ctrl_u` | 観測していない |
+| `t.T_ROMAJI.ctrl_at` | 観測していない |
+| `t.T_ROMAJI.completion_open` | 観測していない |
+| `t.T_ROMAJI.completion_accept` | 観測していない |
+| `t.T_ROMAJI.guard_special` | 観測していない |
+| `t.T_POINT.char` | 観測していない |
+| `t.T_POINT.char_shift` | 観測していない |
+| `t.T_POINT.key_X` | 観測していない |
+| `t.T_POINT.key_l` | 観測していない |
+| `t.T_POINT.key_q` | 観測していない |
+| `t.T_POINT.key_semicolon` | 観測していない |
+| `t.T_POINT.key_slash` | 観測していない |
+| `t.T_POINT.key_L` | 観測していない |
+| `t.T_POINT.key_gt` | 観測していない |
+| `t.T_POINT.key_cq` | 観測していない |
+| `t.T_POINT.space.select` | 観測していない |
+| `t.T_POINT.bs` | 観測していない |
+| `t.T_POINT.bs.empty` | 観測していない |
+| `t.T_POINT.cr` | 観測していない |
+| `t.T_POINT.nl` | 観測していない |
+| `t.T_POINT.cg` | 観測していない |
+| `t.T_POINT.insert_key` | 観測していない |
+| `t.T_POINT.tab` | 観測していない |
+| `t.T_POINT.ctrl_c` | 観測していない |
+| `t.T_POINT.ctrl_o` | 観測していない |
+| `t.T_POINT.ctrl_r` | 観測していない |
+| `t.T_POINT.ctrl_v` | 観測していない |
+| `t.T_POINT.ctrl_k` | 観測していない |
+| `t.T_POINT.ctrl_t` | 観測していない |
+| `t.T_POINT.ctrl_w` | 観測していない |
+| `t.T_POINT.ctrl_u` | 観測していない |
+| `t.T_POINT.ctrl_a` | 観測していない |
+| `t.T_POINT.ctrl_at` | 観測していない |
+| `t.T_POINT.completion_open` | 観測していない |
+| `t.T_POINT.completion_accept` | 観測していない |
+| `t.T_POINT.guard_special` | 観測していない |
+| `t.T_SELECT.char.commit` | 観測していない |
+| `t.T_SELECT.char.commit_romaji` | 観測していない |
+| `t.T_SELECT.char_shift` | 観測していない |
+| `t.T_SELECT.key_x.back` | 観測していない |
+| `t.T_SELECT.key_x.prev` | 観測していない |
+| `t.T_SELECT.key_X` | 観測していない |
+| `t.T_SELECT.key_l` | 観測していない |
+| `t.T_SELECT.key_q` | 観測していない |
+| `t.T_SELECT.key_semicolon` | 観測していない |
+| `t.T_SELECT.key_slash` | 観測していない |
+| `t.T_SELECT.key_L` | 観測していない |
+| `t.T_SELECT.key_gt` | 観測していない |
+| `t.T_SELECT.key_cq` | 観測していない |
+| `t.T_SELECT.space.next` | 観測していない |
+| `t.T_SELECT.bs` | 観測していない |
+| `t.T_SELECT.cr` | 観測していない |
+| `t.T_SELECT.nl` | 観測していない |
+| `t.T_SELECT.cg` | 観測していない |
+| `t.T_SELECT.insert_key` | 観測していない |
+| `t.T_SELECT.tab` | 観測していない |
+| `t.T_SELECT.ctrl_c` | 観測していない |
+| `t.T_SELECT.ctrl_a` | 観測していない |
+| `t.T_SELECT.ctrl_r` | 観測していない |
+| `t.T_SELECT.ctrl_v` | 観測していない |
+| `t.T_SELECT.ctrl_k` | 観測していない |
+| `t.T_SELECT.ctrl_t` | 観測していない |
+| `t.T_SELECT.ctrl_w` | 観測していない |
+| `t.T_SELECT.ctrl_u` | 観測していない |
+| `t.T_SELECT.ctrl_at` | 観測していない |
+| `t.T_SELECT.ctrl_o` | 観測していない |
+| `t.T_SELECT.completion_open` | 観測していない |
+| `t.T_SELECT.completion_accept` | 観測していない |
+| `t.T_SELECT.guard_special` | 観測していない |
 
 ## 非決定の組（同じ状態・イベントで分かれる）
 
@@ -432,16 +692,20 @@
 | `I_DIRECT` | `esc` | `I_ESCAPE / N_OFF` | config.keepState |
 | `I_DIRECT` | `stale` | `I_DIRECT / I_DIRECT / I_DIRECT` | どの autocmd か（カーソルだけのずれか、バッファが変わったか、ずれが無いか） |
 | `I_POINT` | `bs` | `I_POINT / I_ROMAJI` | 読みの長さ（1 文字か、2 文字以上か） |
+| `I_POINT` | `ctrl_a` | `I_DIRECT / I_POINT` | 前に挿入した文字があるか（バッファの中身） |
 | `I_POINT` | `ctrl_u` | `I_DIRECT / I_POINT` | バッファに消す文字があるか |
 | `I_POINT` | `ctrl_w` | `I_DIRECT / I_POINT` | バッファに消す文字があるか |
 | `I_POINT` | `esc` | `I_ESCAPE / N_OFF` | config.keepState |
+| `I_POINT` | `mouse_click` | `I_DIRECT / I_POINT` | クリックでカーソルが動くか（クリックした位置） |
 | `I_POINT` | `space` | `I_SELECT / P_PROMPT_POINT` | 辞書に候補があるか／候補の位置 |
 | `I_POINT` | `stale` | `I_DIRECT / I_DIRECT / I_POINT` | どの autocmd か（カーソルだけのずれか、バッファが変わったか、ずれが無いか） |
 | `I_ROMAJI` | `bs` | `I_ROMAJI / I_DIRECT` | 読みの長さ（1 文字か、2 文字以上か） |
 | `I_ROMAJI` | `char` | `I_ROMAJI / I_POINT` | 打った文字（かなになるか、ローマ字が続くか） |
+| `I_ROMAJI` | `ctrl_a` | `I_DIRECT / I_ROMAJI` | 前に挿入した文字があるか（バッファの中身） |
 | `I_ROMAJI` | `ctrl_u` | `I_DIRECT / I_ROMAJI` | バッファに消す文字があるか |
 | `I_ROMAJI` | `ctrl_w` | `I_DIRECT / I_ROMAJI` | バッファに消す文字があるか |
 | `I_ROMAJI` | `esc` | `I_ESCAPE / N_OFF` | config.keepState |
+| `I_ROMAJI` | `mouse_click` | `I_DIRECT / I_ROMAJI` | クリックでカーソルが動くか（クリックした位置） |
 | `I_ROMAJI` | `stale` | `I_DIRECT / I_DIRECT / I_ROMAJI` | どの autocmd か（カーソルだけのずれか、バッファが変わったか、ずれが無いか） |
 | `I_SELECT` | `char` | `I_DIRECT / I_ROMAJI` | 打った文字（かなになるか、ローマ字が続くか） |
 | `I_SELECT` | `ctrl_u` | `I_DIRECT / I_SELECT` | バッファに消す文字があるか |
@@ -449,9 +713,16 @@
 | `I_SELECT` | `esc` | `I_ESCAPE / N_OFF` | config.keepState |
 | `I_SELECT` | `key_X` | `I_SELECT / P_PROMPT_SELECT` | 候補の位置（最後の候補で登録に入るか） |
 | `I_SELECT` | `key_x` | `I_SELECT / I_POINT` | 候補の位置（最初の候補か、2 つ目以降か） |
+| `I_SELECT` | `mouse_click` | `I_DIRECT / I_SELECT` | クリックでカーソルが動くか（クリックした位置） |
 | `I_SELECT` | `space` | `I_SELECT / P_PROMPT_SELECT` | 辞書に候補があるか／候補の位置 |
 | `I_SELECT` | `stale` | `I_DIRECT / I_DIRECT / I_SELECT` | どの autocmd か（カーソルだけのずれか、バッファが変わったか、ずれが無いか） |
 | `N_OFF` | `insert_enter` | `I_DIRECT / I_OFF` | config.keepState |
+| `T_DIRECT` | `char` | `T_DIRECT / T_ROMAJI` | 打った文字（かなになるか、ローマ字が続くか） |
+| `T_DIRECT` | `char_shift` | `T_ROMAJI / T_POINT` | 打った文字（1 打でかなになるか、▽ を始めるか） |
+| `T_POINT` | `bs` | `T_POINT / T_DIRECT` | 読みの長さ（1 文字か、2 文字以上か） |
+| `T_ROMAJI` | `char` | `T_ROMAJI / T_DIRECT` | 打った文字（かなになるか、ローマ字が続くか） |
+| `T_SELECT` | `char` | `T_DIRECT / T_ROMAJI` | 打った文字（かなになるか、ローマ字が続くか） |
+| `T_SELECT` | `key_x` | `T_POINT / T_SELECT` | 候補の位置（最初の候補か、2 つ目以降か） |
 
 ## 人が読むクラスの中で、相によって終わりが割れるイベント
 
@@ -462,15 +733,38 @@
 | `ni_return_keep` | `I_DIRECT / I_POINT / I_SELECT` |
 | `ni_v` | `V_IDLE / V_PRE` |
 
+### `T_DIRECT`
+
+| イベント | 終わり |
+|---|---|
+| `char` | `T_DIRECT / T_POINT` |
+| `char_shift` | `T_DIRECT / T_POINT` |
+| `key_X` | `T_DIRECT / T_POINT` |
+| `key_semicolon` | `T_DIRECT / T_POINT` |
+
 ### `V_PRE`
 
 | イベント | 終わり |
 |---|---|
 | `esc` | `I_POINT / I_SELECT` |
 
+### `T_NORMAL`
+
+| イベント | 終わり |
+|---|---|
+| `nt_insert` | `T_DIRECT / T_POINT` |
+
 ### `P_PROMPT`
 
 | イベント | 終わり |
 |---|---|
 | `register_cancel` | `I_POINT / I_SELECT` |
+
+### `T_POINT`
+
+| イベント | 終わり |
+|---|---|
+| `bs` | `T_DIRECT / T_POINT` |
+| `char` | `T_DIRECT / T_POINT` |
+| `char_shift` | `T_DIRECT / T_POINT` |
 

@@ -634,6 +634,11 @@ local function run_case(case)
   local last = rec.steps[#rec.steps]
   rec.final_class = last and last.class or rec.prefix_class
   rec.after = last and last.obs or rec.after_prefix
+  if rec.final_class == "BLOCKED" then
+    -- compare.lua は final_class == "BLOCKED" を「観測できず」に数える。
+    -- 集計がずれないよう、ここでも同じ印を付ける。
+    rec.blocked = "キーを打ったあとに観測できない"
+  end
 
   vim.fn.delete(dir, "rf")
   return rec

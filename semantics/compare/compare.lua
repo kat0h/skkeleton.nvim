@@ -168,6 +168,38 @@ local function configs()
   return out
 end
 
+-- 到達性（model_check.lua と同じ BFS）。keepState の両方で BFS し、
+-- どちらかで届く状態を「届く」とする。model.states[].reachable は一部の
+-- 状態にしか無いので、理由の判定には使わない。
+local function reachable_states()
+  local reachable = {}
+  for _, config in ipairs(configs()) do
+    local seen = {}
+    local queue = {}
+    for _, s in ipairs(model.initial) do
+      if not seen[s] then
+        seen[s] = true
+        queue[#queue + 1] = s
+      end
+    end
+    local head = 1
+    while head <= #queue do
+      local state = queue[head]
+      head = head + 1
+      for _, t in ipairs(by_from[state] or {}) do
+        if guard_ok(t, config) and not seen[t.to] then
+          seen[t.to] = true
+          queue[#queue + 1] = t.to
+        end
+      end
+    end
+    for s in pairs(seen) do
+      reachable[s] = true
+    end
+  end
+  return reachable
+end
+
 -- 遷移の終わり先が、観測で見えるクラスになるか（probe.lua と同じ）
 ---@param t table
 ---@param config table
@@ -455,6 +487,8 @@ local PREMISE = {
   bs = "読みの長さ（1 文字か、2 文字以上か）",
   ctrl_w = "バッファに消す文字があるか",
   ctrl_u = "バッファに消す文字があるか",
+  ctrl_a = "前に挿入した文字があるか（バッファの中身）",
+  mouse_click = "クリックでカーソルが動くか（クリックした位置）",
   key_x = "候補の位置（最初の候補か、2 つ目以降か）",
   key_X = "候補の位置（最後の候補で登録に入るか）",
   space = "辞書に候補があるか／候補の位置",
@@ -507,6 +541,7 @@ function M.main(argv)
   local observed_only = {}
   local effect_mismatch = {}
   local blocked = 0
+  local blocked_ids = {}
   local unknown_result = {}
   local covered = {}
   local prefix_bad = {}
@@ -514,6 +549,9 @@ function M.main(argv)
   for _, p in ipairs(probes) do
     if p.error or p.blocked or p.final_class == "BLOCKED" then
       blocked = blocked + 1
+      if p.transition then
+        blocked_ids[p.transition] = true
+      end
     else
       local state = p.state or p.from
       local from_class = p.prefix_class
@@ -567,6 +605,7 @@ function M.main(argv)
   end
 
   -- model-only: 観測で確かめられなかった遷移
+  local reachable = reachable_states()
   local model_only = {}
   for _, t in ipairs(model.transitions) do
     if not covered[t.id] then
@@ -578,7 +617,9 @@ function M.main(argv)
         why = "autocmd。キーで観測できない（probe では stale / winleave を打っていない）"
       elseif ev.kind == "input" then
         why = "入力（マウス・貼り付け）。キーで観測できない（07e #191）"
-      elseif not model.states[t.from].reachable and t.from ~= "R_MID" then
+      elseif blocked_ids[t.id] then
+        why = "観測できず（BLOCKED）。probe では観測できなかった"
+      elseif not reachable[t.from] then
         why = "到達しない状態からの遷移"
       elseif t.from == "I_ESCAPE" or t.from == "N_WAIT" or t.from == "R_MID" then
         why = "遷移の途中の状態からの遷移"
