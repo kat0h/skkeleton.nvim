@@ -99,6 +99,14 @@ local MACROS = {
   ["<Plug>(skkeleton-disable)"] = "<Plug>(skkeleton-disable)",
 }
 
+-- 1 文字ずつ送ると成り立たないキー。q は次の文字（レジスタ名）を待つので、
+-- `qa` をまとめて送る（#192）
+local RAW = {
+  qa = true,
+  ["@a"] = true,
+  ["3@a"] = true,
+}
+
 -- 文字のキーは、そのまま 1 つの遷移にする
 ---@param name string
 ---@return table
@@ -181,6 +189,24 @@ local PROFILES = {
       helpers.type(child, "<Esc>")
     end,
     alphabet = { "i", "a", "v", "V", "R", "<C-o>", ":", "q", "<Esc>" },
+  },
+  -- マクロと `.`（#192）。記録と再生は normal のキーなので、行のあるバッファから始める
+  macro = {
+    setup = function(child)
+      child.api.nvim_buf_set_lines(0, 0, -1, false, { "ab cd", "ef gh", "ij kl" })
+      child.api.nvim_win_set_cursor(0, { 1, 5 })
+    end,
+    alphabet = {
+      "qa",
+      "q",
+      "A",
+      "<Plug>(skkeleton-enable)",
+      "Kan<Space><C-j>",
+      "<Esc>",
+      "j",
+      "@a",
+      ".",
+    },
   },
   cmdline = {
     setup = function(child)
@@ -348,6 +374,8 @@ function M.alphabet(names)
   for _, name in ipairs(names) do
     if MACROS[name] then
       out[#out + 1] = { name = name, keys = MACROS[name], macro = true }
+    elseif RAW[name] then
+      out[#out + 1] = { name = name, keys = name, raw = true }
     else
       out[#out + 1] = token(name)
     end
@@ -372,6 +400,8 @@ function M.state_key(obs)
     obs.popup.shown and "1" or "0",
     obs.completion and obs.completion.menu and "1" or "0",
     tostring(obs.register_depth),
+    obs.registers and obs.registers.recording or "",
+    obs.registers and obs.registers.executing or "",
     tostring(obs.mappings.skk),
     tostring(#lines),
     tostring(obs.buffer.cursor[1]),
@@ -523,7 +553,9 @@ end
 local function feed_token(runner, tok, seq, file, write, record)
   local before = runner:observe()
   local from = before.class
-  for _, key in ipairs(M.scan_keys(tok.keys)) do
+  -- raw のトークンは、キー列をまとめて 1 回で送る（`qa` など次の文字を待つもの）
+  local keys = tok.raw and { tok.keys } or M.scan_keys(tok.keys)
+  for _, key in ipairs(keys) do
     local ok, err = runner:feed(key)
     local after
     if ok then
@@ -694,6 +726,8 @@ function M.parse_replay(s)
       if part ~= "" then
         if MACROS[part] then
           tokens[#tokens + 1] = { name = part, keys = MACROS[part], macro = true }
+        elseif RAW[part] then
+          tokens[#tokens + 1] = { name = part, keys = part, raw = true }
         else
           tokens[#tokens + 1] = { name = part, keys = part }
         end
