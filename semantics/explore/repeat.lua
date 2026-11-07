@@ -209,6 +209,27 @@ local cases = {
     expect = "T_NORMAL",
     known_issue = "#214",
   },
+  {
+    id = "replay.guard",
+    purpose = "再生中の guard は typed が空なので、typed の <S-Tab> と再生の <S-Tab> で読みの扱いが違う（既知の不具合）",
+    lines = { "ab cd", "ef gh" },
+    cursor = { 1, 2 },
+    keys = {
+      "qa",
+      "A",
+      "<Plug>(skkeleton-enable)",
+      "Kan",
+      "<S-Tab>",
+      "<Esc>",
+      "q",
+      "j",
+      "0",
+      "@a",
+    },
+    expect = "N_OFF",
+    known_issue = "#216",
+    guard_compare = true,
+  },
 }
 
 local function parse_args(argv)
@@ -377,6 +398,23 @@ local function run_case(case)
   end
   row.before = compact(before)
   row.after = compact(after)
+
+  -- typed のキーと再生のキーで、同じキー列の結果が違わないか（#216）。
+  -- 状態クラスは N_OFF のままで、バッファに残る読みだけが違う
+  if case.guard_compare then
+    local typed_line = after.buffer.lines[1] or ""
+    local replay_line = after.buffer.lines[2] or ""
+    row.guard = {
+      typed_line = typed_line,
+      replay_line = replay_line,
+      typed_has_reading = typed_line:find("かん", 1, true) ~= nil,
+      replay_has_reading = replay_line:find("かん", 1, true) ~= nil,
+    }
+    if row.guard.typed_has_reading and not row.guard.replay_has_reading then
+      row.ok = false
+      row.error = row.error or "再生で読みが消えた（typed のときと結果が違う）"
+    end
+  end
 
   -- undo は状態クラスに無いので、u ごとのバッファを残す
   if case.undo then

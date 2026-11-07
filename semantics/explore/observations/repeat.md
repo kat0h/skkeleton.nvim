@@ -1,6 +1,6 @@
 # マクロと `.` の観測（#192 / 07f）
 
-`repeat.jsonl` は、`semantics/explore/repeat.lua` で取った観測です（15 件）。1 行が 1 つのキー列で、前後の状態クラス（`semantics/GLOSSARY.md`）と、レジスタ `a` / `.`、undo の各段階のバッファを残しています。
+`repeat.jsonl` は、`semantics/explore/repeat.lua` で取った観測です（16 件）。1 行が 1 つのキー列で、前後の状態クラス（`semantics/GLOSSARY.md`）と、レジスタ `a` / `.`、undo の各段階のバッファを残しています。
 
 子の nvim は `tests/helpers.lua` の `e2e_set`（一時ディレクトリの辞書、`HISTFILE=/dev/null`、インジケータは無効）です。マクロの記録は normal のキーなので、`qa` と `@a` はキー列として流しています。
 
@@ -39,8 +39,9 @@ flock /tmp/heavy.lock timeout 600 nvim --headless -u NONE -i NONE \
 | 13 | `cmdline.record` | `qa` `:` `<C-j>` `Kan<C-j>` `<Esc>` `q` | N_OFF | N_OFF | `N_OFF`（既知の不具合 #214） |
 | 14 | `cmdline.replay` | 13 のあと `j` `@a` | N_OFF | N_OFF | `N_OFF`（既知の不具合 #214） |
 | 15 | `terminal.record` | terminal で `qa` … `q` | T_DIRECT | T_NORMAL | `T_NORMAL`（既知の不具合 #214） |
+| 16 | `replay.guard` | `qa` `A` enable `Kan` `<S-Tab>` `<Esc>` `q` `j` `0` `@a` | N_OFF | N_OFF | `N_OFF`（既知の不具合 #216） |
 
-「後」は観測した状態クラスです。13–15 は `△`（既知の不具合 #214）にしています。
+「後」は観測した状態クラスです。13–16 は `△`（既知の不具合 #214 / #216）にしています。16 は状態クラスが同じでも、typed のときと再生のときでバッファに残る読みが違います。
 
 ## 分かったこと（モデルと観測の差）
 
@@ -56,6 +57,8 @@ flock /tmp/heavy.lock timeout 600 nvim --headless -u NONE -i NONE \
 
 6. **cmdline と terminal では、skk が流したキーがレジスタに混ざる（#214）。** cmdline で skk を有効にして記録すると、レジスタに `▽k`、BS、`<Cmd>lua require('skkeleton.render').finish()<CR>` が入ります。`@a` で再生すると `E492: Not an editor command: かん` になります（`cmdline.replay`）。terminal でも `▽か` と `finish()` が入ります（`terminal.record`。再生は未確認）。insert では #36 の修正で混ざらないので、`render.lua` の `feed` が cmdline / terminal で `t` を残していることによると見ています。issue #214 にしました。
 
+7. **再生中の guard は、typed のときと結果が違う（#216）。** 記録したマクロの中の `<S-Tab>` は、typed のときは guard が `かん` を確定してからタブを入れます（1 行目は `ab cdかん<Tab>`）。`@a` で再生すると `vim.on_key` の `typed` が空なので guard が確定せず、タブがバッファを変えたあとに `TextChangedI` が読みを drop します（2 行目は `ef gh<Tab>` で、`かん` が入らない）。状態クラスはどちらも N_OFF なので、モデルの性質では捕まりません。`repeat.jsonl` の `guard` に 2 行を残しました。issue #216 にしました。
+
 ## 過去の issue との対応
 
 | issue | 状態 | このモデルでの扱い |
@@ -64,6 +67,7 @@ flock /tmp/heavy.lock timeout 600 nvim --headless -u NONE -i NONE \
 | #57 | CLOSED | undo の区切りは `oos.repeat_undo`（`undo.replay` / `undo.dot` で観測） |
 | #152 | CLOSED | `.` が InsertEnter を起こして one-shot を使い切る。`t.N_KEEP.dot` と `O-dot-keepstate` で表した |
 | #214 | OPEN | cmdline / terminal のマクロのレジスタに skk の出力が混ざる（07f で見つけた別 issue） |
+| #216 | OPEN | 再生中の guard は `typed` が空なので、`<S-Tab>` で読みが消える（07f で見つけた別 issue） |
 
 ## モデルに足したもの
 
@@ -80,3 +84,4 @@ flock /tmp/heavy.lock timeout 600 nvim --headless -u NONE -i NONE \
 - レジスタ `a` 以外のレジスタは観測していません。#36 の再現と観測が `a` だけなので、モデルも `a` だけを対象にしています。
 - terminal で記録したマクロの再生は、端末のジョブを開き直す必要があり、まだ試していません。レジスタの混入だけを #214 に書きました。
 - `.` が繰り返す「直前の変更」の中身（insert か delete か）は状態クラスに持っていません。insert の `.` だけを観測しました。
+- マクロの再生中の guard（#216）は、状態クラスでは typed と同じに見えるので遷移にしていません。`repeat.jsonl` の `guard` と issue に残しました。
