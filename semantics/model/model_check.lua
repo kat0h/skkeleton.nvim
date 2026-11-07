@@ -4,6 +4,9 @@
 -- 性質が破れたら、そこへ行くまでのイベント列（反例）を出す。
 -- 既知の破れ（M.known）は △ として出し、失敗にしない。知らない破れは ✗ で失敗にする。
 --
+-- 観測の keys には、キーのほかに "@イベント名" を書ける（autocmd / User イベントを起こす）。
+-- 例: { "Kanj", "@blink_refresh", "<Tab>" }。
+--
 -- 使い方（リポジトリの一番上で動かす）:
 --   nvim --headless -u NONE -i NONE -l semantics/model/model_check.lua
 --   nvim --headless -u NONE -i NONE -l semantics/model/model_check.lua --verbose
@@ -66,7 +69,7 @@ local function validate()
   for _, name in ipairs({
     "commit_reading", "commit_candidate", "cancel", "drop", "keep", "reset_state",
     "restore_mapping", "install_mapping", "save_mapping", "clear_extmark", "clean_cmdline",
-    "render", "feed_key", "pass_key",
+    "show_completion", "hide_completion", "render", "feed_key", "pass_key",
   }) do
     effect_ok[name] = true
   end
@@ -199,6 +202,18 @@ local function transitions_for_key(state_name, key, config)
   return out
 end
 
+-- キーではなくイベント（autocmd / API）を起こしたときの遷移を返す。
+-- 観測の keys に "@イベント名" と書くと、その位置でこのイベントを起こす（#190）。
+local function transitions_for_event(state_name, event_name, config)
+  local out = {}
+  for _, t in ipairs(by_from[state_name] or {}) do
+    if t.event == event_name and guard_ok(t, config) then
+      table.insert(out, t)
+    end
+  end
+  return out
+end
+
 -- 内部の片付け（SafeState、escape の片付け、i→R の移り変わり）を、なくなるまで進める
 local function settle(paths, config)
   local out = {}
@@ -243,7 +258,13 @@ local function run_keys(keys, config, start)
   for _, key in ipairs(keys) do
     local next_paths = {}
     for _, path in ipairs(paths) do
-      for _, t in ipairs(transitions_for_key(path.state, key, config)) do
+      local list
+      if key:sub(1, 1) == "@" then
+        list = transitions_for_event(path.state, key:sub(2), config)
+      else
+        list = transitions_for_key(path.state, key, config)
+      end
+      for _, t in ipairs(list) do
         local p = { state = t.to, trail = copy(path.trail) }
         table.insert(p.trail, t.id)
         table.insert(next_paths, p)

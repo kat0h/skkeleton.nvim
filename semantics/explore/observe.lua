@@ -112,6 +112,21 @@ M.snapshot_source = [[(function()
   end
 
   local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+
+  -- 補完のメニュー。blink.cmp は自分の浮動ウィンドウを出す（filetype は blink-cmp-menu）。
+  -- 画面の位置も、外から見える値として取る（#143、#174）
+  local completion = { menu = false, row = -1, col = -1 }
+  for _, w in ipairs(vim.api.nvim_list_wins()) do
+    local b = vim.api.nvim_win_get_buf(w)
+    if vim.bo[b].filetype == "blink-cmp-menu" then
+      local pos = vim.api.nvim_win_get_position(w)
+      completion.menu = true
+      completion.row = pos[1]
+      completion.col = pos[2]
+      break
+    end
+  end
+
   return {
     buf = buf,
     win = win,
@@ -130,6 +145,7 @@ M.snapshot_source = [[(function()
     cmdline = cmdline,
     terminal = terminal,
     popup = popup,
+    completion = completion,
     mappings = {
       i = i_total,
       c = c_total,
@@ -179,8 +195,12 @@ function M.classify(obs)
     return "P_PROMPT"
   end
 
-  -- 組み込みの補完は Vim のモードが ic
-  if mode == "ic" then
+  -- 組み込みの補完は Vim のモードが ic。blink.cmp は Vim のモードを変えずに
+  -- 自分のメニューを出すので、pre-edit が残ったままでも IC とする
+  if mode == "ic" or mode == "ix" then
+    return "IC"
+  end
+  if enabled and preedit ~= "" and (obs.completion or {}).menu then
     return "IC"
   end
 
@@ -217,6 +237,9 @@ function M.classify(obs)
 
   -- insert
   if mode == "i" then
+    if not enabled then
+      return "I_OFF"
+    end
     if state.phase == "escape" then
       return "I_ESCAPE"
     end
@@ -227,7 +250,7 @@ function M.classify(obs)
       if state.henkan_feed ~= "" then
         return "I_POINT"
       end
-      return "I_PENDING"
+      return "I_ROMAJI"
     end
     return "I_DIRECT"
   end
