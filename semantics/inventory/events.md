@@ -344,36 +344,36 @@ insert で有効化、`;ka`、`qa!`。
 
 normal の `q`（記録）、`@`（再生）、`.`（直前の変更の繰り返し）は、skk のマッピングが無い normal のキーです。skk の状態クラスは変わりませんが、skk が `feedkeys` で流したキーがレジスタに入るかどうかが変わります。
 
-### O19. insert のマクロを記録して再生する
+### O20. insert のマクロを記録して再生する
 
 normal で `qa`、`A`、有効化、`Kan<Space><C-j>`、`<Esc>`、`q`、`j`、`@a`。
 
 - 記録中の `reg_recording()` は `a`。レジスタ `a` は `A<80><fd>S(skkeleton-enable)Kan <80><fc>\4J\27` のような打ったキーだけで、確定した `缶` や `render.finish` は入らない（#36 の修正）。
 - `@a` のあと: 2 行目にも `缶` が入り、モード n、enabled=false、preedit=""。状態クラスは N_OFF のまま。
 
-### O20. `.` の繰り返し
+### O21. `.` の繰り返し
 
 `A`、有効化、`Kan<Space><C-j>`、`<Esc>`、`j0`、`.`。
 
 - 後: カーソルの行にもう一度 `缶` が入り、モード n、enabled=false。状態クラスは N_OFF。
 - `.` を 2 回続けても同じ。undo は確定ごとに区切られ、`u` 1 回で確定 1 つぶんが戻る（#57、#158）。
 
-### O21. keepState の one-shot と `.`（#152）
+### O22. keepState の one-shot と `.`（#152）
 
 `keepState = true` で insert して `<Esc>`、`.`、`a`。
 
 - `.` が InsertEnter を起こして one-shot を使い切る。そのあとの `a` は I_OFF で、skk は有効にならない。最後の変更が空の insert でも同じ。
 - one-shot があるときの `@a` は、再生の最後の `<Esc>` で one-shot をまた残す。そのあとの `a` は I_DIRECT になる。normal の移動だけのマクロには `<Esc>` が無いので残らない。
 
-### O22. マクロの再生中のキー
+### O23. マクロの再生中のキー
 
 `@a` の再生中、`vim.on_key` が見るキーには `reg_executing()` が `a` と付く。`typed` は空なので、guard は再生中の物理キーを確定の対象にしない（#216）。skk が流した確定文字列は、`render.finish` の `<Cmd>` として再生のキー列に出る。
 
-### O23. cmdline / terminal の記録（#214）
+### O24. cmdline / terminal の記録（#214）
 
 cmdline で `<C-j>` を toggle にして `qa` `:` `<C-j>` `Kan<C-j>` `<Esc>` `q` とすると、レジスタ `a` に `▽k`、BS、`<Cmd>lua require('skkeleton.render').finish()<CR>` が入る。`@a` で再生すると `E492: Not an editor command: かん` になる。terminal でも `▽か` と `finish()` が入る（再生は未確認）。insert では #36 の修正で混ざらない。詳しくは #214。
 
-### O24. 再生中の guard（#216）
+### O25. 再生中の guard（#216）
 
 `<S-Tab>` を含む insert のマクロを記録して再生する。typed の `<S-Tab>` は guard が `かん` を確定してからタブを入れるので、1 行目は `ab cdかん<Tab>` になる。`@a` の再生では `typed` が空なので guard が確定せず、タブのあとの `TextChangedI` が読みを drop する。2 行目は `ef gh<Tab>` になり、`かん` は入らない。状態クラスはどちらも N_OFF。詳しくは #216。
 
@@ -391,7 +391,7 @@ cmdline で `<C-j>` を toggle にして `qa` `:` `<C-j>` `Kan<C-j>` `<Esc>` `q`
 - キーそのもの（どのキーを skkeleton が受けるか）は #181。
 - terminal（t / nt）の状態機械は #188。今回の観測は insert・normal・visual・cmdline だけです。
 - 補完メニューの中の動き（blink.cmp の accept など）は #190。07d で blink.cmp を一時的に入れて観測しました（O19）。
-- マクロと `.` は 07f（#192）で足した（上の O19–O24）。貼り付け・マウス・ホイールは #191。
+- マクロと `.` は 07f（#192）で足した（上の O20–O25）。貼り付け・マウス・ホイールは #191。
 - 辞書 DB の非同期の構築（`dictionary/db.lua` の `run_async`、`vim.defer_fn`、`vim.schedule`）は入力状態を変えないので入れていません。
 - インジケータのフェードアウトのタイマー（`indicator.lua` 120–134 行）は表示だけです。
 

@@ -135,9 +135,9 @@ probe で確かめられなかった遷移です。
 - `V_IDLE` と `N_OFF`：`<Esc>` で I_DIRECT と N_OFF、`v` で I_DIRECT と N_OFF。visual で有効のままなのが分かる（作者の判断 2 のとおり）。
 - `NI` / `V_PRE` / `P_PROMPT` の相：NI の `<Esc>` は、direct / point / select でそれぞれ I_DIRECT / I_POINT / I_SELECT に戻ります。人が読むクラスは 1 つのままで、相を属性に持つ形（作者の判断 4 のとおり）が要ります。
 
-### 分ける必要があると分かったが、この PR では分けていない
+### 分ける必要があると分かった（フォローアップで分けた）
 
-- `▽` と `▽*`（作者の判断 7）。`a` で I_POINT と I_SELECT、`<Space>` で I_SELECT と P_PROMPT に割れました。結果が割れたので、判断の条件に当たります。いまのモデルは `I_POINT` 1 つのままです。分けると `I_POINT` の遷移（約 40 本）を複製し、`NI` / `V_PRE` の相も増えるので、仕様書（#194）と SPIN（#193）を進めるときにまとめて扱うのがよさそうです。
+- `▽` と `▽*`（作者の判断 7）。`a` で I_POINT と I_SELECT、`<Space>` で I_SELECT と P_PROMPT に割れました。結果が割れたので、判断の条件に当たります。この PR では `I_POINT` 1 つのままでしたが、07f の後のフォローアップで、人が読むクラスは `I_POINT` のまま相（okurinasi / okuriari）を属性に持つ `I_POINT` と `I_POINT_OKURI` に分けました（`model.lua` の `M.decisions` 7）。
 
 ### 分けない（前提にする）
 
@@ -177,7 +177,6 @@ probe で確かめられなかった遷移です。
 
 ## 決めていないこと
 
-- `▽` と `▽*` を分ける作業（分けることは決まったが、モデルの変更はしていない）
 - `I_ROMAJI` の打ちかけの中身をどう持つか
 - #210 の直し方（3 案を issue に書いた）
 - `t.I_POINT.key_gt` / `t.I_SELECT.key_gt` / `t.I_SELECT.key_X.register` の確定

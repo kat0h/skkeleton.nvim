@@ -136,16 +136,35 @@ M.states = {
   },
   I_POINT = {
     class = "I_POINT",
-    layer = "Vim のモードが i、▽ / ▽*（okurinasi / okuriari）",
+    aspect = "okurinasi",
+    layer = "Vim のモードが i、▽（okurinasi）",
     vim_mode = "i",
     enabled = true,
-    phase = "input:okurinasi|okuriari",
+    phase = "input:okurinasi",
     reading = "point",
     preedit = "point",
-    label = "▽ / ▽*",
-    refs = { "keymap.lua:23-56", "function/input.lua" },
-    notes = "▽ と ▽* はまとめた。06 の観測で `a` は I_POINT と I_SELECT、`<Space>` は I_SELECT と P_PROMPT に割れ、"
-      .. "作者の判断 7 の条件が成立した。分ける作業は #194 と #193 で扱う。",
+    label = "▽",
+    refs = { "keymap.lua:23-56", "function/input.lua", "#186" },
+    notes = "人が読むクラスは I_POINT の 1 つで、相（okurinasi）を aspect に持つ（作者の判断 7）。"
+      .. "06（#186）の観測で ▽ と ▽* は同じキーでも結果が割れたので、▽* を I_POINT_OKURI に分けた。"
+      .. "`a` は ▽ では読みに足されて I_POINT のまま、▽* では I_SELECT になる。"
+      .. "`<Space>` は ▽ では I_SELECT、▽* では P_PROMPT になる。",
+  },
+  I_POINT_OKURI = {
+    class = "I_POINT",
+    aspect = "okuriari",
+    layer = "Vim のモードが i、▽*（okuriari。送り仮名を打っている）",
+    vim_mode = "i",
+    enabled = true,
+    phase = "input:okuriari",
+    reading = "point",
+    preedit = "point",
+    label = "▽*",
+    refs = { "keymap.lua:23-56", "function/input.lua:147-199", "function/henkan.lua:21-56", "#186" },
+    notes = "人が読むクラスは I_POINT の 1 つで、相（okuriari）を aspect に持つ（作者の判断 7）。"
+      .. "06（#186）の観測で、`a` は ▽* では送り仮名が埋まるとすぐ変換して I_SELECT になり、"
+      .. "`<Space>` は辞書登録のプロンプト（P_PROMPT）に入った。▽ の結果（I_POINT / I_SELECT）と割れる。"
+      .. "打てるキーは ▽ と同じなので、遷移は I_POINT のものを写し、結果が割れる遷移だけここで書き直す。",
   },
   I_SELECT = {
     class = "I_SELECT",
@@ -1875,6 +1894,103 @@ add({
     .. "その <Esc> が再生され、keepState の one-shot がまた残る（観測）。",
 })
 
+-- N_KEEP は N_OFF と同じクラスなので、N_OFF が持つ normal の遷移も持つ（#215 のレビュー 2）。
+-- one-shot を使い切る遷移（<Insert> と insert_enter）だけは、N_OFF と行き先が違う（I_DIRECT）。
+add({
+  id = "t.N_KEEP.enable",
+  from = "N_KEEP",
+  event = "enable",
+  to = "I_DIRECT",
+  effects = { "save_mapping", "install_mapping", "reset_state", "hide_completion" },
+  status = "ok",
+  refs = { "main.lua:101-125", "#152", "#215" },
+  notes = "one-shot が残っていても、enable を押すとその場で有効になる。"
+    .. "one-shot は次の InsertEnter まで残るが、モデルは N_KEEP を離れたあとの one-shot を持たない。",
+})
+add({
+  id = "t.N_KEEP.toggle",
+  from = "N_KEEP",
+  event = "toggle",
+  to = "I_DIRECT",
+  effects = { "save_mapping", "install_mapping", "reset_state" },
+  status = "ok",
+  refs = { "main.lua:169-175", "#152", "#215" },
+  notes = "無効なので toggle は enable と同じ。",
+})
+add({
+  id = "t.N_KEEP.insert_key",
+  from = "N_KEEP",
+  event = "insert_key",
+  to = "I_DIRECT",
+  effects = { "save_mapping", "install_mapping", "reset_state" },
+  status = "ok",
+  refs = { "host.lua:235-244", "#29", "#38", "#152", "#156", "#215" },
+  notes = "normal の <Insert> は insert に入り、InsertEnter で one-shot を使い切る。"
+    .. "N_OFF からの <Insert> は I_OFF（無効）だが、one-shot が残っていれば I_DIRECT になる。"
+    .. "レビューで指摘された、この 2 つの結果の違いを書いた遷移。",
+})
+add({
+  id = "t.N_KEEP.normal_R",
+  from = "N_KEEP",
+  event = "normal_R",
+  to = "R_OFF",
+  effects = { "pass_key" },
+  status = "ok",
+  refs = { "Vim 本体", "#152", "#215" },
+  notes = "normal の R は置換モードへ。InsertEnter を起こさないので one-shot は使わない。"
+    .. "モデルは R_OFF のあとの one-shot を引き継がない。",
+})
+add({
+  id = "t.N_KEEP.mouse_click",
+  from = "N_KEEP",
+  event = "mouse_click",
+  to = "N_KEEP",
+  effects = { "pass_key" },
+  status = "ok",
+  refs = { "Vim 本体", "#47", "#152", "#191", "#215" },
+  notes = "normal のクリックはカーソル移動だけで、one-shot は残る。",
+})
+add({
+  id = "t.N_KEEP.term_open",
+  from = "N_KEEP",
+  event = "term_open",
+  to = "T_OFF",
+  effects = { "pass_key" },
+  status = "ok",
+  refs = { "keys.md §5", "#152", "#188", "#215" },
+  notes = "terminal を開く。one-shot は残るが、モデルは T_OFF に移ったあとの one-shot を持たない。",
+})
+add({
+  id = "t.N_KEEP.blink_hide",
+  from = "N_KEEP",
+  event = "blink_hide",
+  to = "N_KEEP",
+  effects = { "hide_completion" },
+  status = "ok",
+  refs = { "completion/init.lua:135-142", "#24", "#152", "#215" },
+  notes = "skkeleton が開いたものではないメニューを閉じるだけ。one-shot は残る。",
+})
+add({
+  id = "t.N_KEEP.cmdline_open",
+  from = "N_KEEP",
+  event = "cmdline_open",
+  to = "C_OFF",
+  effects = {},
+  status = "ok",
+  refs = { "keys.md §1", "#152", "#187", "#215" },
+  notes = "normal で `:` / `/`。one-shot は残るが、モデルは C_OFF に移ったあとの one-shot を持たない。",
+})
+add({
+  id = "t.N_KEEP.visual_entry",
+  from = "N_KEEP",
+  event = "visual_entry",
+  to = "N_KEEP",
+  effects = { "pass_key" },
+  status = "ok",
+  refs = { "#28", "cleanup.lua:179-190", "#152", "#215" },
+  notes = "normal から visual へ。skk は無効のままで、one-shot も残る。",
+})
+
 -- マクロの記録と再生、`.` の繰り返し（#192）
 add({
   id = "t.N_OFF.macro_record_start",
@@ -2171,6 +2287,14 @@ add({
   notes = "カーソルもバッファも変わらなければ、そのまま insert に戻る。",
 })
 add({
+  id = "t.NI_POINT.return_keep.okuri",
+  from = "NI_POINT", event = "ni_return_keep", to = "I_POINT_OKURI",
+  effects = { "keep" },
+  status = "unknown", refs = { "#117", "#186" },
+  notes = "▽* から <C-o> で niI に入ったときも mode は okuriari のままなので、戻り先は ▽* になる。"
+    .. "niI は送り仮名の有無を状態に持たないので、戻り先は I_POINT と I_POINT_OKURI に割れる。",
+})
+add({
   id = "t.NI_SELECT.return_keep",
   from = "NI_SELECT", event = "ni_return_keep", to = "I_SELECT",
   effects = { "keep" },
@@ -2293,6 +2417,14 @@ add({
   effects = { "keep", "render" },
   status = "ok", refs = { "cleanup.lua:192-251" }, observed = { "O-ctrl-o-v-esc" },
   notes = "観測では pre-edit を保ったまま insert に戻った（data.js の「抜けると確定」は再現しなかった）。",
+})
+add({
+  id = "t.V_PRE_POINT.esc.okuri",
+  from = "V_PRE_POINT", event = "esc", to = "I_POINT_OKURI",
+  effects = { "keep", "render" },
+  status = "unknown", refs = { "cleanup.lua:192-251", "#186" },
+  notes = "▽* から <C-o>v で visual に入ったときも mode は okuriari のままなので、戻り先は ▽* になる。"
+    .. "V_PRE は送り仮名の有無を状態に持たないので、戻り先は I_POINT と I_POINT_OKURI に割れる。",
 })
 add({
   id = "t.V_PRE_SELECT.esc",
@@ -2454,9 +2586,11 @@ add({
 })
 add({
   id = "t.I_POINT.char_shift",
-  from = "I_POINT", event = "char_shift", to = "I_POINT",
+  from = "I_POINT", event = "char_shift", to = "I_POINT_OKURI",
   effects = { "keep", "render" },
-  status = "unknown", refs = { "function/input.lua:85-120" },
+  status = "unknown", refs = { "function/input.lua:147-177", "#186" },
+  notes = "▽ でシフト付きの文字を打つと、henkan_point が送り仮名モード（▽*）へ移る。"
+    .. "たとえば ▽かん で K を打つと ▽かん*k になる。▽* の状態を I_POINT_OKURI に分けた。",
 })
 add({
   id = "t.I_SELECT.char_shift",
@@ -2649,6 +2783,14 @@ add({
   effects = { "keep", "render" },
   status = "ok", refs = { "keymap.lua:51", "function/henkan.lua:116-133" }, observed = { "O-x-back" },
   notes = "最初の候補でさらに x を押すと ▽ に戻る。",
+})
+add({
+  id = "t.I_SELECT.x.back.okuri",
+  from = "I_SELECT", event = "key_x", to = "I_POINT_OKURI",
+  effects = { "keep", "render" },
+  status = "unknown", refs = { "keymap.lua:51", "function/henkan.lua:116-133", "#186" },
+  notes = "▽* から変換に入った ▼ で x を押すと、henkan_backward は mode を変えないので ▽* に戻る。"
+    .. "▼ は送り仮名の有無を状態に持たないので、x の戻り先は I_POINT と I_POINT_OKURI に割れる。",
 })
 add({
   id = "t.I_SELECT.key_X.purge",
@@ -6075,6 +6217,80 @@ for _, from in ipairs({ "C_REPLACE_ROMAJI", "C_REPLACE_POINT", "C_REPLACE_SELECT
   })
 end
 
+-- ▽*（okuriari）の遷移（作者の判断 7、#186）
+--
+-- 06 の観測で ▽ と ▽* は同じキーでも結果が割れたので、人が読むクラスは I_POINT のまま
+-- 相を分けた（I_POINT_OKURI）。▽* から打てるキーは ▽ と同じなので、I_POINT の遷移を
+-- 写してから、結果が割れる遷移だけ I_POINT_OKURI 用に書き直す。observed は写さない
+-- （観測のキー列は ▽ から通るので、▽* の遷移を通らない）。
+--
+-- 書き直す・足す遷移（06 の観測とコード読解）:
+--   char        ▽* で送り仮名が埋まると、その場で変換して I_SELECT になる（`a`）。
+--               続くローマ字は I_POINT_OKURI のまま（分かれる組）。
+--   space       ▽* は送りありの語を引くので、既定の辞書では登録のプロンプトに入る
+--               （P_PROMPT_SELECT）。▽ の <Space> は I_SELECT になる。
+--   bs          送り仮名を全部消すと ▽ に戻る。それまでは ▽* のまま。
+--   そのほか    行き先と効果は ▽ と同じ。
+local point_okuri_overrides = {
+  ["space.select"] = false, -- ▽* の <Space> は登録のプロンプトに入る（space.register に寄せる）
+  ["space.register"] = {
+    to = "P_PROMPT_SELECT",
+    refs = { "function/henkan.lua:21-56", "host.lua:175-213", "#144", "#186", "#189" },
+    observed = { "P.c.okuri.I_POINT_ARI.space" },
+    notes = "▽* の <Space> は送りありの語を辞書に引く。既定の辞書に無いので、06 の観測では"
+      .. "登録のプロンプト（P_PROMPT_SELECT）に入った。▽ の <Space> は I_SELECT になった。",
+  },
+  ["bs.empty"] = {
+    to = "I_POINT",
+    notes = "▽* で送り仮名を全部消すと、mode は okurinasi に戻る（function/input.lua の delete_char）。",
+  },
+}
+local point_clone_of = {}
+do
+  local point = {}
+  for _, t in ipairs(M.transitions) do
+    if t.from == "I_POINT" then
+      point[#point + 1] = t
+    end
+  end
+  for _, src in ipairs(point) do
+    local suffix = src.id:match("^t%.I_POINT%.(.+)$")
+    local override = suffix and point_okuri_overrides[suffix]
+    if suffix and override ~= false then
+      local t = {
+        id = "t.I_POINT_OKURI." .. suffix,
+        from = "I_POINT_OKURI",
+        event = src.event,
+        to = src.to == "I_POINT" and "I_POINT_OKURI" or src.to,
+        guard = src.guard,
+        effects = src.effects,
+        status = src.status,
+        refs = src.refs,
+        observed = {},
+        notes = src.notes,
+      }
+      if override then
+        for k, v in pairs(override) do
+          t[k] = v
+        end
+      end
+      add(t)
+      point_clone_of[t.id] = src.id
+    end
+  end
+end
+add({
+  id = "t.I_POINT_OKURI.char.select",
+  from = "I_POINT_OKURI", event = "char", to = "I_SELECT",
+  effects = { "keep", "render" },
+  status = "ok",
+  refs = { "function/input.lua:35-60,147-199", "function/henkan.lua:21-56", "#186" },
+  observed = { "P.c.okuri.I_POINT_ARI.a" },
+  notes = "▽* で送り仮名が埋まると、accept_result がその場で henkan_first を呼ぶ（`a` など）。"
+    .. "06 の観測では ▽ の `a` は I_POINT のまま、▽* の `a` は I_SELECT になった（作者の判断 7）。"
+    .. "続くローマ字（`k` など）は送り仮名がまだ埋まらないので I_POINT_OKURI のまま。",
+})
+
 -- 観測の記録（子の nvim、一時ディレクトリの辞書）
 --
 -- 04 の観測。1 つのキーを 1 回の入力として流し、落ち着いてから
@@ -8343,6 +8559,15 @@ M.out_of_scope = {
     keys = {},
   },
   {
+    id = "oos.keepstate_macro_record",
+    what = "keepState の one-shot 待ちの最中に `qa` でマクロの記録を始める組合せ（N_KEEP と N_REC が同時に成り立つ）",
+    why = "N_KEEP と N_REC を別の状態にしているので、両方を同時に持てない。`qa` は N_OFF からの"
+      .. "遷移だけを書き、one-shot 待ちの側は掘り残しにした（#215 のレビュー 2）。"
+      .. "one-shot は記録では使われないので、記録を止めたあとの insert では有効になる。",
+    refs = { "#152", "#192", "#215" },
+    keys = { "qa" },
+  },
+  {
     id = "oos.mouse_position",
     what = "#47 のインジケータの位置（visual から insert に戻ったとき）",
     why = "表示（インジケータ）の位置は P2 / P15 の層で、このモデルの状態クラスには持っていない。"
@@ -8580,6 +8805,32 @@ for _, k in ipairs(cmdline_known) do
   M.known[#M.known + 1] = k
 end
 
+-- I_POINT_OKURI に写した遷移のうち、I_POINT 側で既知の破れになっているものは、
+-- 同じ性質・issue を写す（読みの落ち方は ▽* でも同じ）。
+do
+  local function key(k)
+    return tostring(k.property) .. "\0" .. k.transition
+  end
+  local seen = {}
+  for _, k in ipairs(M.known) do
+    seen[key(k)] = true
+  end
+  for _, t in ipairs(M.transitions) do
+    local src = point_clone_of[t.id]
+    if src then
+      for _, k in ipairs(M.known) do
+        if k.transition == src then
+          local copy = { property = k.property, transition = t.id, refs = k.refs }
+          if not seen[key(copy)] then
+            seen[key(copy)] = true
+            M.known[#M.known + 1] = copy
+          end
+        end
+      end
+    end
+  end
+end
+
 -- 作者の判断（10 点）と、このモデルでの反映先（#204 の 2026-11-06 のコメント）
 M.decisions = {
   {
@@ -8624,9 +8875,14 @@ M.decisions = {
   },
   {
     id = 7,
-    title = "▽ と ▽* は今はまとめる",
-    decision = "06 で結果が割れたら分ける。",
-    reflected_in = { "I_POINT" },
+    title = "▽ と ▽* は結果が割れたので分ける",
+    decision = "06（#186）の観測で条件が成立した。`a` は ▽ で I_POINT、▽* で I_SELECT になり、"
+      .. "`<Space>` は ▽ で I_SELECT、▽* で P_PROMPT になった。人が読むクラスは I_POINT のまま、"
+      .. "相（okurinasi / okuriari）を aspect に持つ I_POINT と I_POINT_OKURI に分ける。"
+      .. "打てるキーは同じなので遷移は写し、結果が割れる遷移（char / space / bs など）だけ書き直す。",
+    reflected_in = { "I_POINT", "I_POINT_OKURI", "t.I_POINT_OKURI.char.select",
+      "t.I_POINT_OKURI.space.register", "t.I_POINT_OKURI.bs.empty",
+      "P.c.okuri.I_POINT_ARI.a", "P.c.okuri.I_POINT_ARI.space" },
   },
   {
     id = 8,
@@ -8857,6 +9113,13 @@ M.probes = {
   { id = "P.t.V_IDLE.esc", transition = "t.V_IDLE.esc", keys = { "i", "<Plug>(skkeleton-enable)", "<C-o>", "v", "<Esc>" }, expect = { "I_DIRECT" } },
   { id = "P.t.V_PRE_POINT.esc", transition = "t.V_PRE_POINT.esc", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<C-o>", "v", "<Esc>" }, expect = { "I_POINT" } },
   { id = "P.t.V_PRE_SELECT.esc", transition = "t.V_PRE_SELECT.esc", keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "n", "<Space>", "<C-o>", "v", "<Esc>" }, expect = { "I_SELECT" } },
+  -- 06（#186）の ▽ と ▽* の比較（c.okuri.*）。同じキーでも結果が割れた（作者の判断 7）。
+  -- ▽（Kan）の `a` は I_POINT、▽*（KaeR）の `a` は I_SELECT。`<Space>` は ▽ が I_SELECT、
+  -- ▽* が辞書登録のプロンプト（P_PROMPT）になる。
+  { id = "P.c.okuri.I_POINT_ARI.a", transition = "t.I_POINT_OKURI.char.select",
+    keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "e", "R", "a" }, expect = { "I_SELECT" } },
+  { id = "P.c.okuri.I_POINT_ARI.space", transition = "t.I_POINT_OKURI.space.register",
+    keys = { "i", "<Plug>(skkeleton-enable)", "K", "a", "e", "R", "<Space>" }, expect = { "P_PROMPT" } },
 }
 
 -- 06 の観測を、遷移の observed 欄に足す。04 の observed はそのまま残す。
