@@ -186,7 +186,6 @@ function User:save_ranks(path)
   local wrote = false
   if fd then
     wrote = uv.fs_write(fd, content, 0) == #content
-    wrote = uv.fs_fsync(fd) ~= nil and wrote
     uv.fs_close(fd)
     wrote = wrote and uv.fs_rename(tmp, target) ~= nil
     if not wrote then
@@ -346,7 +345,6 @@ function User:save()
   local fd = uv.fs_open(tmp, "w", stat and bit.band(stat.mode, 511) or 420)
   if fd then
     ok = uv.fs_write(fd, content, 0) == #content
-    ok = uv.fs_fsync(fd) ~= nil and ok
     uv.fs_close(fd)
     ok = ok and uv.fs_rename(tmp, target) ~= nil
     if not ok then
