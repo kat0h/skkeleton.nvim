@@ -254,7 +254,10 @@ function M.setup()
   vim.api.nvim_create_autocmd("CmdlineLeave", {
     group = group,
     callback = function()
-      drop_cmdline_preedit()
+      -- <C-r>= などの内側の cmdline を抜けるときは、外側の cmdline の記録を残す (#206)
+      if vim.v.event.cmdtype == ":" then
+        drop_cmdline_preedit()
+      end
       -- <C-o>: から戻ったときなど、insert の pre-edit が残っていればその値を保つ (#86)
       M.update_state_variable()
       local cmdtype = vim.v.event.cmdtype
