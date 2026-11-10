@@ -20,8 +20,8 @@ function M.sort_completions(completion_result, ranks)
       if not seen[key] then
         seen[key] = true
         dict_order = dict_order + 1
-        local pure_word = word:find(";", 1, true) and word:match("^([^;]*)") or word
-        local user_rank = ranks[word] or ranks[pure_word] or ranks[pure_word:gsub("\\073", ";")]
+        -- denops 版と同じく、候補の文字列と完全に一致するものだけを照合する (#159)
+        local user_rank = ranks[word]
         items[#items + 1] = {
           kana = kana,
           word = word,

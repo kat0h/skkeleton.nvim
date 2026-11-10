@@ -196,9 +196,13 @@ function User:save_ranks(path)
   if not wrote then
     local direct_fd = uv.fs_open(target, "w", 420)
     if direct_fd then
-      uv.fs_write(direct_fd, content, 0)
+      wrote = uv.fs_write(direct_fd, content, 0) == #content
       uv.fs_close(direct_fd)
     end
+  end
+  if not wrote then
+    -- denops 版と同じく、書けなかったときは警告を出す (#159)
+    vim.notify(("skkeleton: can't write candidate rank data to %s"):format(expanded), vim.log.levels.WARN)
   end
 end
 
