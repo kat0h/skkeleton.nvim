@@ -64,6 +64,43 @@ T["hooks"]["insert モードに入ると英字が出て、出ると閉じる"] =
   eq(#floats(), 0)
 end
 
+T["hooks"]["textlock 中に閉じられなくても Normal に戻ると残らない (#223)"] = function()
+  child.lua([[
+    require("skkeleton.indicator.config").setup({ fadeOutMs = 0 })
+    _G.indicator = require("skkeleton.indicator.indicator").new()
+    vim.keymap.set("i", "<F6>", function()
+      _G.indicator:close()
+      return ""
+    end, { expr = true })
+  ]])
+  child.type_keys("i")
+  eq(#floats(), 1)
+  child.type_keys("<F6><Esc>")
+  wait(30)
+  eq(child.fn.mode(), "n")
+  eq(#floats(), 0)
+end
+
+T["hooks"]["作り直す前に管理から外れたインジケータだけを閉じる (#223)"] = function()
+  setup({ fadeOutMs = 0 })
+  child.type_keys("i")
+  eq(#floats(), 1)
+  child.lua([[
+    local buf = vim.api.nvim_create_buf(false, true)
+    _G.other_win = vim.api.nvim_open_win(buf, false, {
+      relative = "editor", row = 0, col = 20, width = 2, height = 1,
+    })
+    package.loaded["skkeleton.indicator"] = nil
+    require("skkeleton.indicator").setup({ fadeOutMs = 0 })
+  ]])
+  wait(30)
+  eq(#floats(), 2)
+  eq(child.lua_get("vim.api.nvim_win_is_valid(_G.other_win)"), true)
+  child.type_keys("<Esc>")
+  eq(#floats(), 1)
+  eq(child.lua_get("vim.api.nvim_win_is_valid(_G.other_win)"), true)
+end
+
 T["hooks"]["mode-changed でテキスト、幅、ハイライトが変わる"] = function()
   setup({})
   child.type_keys("i")
