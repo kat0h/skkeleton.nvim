@@ -25,6 +25,7 @@ function Indicator.new()
     modes = Modes.new(),
     timer = assert(vim.uv.new_timer()),
     winid = {},
+    cap_backgrounds = {},
   }, Indicator)
   self.group = vim.api.nvim_create_augroup(NAME, {})
   local defs = {
@@ -45,6 +46,11 @@ function Indicator.new()
     { "OptionSet", "background", self:method("refresh") },
     { "ColorScheme", "*", self:method("refresh") },
   }
+  vim.api.nvim_set_decoration_provider(self.ns, {
+    on_end = function()
+      self:update_cap_backgrounds()
+    end,
+  })
   for _, def in ipairs(defs) do
     vim.api.nvim_create_autocmd(def[1], { group = self.group, pattern = def[2], callback = def[3] })
   end
@@ -73,6 +79,15 @@ local function has_preedit()
   return type(state) == "table" and (state.preedit or "") ~= ""
 end
 
+-- reverse のセルでは foreground が実際の背景色になる
+local function cell_background(cell)
+  local attrs = cell[2] or {}
+  if attrs.reverse then
+    return attrs.foreground or vim.api.nvim_get_hl(0, { name = "Normal", link = false }).fg or "NONE"
+  end
+  return attrs.background or "NONE"
+end
+
 -- 今のバッファでは出さない設定か
 ---@return boolean
 function Indicator:is_disabled()
@@ -92,13 +107,19 @@ end
 function Indicator:set_text(buf, mode)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, { mode.text })
   vim.api.nvim_buf_clear_namespace(buf, self.ns, 0, -1)
-  if config.style == "pill" and mode.cap_hl_name and mode.left_cap and mode.right_cap then
+  if
+    config.style == "pill"
+    and mode.left_cap_hl_name
+    and mode.right_cap_hl_name
+    and mode.left_cap
+    and mode.right_cap
+  then
     local left_len = #mode.left_cap
     local right_start = #mode.text - #mode.right_cap
     vim.api.nvim_buf_set_extmark(buf, self.ns, 0, 0, {
       end_row = 0,
       end_col = left_len,
-      hl_group = mode.cap_hl_name,
+      hl_group = mode.left_cap_hl_name,
     })
     vim.api.nvim_buf_set_extmark(buf, self.ns, 0, left_len, {
       end_row = 0,
@@ -108,7 +129,7 @@ function Indicator:set_text(buf, mode)
     vim.api.nvim_buf_set_extmark(buf, self.ns, 0, right_start, {
       end_row = 0,
       end_col = #mode.text,
-      hl_group = mode.cap_hl_name,
+      hl_group = mode.right_cap_hl_name,
     })
   else
     vim.api.nvim_buf_set_extmark(buf, self.ns, 0, 0, {
@@ -155,6 +176,50 @@ function Indicator:border_highlight(winid, mode)
     vim.wo[winid].winblend = config.winblend or 0
     vim.wo[winid].winhighlight = "FloatBorder:" .. mode.hl_name
   end
+end
+
+-- 描画後に既定 grid の下地色を読み、端の色が変わったときだけ反映する
+function Indicator:update_cap_backgrounds()
+  -- nvim__inspect_cell は実験的 API で、既定 grid の RGB 属性を読む
+  if config.style ~= "pill" or not self:is_opened() then
+    return
+  end
+  local winid = self.winid[1]
+  local pos = vim.fn.screenpos(winid, 1, 1)
+  if not pos.row or pos.row <= 0 or not pos.col or pos.col <= 0 then
+    return
+  end
+  local mode = self.modes:detect()
+  if not mode.left_cap_hl_name or not mode.right_cap_hl_name then
+    return
+  end
+  local row = pos.row - 1
+  local left_col = pos.col - 1
+  local right_col = left_col + mode.width - 1
+  local ok_left, left = pcall(vim.api.nvim__inspect_cell, 1, row, left_col)
+  local ok_right, right = pcall(vim.api.nvim__inspect_cell, 1, row, right_col)
+  if not ok_left or not ok_right or not left or not right then
+    return
+  end
+  local left_bg = cell_background(left)
+  local right_bg = cell_background(right)
+  local cached = self.cap_backgrounds[mode.name]
+  if cached and cached[1] == left_bg and cached[2] == right_bg then
+    return
+  end
+  self.cap_backgrounds[mode.name] = { left_bg, right_bg }
+  vim.schedule(function()
+    if not self:is_opened() or config.style ~= "pill" then
+      return
+    end
+    local left_hl = vim.api.nvim_get_hl(0, { name = mode.left_cap_hl_name, link = false })
+    local right_hl = vim.api.nvim_get_hl(0, { name = mode.right_cap_hl_name, link = false })
+    left_hl.bg = left_bg
+    right_hl.bg = right_bg
+    vim.api.nvim_set_hl(0, mode.left_cap_hl_name, left_hl)
+    vim.api.nvim_set_hl(0, mode.right_cap_hl_name, right_hl)
+    vim.cmd("redraw")
+  end)
 end
 
 ---@param mode skkeleton.IndicatorMode
@@ -396,6 +461,7 @@ end
 -- 色や文言の設定が変わったときに作り直す
 function Indicator:refresh()
   self.modes = Modes.new()
+  self.cap_backgrounds = {}
   if self:is_opened() then
     self:update()
   elseif Modes.is_active() then
@@ -405,6 +471,7 @@ end
 
 -- autocmd、ウィンドウ、タイマーをすべて片付ける
 function Indicator:destroy()
+  vim.api.nvim_set_decoration_provider(self.ns, {})
   self:close()
   if not self.timer:is_closing() then
     self.timer:close()
