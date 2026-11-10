@@ -128,7 +128,9 @@ function Library:get_completion_result(prefix, feed, limit)
         if #order >= limit then
           break
         end
-        for _, e in ipairs(dic:get_prefix("okurinasi", p, limit)) do
+        -- すでに集めた分を引いた残りだけ取る。内側でも limit で止まるので、
+        -- ヒットの多い prefix で余分に読まない (#162)
+        for _, e in ipairs(dic:get_prefix("okurinasi", p, limit - #order)) do
           gather(order, map, seen, e[1], e[2])
         end
       end
