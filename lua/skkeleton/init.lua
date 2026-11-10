@@ -102,6 +102,13 @@ function M.get_preedit()
   return require("skkeleton.store").context():to_string()
 end
 
+-- 今、変換中か（▽ の読み・▼ の候補・未確定のローマ字があるか）。
+-- 補完のソースを切り替えるときなど、pre-edit の有無だけを見たいときに使う (#163)
+---@return boolean
+function M.is_composing()
+  return M.is_enabled() and M.get_preedit() ~= ""
+end
+
 -- 今の読みと feed に合う補完の候補。{ { 読み, 候補の配列 }, ... }
 ---@return { [1]: string, [2]: string[] }[]
 function M.get_completion_result()

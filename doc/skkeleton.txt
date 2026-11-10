@@ -162,6 +162,12 @@ get_preedit()
 	現在の pre-edit 文字列（例: `"▽かんj"`）を返します。未入力時は空文字
 	列（`""`）を返します。
 
+                                                   *skkeleton.is_composing()*
+is_composing()
+	今、変換中か（▽ の読み・▼ の候補・未確定のローマ字があるか）を真偽
+	値で返します。skkeleton が無効のときは `false` です。pre-edit の文字
+	列そのものは |skkeleton.get_preedit()| で取れます。
+
                                           *skkeleton.get_completion_result()*
 get_completion_result()
 	現在の読みと未変換入力に合致する補完候補の一覧を返します。返り値は

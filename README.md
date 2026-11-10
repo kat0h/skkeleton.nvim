@@ -98,6 +98,7 @@ require("skkeleton").setup({
 
 - `require("skkeleton").get_prefix()`: 現在の読み（かな）を取得
 - `require("skkeleton").get_preedit()`: 現在の pre-edit 文字列を取得
+- `require("skkeleton").is_composing()`: 今、変換中か（pre-edit があるか）を取得
 - `require("skkeleton").get_completion_result()`: 補完候補一覧を取得
 - `require("skkeleton").get_completion_ranks()`: 候補のランクテーブルを取得
 - `require("skkeleton").complete(kana, word, kind)`: 候補を確定してバッファに挿入し、辞書とランクに登録
