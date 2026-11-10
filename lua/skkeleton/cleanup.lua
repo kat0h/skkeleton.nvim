@@ -250,12 +250,24 @@ function M.setup()
     end,
   })
 
+  -- cmdwin を開いたら印を消す。開けなかったときも、次の CmdlineLeave で消える
+  vim.api.nvim_create_autocmd({ "CmdwinEnter", "CmdlineEnter" }, {
+    group = group,
+    callback = function()
+      require("skkeleton.guard").clear_cmdwin_pending()
+    end,
+  })
   -- cmdline を抜ける際（取り消しも含めて）に pre-edit を取り除き、履歴にマーカーを残さない
   vim.api.nvim_create_autocmd("CmdlineLeave", {
     group = group,
     callback = function()
+      -- <C-f> で cmdwin を開くときは、cmdline の文字列を Neovim が cmdwin に写す。
+      -- 写すまで pre-edit を消さない (#205)
       -- <C-r>= などの内側の cmdline を抜けるときは、外側の cmdline の記録を残す (#206)
-      if vim.v.event.cmdtype == ":" then
+      if require("skkeleton.guard").is_cmdwin_pending() then
+        cmdline.reset()
+        clear_preedit_state()
+      elseif vim.v.event.cmdtype == ":" then
         drop_cmdline_preedit()
       end
       -- <C-o>: から戻ったときなど、insert の pre-edit が残っていればその値を保つ (#86)
@@ -275,7 +287,9 @@ function M.setup()
       if host.is_in_input() then
         return
       end
-      if vim.fn.mode():sub(1, 1) == "c" then
+      -- <C-f> で cmdwin を開くときは、cmdline の文字列を Neovim が cmdwin に写す。
+      -- 写すまで pre-edit を消さない (#205)
+      if vim.fn.mode():sub(1, 1) == "c" and not require("skkeleton.guard").is_cmdwin_pending() then
         drop_cmdline_preedit()
       end
       reset()

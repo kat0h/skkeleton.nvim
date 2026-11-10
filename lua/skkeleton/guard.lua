@@ -95,6 +95,39 @@ local own_output = {
   [0x1b] = true, -- <Esc>
 }
 
+-- cmdline で cmdwin を開くキーか（<C-f> と 'cedit'）
+---@param key string
+---@return boolean
+local function is_cmdwin_key(key)
+  local cedit = vim.o.cedit
+  if cedit and cedit ~= "" then
+    local ok, code = pcall(vim.api.nvim_replace_termcodes, "<" .. cedit .. ">", true, true, true)
+    if ok and code == key then
+      return true
+    end
+  end
+  -- <C-f> は KS_MODIFIER (0x80 0xfc 0x06) の形でも、0x06 の形でも届く
+  if key == "\06" then
+    return true
+  end
+  return key:byte(1) == 0x80 and key:byte(2) == 0xfc and key:byte(4) == 0x06
+end
+
+-- cmdwin を開くキーを押したあと、cmdline の文字列を cmdwin に写すまで
+-- pre-edit の掃除を止めるための印 (#205)
+local cmdwin_pending = false
+
+-- cmdwin を開くキーを押したか
+---@return boolean
+function M.is_cmdwin_pending()
+  return cmdwin_pending
+end
+
+-- 印を消す（cmdwin を開いた、または開けなかったとき）
+function M.clear_cmdwin_pending()
+  cmdwin_pending = false
+end
+
 -- terminal でジョブに渡す前に確定すべきキーか。
 -- Ctrl + 文字は KS_MODIFIER (0x80 0xfc) で届くので、単バイトの制御キーだけでなく
 -- KS_MODIFIER も対象にする (#121)。
@@ -139,6 +172,11 @@ end
 function M._on_key(key, typed)
   if is_mapped_key(key) then
     return
+  end
+  -- cmdline で cmdwin を開くキーは、cmdline の文字列を cmdwin に写すまで
+  -- pre-edit を消さないように印を付ける (#205)
+  if vim.api.nvim_get_mode().mode:sub(1, 1) == "c" and is_cmdwin_key(key) then
+    cmdwin_pending = true
   end
   if key == insert_key then
     return
