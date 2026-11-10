@@ -1,7 +1,6 @@
--- skkeleton.nvim: 補完候補の 3 段階ソート
--- 1. 読みの長さ（短い順）
--- 2. ユーザーの選択頻度ランク（高い順）
--- 3. 辞書の並び順（出現順）
+-- skkeleton.nvim: 補完候補の並べ替え
+-- denops 版（denops/@ddc-sources/skkeleton/main.ts）に合わせて、選択履歴のランクの大きい順に
+-- 並べる。rank がない候補は読みの辞書順に並べる (#159)
 local M = {}
 
 ---@param completion_result { [1]: string, [2]: string[] }[]
@@ -16,29 +15,41 @@ function M.sort_completions(completion_result, ranks)
   for _, entry in ipairs(completion_result or {}) do
     local kana = entry[1]
     local candidates = entry[2] or {}
-    local kana_len = vim.fn.strchars(kana)
     for _, word in ipairs(candidates) do
       local key = kana .. "\0" .. word
       if not seen[key] then
         seen[key] = true
         dict_order = dict_order + 1
         local pure_word = word:find(";", 1, true) and word:match("^([^;]*)") or word
-        local user_rank = ranks[word] or ranks[pure_word] or ranks[pure_word:gsub("\\073", ";")] or 0
+        local user_rank = ranks[word] or ranks[pure_word] or ranks[pure_word:gsub("\\073", ";")]
         items[#items + 1] = {
           kana = kana,
           word = word,
           rank = user_rank,
-          kana_len = kana_len,
           dict_order = dict_order,
         }
       end
     end
   end
 
-  table.sort(items, function(a, b)
-    if a.kana_len ~= b.kana_len then
-      return a.kana_len < b.kana_len
+  -- rank がない候補は、読みの辞書順に後ろから -1, -2, ... と振る
+  local unranked = {}
+  for _, item in ipairs(items) do
+    if item.rank == nil then
+      unranked[#unranked + 1] = item
     end
+  end
+  table.sort(unranked, function(a, b)
+    if a.kana ~= b.kana then
+      return a.kana < b.kana
+    end
+    return a.dict_order < b.dict_order
+  end)
+  for i, item in ipairs(unranked) do
+    item.rank = -i
+  end
+
+  table.sort(items, function(a, b)
     if a.rank ~= b.rank then
       return a.rank > b.rank
     end

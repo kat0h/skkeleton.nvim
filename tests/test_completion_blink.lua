@@ -564,7 +564,7 @@ end
 -- =========================================================================
 T["sort"] = MiniTest.new_set()
 
-T["sort"]["sorts by reading length, user rank, and dictionary order"] = function()
+T["sort"]["sorts by user rank, then dictionary order"] = function()
   local res = child.lua_get([[(function()
     local sort = require("skkeleton.completion.sort")
     local input = {
@@ -580,30 +580,15 @@ T["sort"]["sorts by reading length, user rank, and dictionary order"] = function
     return sort.sort_completions(input, ranks)
   end)()]])
 
-  -- 1st level: length of reading (shorter first) -> "か" (len 1), then "かん" (len 2), then "かんじ" (len 3)
-  -- Within "か": dict order (蚊, then 課)
-  eq(res[1], { kana = "か", word = "蚊", rank = 0, kana_len = 1, dict_order = 7 })
-  eq(res[2], { kana = "か", word = "課", rank = 0, kana_len = 1, dict_order = 8 })
-
-  -- Within "かん": user rank first ("感" has rank 2, others 0), then dict order ("缶", then "漢")
-  eq(res[3].kana, "かん")
-  eq(res[3].word, "感")
-  eq(res[3].rank, 2)
-  eq(res[4].kana, "かん")
-  eq(res[4].word, "缶")
-  eq(res[5].kana, "かん")
-  eq(res[5].word, "漢")
-
-  -- Within "かんじ": user rank ("感じ" rank 10 > "漢字" rank 5 > "幹事" rank 0)
-  eq(res[6].kana, "かんじ")
-  eq(res[6].word, "感じ")
-  eq(res[6].rank, 10)
-  eq(res[7].kana, "かんじ")
-  eq(res[7].word, "漢字")
-  eq(res[7].rank, 5)
-  eq(res[8].kana, "かんじ")
-  eq(res[8].word, "幹事")
-  eq(res[8].rank, 0)
+  -- 選択履歴のランクの大きい順。rank がない候補は、読みの長さによらず後ろに辞書順で並ぶ (#159)
+  local words = {}
+  for i, item in ipairs(res) do
+    words[i] = item.word
+  end
+  eq(words, { "感じ", "漢字", "感", "蚊", "課", "缶", "漢", "幹事" })
+  eq(res[1].rank, 10)
+  eq(res[4].rank, -1)
+  eq(res[8].rank, -5)
 end
 
 T["sort"]["deduplicates by kana and word while preserving first appearance"] = function()
