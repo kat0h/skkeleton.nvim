@@ -364,7 +364,7 @@ completionRankFile                       *skkeleton-config-completionRankFile*
 	(既定値: "")
 	補完候補の選択順位（ランク）を保存・復元する JSON ファイルのパス
 	を指定します。指定した場合、候補確定時の順位が記録され、以後の補
-	完候補の並び替え（3 段階ソート）に反映されます。空文字列の場合は
+	完候補の並び替えに反映されます。空文字列の場合は
 	ファイルへの永続化を行いません。
 
 databasePath                                   *skkeleton-config-databasePath*
@@ -491,11 +491,13 @@ userDictionary                               *skkeleton-config-userDictionary*
 
 skkeleton.nvim は、送りなし変換の入力中に blink.cmp による補完に対応しています。
 
-補完候補は以下の 3 段階でソートされます。
-1. 読みの長さ（短い読みが優先）
-2. 選択履歴のランク（|skkeleton-config-completionRankFile| で、最後に確定し
-   た時刻が新しい順）
-3. 辞書内の定義順
+補完候補は、選択履歴のランク（|skkeleton-config-completionRankFile|）の大き
+い順に並びます。ランクは最後に確定した時刻が新しいほど大きくなります。
+
+- ランクのある候補は、ランクの大きい順
+- ランクのない候補は、読みの辞書順。同じ読みの候補は辞書に出てくる順
+
+読みの長さでは並べません。最近確定した候補は、読みが長くても上に来ます。
 
 ------------------------------------------------------------------------------
 blink.cmp の設定                                 *skkeleton-completion-blink*
