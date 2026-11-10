@@ -222,6 +222,11 @@ function M.setup()
       elseif action == "safe_reset" then
         -- insert から normal へ抜けたときは、捨てずに <Esc> と同じく確定する
         local commit = old_mode:sub(1, 1) == "i"
+        -- niI / nt へ入っただけ（<C-o> など）では SafeState を登録しない。
+        -- そこから先の遷移（niI→n など）が自分で片付けを登録する (#169)
+        if vim.startswith(new_mode, "ni") or vim.startswith(new_mode, "nt") then
+          return
+        end
         vim.api.nvim_create_autocmd("SafeState", {
           group = group,
           once = true,
@@ -237,6 +242,12 @@ function M.setup()
               and not vim.startswith(m, "nt")
               and not host.is_in_input()
             then
+              local ctx = store.context()
+              -- <C-o> から normal へ抜けるとき（:stopinsert など）は、insert の pre-edit を
+              -- 確定も捨てもせず保持する (#169)
+              if not commit and ctx.vim_mode == "i" and ctx:to_string() ~= "" and render.preedit_position() then
+                return
+              end
               if commit then
                 -- <C-c> などで insert を抜けたとき、確定した文字の末尾へ移す (#142)
                 commit_preedit("normal")
@@ -291,6 +302,24 @@ function M.setup()
       -- 写すまで pre-edit を消さない (#205)
       if vim.fn.mode():sub(1, 1) == "c" and not require("skkeleton.guard").is_cmdwin_pending() then
         drop_cmdline_preedit()
+      end
+      local ctx = store.context()
+      -- insert の pre-edit が出ている間にウィンドウやタブを移るとき（<C-o>:wincmd w など）は、
+      -- 移動が済んでから元のバッファがまだ表示されているかで判断する。表示されていれば
+      -- pre-edit を保持し、バッファを離れていれば従来通り捨てる (#169)
+      if ctx.vim_mode == "i" and ctx:to_string() ~= "" then
+        local pbuf = render.preedit_buffer()
+        if pbuf then
+          vim.schedule(function()
+            if vim.api.nvim_buf_is_valid(pbuf) and #vim.fn.win_findbuf(pbuf) > 0 then
+              M.update_state_variable()
+            else
+              reset()
+              host.disable()
+            end
+          end)
+          return
+        end
       end
       reset()
       host.disable()

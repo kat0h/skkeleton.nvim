@@ -110,6 +110,15 @@ function M.preedit_position()
   return mark.buf, mark.row, mark.col
 end
 
+-- 今出している pre-edit があるバッファ。出していなければ nil
+---@return integer?
+function M.preedit_buffer()
+  if mark and vim.api.nvim_buf_is_valid(mark.buf) then
+    return mark.buf
+  end
+  return nil
+end
+
 -- pre-edit の extmark を消す
 function M.clear()
   pending = false
@@ -280,11 +289,16 @@ function M.is_stale(ctx, vim_mode)
   if pre == "" then
     return false
   end
-  if ctx.vim_mode ~= vim_mode then
+  -- <C-o>: などで insert の pre-edit を残したまま cmdline に入ったときは、cmdline 側の
+  -- ずれ検査の対象にしない (#169)
+  if ctx.vim_mode ~= vim_mode and not (vim_mode == "c" and ctx.vim_mode == "i") then
     return true
   end
   if vim_mode == "c" then
-    return cmdline.is_stale(pre)
+    if ctx.vim_mode == "c" then
+      return cmdline.is_stale(pre)
+    end
+    return false
   elseif vim_mode == "t" then
     return false
   end
@@ -293,7 +307,9 @@ function M.is_stale(ctx, vim_mode)
   end
   local buf = vim.api.nvim_get_current_buf()
   if mark.buf ~= buf then
-    return true
+    -- 別のウィンドウ・タブに移っている間は pre-edit を保持する。バッファがどこにも
+    -- 表示されなくなったときだけずれとみなす (#169)
+    return not vim.api.nvim_buf_is_valid(mark.buf) or #vim.fn.win_findbuf(mark.buf) == 0
   end
   local pos = vim.api.nvim_win_get_cursor(0)
   if pos[1] - 1 ~= mark.row or pos[2] ~= mark.col then

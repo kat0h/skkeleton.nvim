@@ -332,12 +332,40 @@ T["g:skkeleton#mapped_keys adds keys"] = function()
   eq(child.lua_get([[vim.fn.maparg("<F3>", "i", false, true).desc]]), "skkeleton")
 end
 
-T["leaving the window disables"] = function()
+-- バッファを指定して pre-edit の文字列を取る
+local function preedit_in(buf)
+  return child.lua_get(
+    [[(function(buf)
+      local ns = vim.api.nvim_get_namespaces()["skkeleton-preedit"]
+      local text = ""
+      for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, ns, 0, -1, { details = true })) do
+        for _, chunk in ipairs(m[4].virt_text or {}) do
+          text = text .. chunk[1]
+        end
+      end
+      return text
+    end)(...)]],
+    { buf }
+  )
+end
+
+T["leaving the window keeps the pre-edit (#169)"] = function()
   enable()
   type("Ka")
+  local buf = child.api.nvim_get_current_buf()
   child.cmd("new")
-  eq(child.g["skkeleton#enabled"], false)
-  eq(helpers.preedit(child), "")
+  eq(child.g["skkeleton#enabled"], true)
+  -- 元のバッファに pre-edit が残る
+  eq(preedit_in(buf), "▽か")
+end
+
+T["leaving the buffer drops the pre-edit (#169)"] = function()
+  enable()
+  type("Ka")
+  local buf = child.api.nvim_get_current_buf()
+  type("<C-o>:enew<CR>")
+  eq(preedit_in(buf), "")
+  eq(child.g["skkeleton#state"].preedit, "")
 end
 
 T["leaving insert mode with <C-c> disables"] = function()
@@ -443,8 +471,12 @@ T["the state is exposed in g:skkeleton#state"] = function()
   eq(child.g["skkeleton#state"].henkanFeed, "か")
   type("n<Space>")
   eq(child.g["skkeleton#state"].phase, "henkan")
-  -- ウィンドウを移ったり normal に戻ったりして状態が初期化されたら g:skkeleton#state も初期化される
+  -- ウィンドウを移っても pre-edit は保持される (#169)
   child.cmd("botright new")
+  eq(child.g["skkeleton#state"].preedit, "▼缶")
+  -- バッファを離れて状態が初期化されたら g:skkeleton#state も初期化される
+  child.cmd("wincmd p")
+  type("<C-o>:enew<CR>")
   eq(child.g["skkeleton#state"], { phase = "input", henkanFeed = "", preedit = "" })
 end
 
