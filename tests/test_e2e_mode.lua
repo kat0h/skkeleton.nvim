@@ -168,6 +168,46 @@ T["<C-j> assigned to toggle works as kakutei while converting"] = function()
   eq(vim_mode(), "hira")
 end
 
+-- 変換中に <Plug>(skkeleton-enable) を押しても、打った読みを捨てない (#210)。
+-- 期待値は upstream（vim-skk/skkeleton e78aca1）に同じキー列を流した結果に合わせている
+T["enable during conversion keeps the reading"] = function()
+  -- ▽ の読み
+  type("i")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+  eq(helpers.preedit(child), "▽かn")
+  type("<Plug>(skkeleton-enable)")
+  eq(helpers.preedit(child), "▽かn")
+  eq(helpers.buffer(child), { "" })
+  type("<Esc>")
+  eq(helpers.buffer(child), { "かん" })
+
+  -- 打ちかけのローマ字
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "" })
+  type("i")
+  type("<Plug>(skkeleton-enable)")
+  type("K")
+  eq(helpers.preedit(child), "▽k")
+  type("<Plug>(skkeleton-enable)")
+  eq(helpers.preedit(child), "▽k")
+  child.type_keys("<Esc>")
+  child.lua([[vim.wait(100)]])
+end
+
+T["enable during henkan commits the candidate"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "" })
+  type("i")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan<Space>")
+  eq(helpers.preedit(child), "▼缶")
+  type("<Plug>(skkeleton-enable)")
+  -- 候補を確定してから有効になる（upstream と同じ）
+  eq(helpers.buffer(child), { "缶" })
+  eq(helpers.preedit(child), "")
+  child.type_keys("<Esc>")
+  child.lua([[vim.wait(100)]])
+end
+
 T["enable is refused in replace mode"] = function()
   child.type_keys("R")
   child.lua([[require("skkeleton").enable()]])
