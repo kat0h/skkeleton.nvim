@@ -19,6 +19,23 @@ T["hiragana"] = function()
   eq(helpers.mode(child), "hira")
 end
 
+-- <C-r>= で式を入れて戻ったとき、cmdline に marker と読みを残さない (#206)
+T["<C-r>= leaves no marker in the cmdline"] = function()
+  child.type_keys(":")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+  eq(child.fn.getcmdline(), "▽かn")
+  type("<C-r>=1<CR>")
+  -- marker と読みは消え、式の結果だけが残る
+  eq(child.fn.getcmdline(), "1")
+  eq((child.g["skkeleton#state"] or {}).preedit, "")
+  -- 続けて打った文字が marker の後ろに残らない
+  type("a")
+  eq(child.fn.getcmdline(), "1あ")
+  child.type_keys("<Esc>")
+  child.lua([[vim.wait(100)]])
+end
+
 T["pre-edit is written in the command line"] = function()
   enable_in_cmdline()
   type("Kan")

@@ -74,7 +74,10 @@ end
 ---@param text string
 function M.remember(text)
   if text == "" then
-    cmd_mark = nil
+    -- <C-r>= の式の入力中は、外側の cmdline の記録を消さない (#206)
+    if vim.fn.getcmdtype() ~= "=" then
+      cmd_mark = nil
+    end
     return
   end
   local line = vim.fn.getcmdline()
