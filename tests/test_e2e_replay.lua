@@ -23,8 +23,8 @@ T["replayed macro commits the pre-edit before a guard key (#216)"] = function()
   child.api.nvim_buf_set_lines(0, 0, -1, false, { "ab cd", "ef gh" })
   child.api.nvim_win_set_cursor(0, { 2, 4 })
   replay()
-  -- 読みが確定して入る（<S-Tab> のタブは別の課題として #216 に残す）
-  eq(helpers.buffer(child), { "ab cd", "ef ghかん" })
+  -- 確定した読みのあとに <S-Tab> のタブが入る（記録したときと同じ順）
+  eq(helpers.buffer(child), { "ab cd", "ef ghかん\t" })
 end
 
 return T
