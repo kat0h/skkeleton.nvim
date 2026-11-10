@@ -108,6 +108,40 @@ local function enable(opts, vim_mode)
     handle_keys(opts, vim_mode)
     return
   end
+  -- <Plug>(skkeleton-enable) から変換中に呼ばれたときは、Context を作り直さず、
+  -- 打った読みをそのまま残す (#210)。upstream の enable() と同じく、変換中の状態は
+  -- そのまま有効にするだけにする
+  -- ▼ の候補中は、upstream と同じく候補を確定してから有効にする (#210)
+  if not opts.key and old.state.type == "henkan" then
+    old.vim_mode = vim_mode:sub(1, 1)
+    common_func.kakutei(old)
+    local commit = old.preedit:take_kakutei():gsub("\x07u$", "")
+    kana.set_current(options.kanaTable)
+    local ctx = store.init_context()
+    ctx.vim_mode = vim_mode:sub(1, 1)
+    ctx.preedit:do_kakutei(commit)
+    doautocmd("skkeleton-enable-pre")
+    map.save_options()
+    map.map()
+    vim.g["skkeleton#enabled"] = true
+    local mode_function = functions.mode_functions[store.variables.last_mode]
+    if mode_function then
+      mode_function(ctx, "")
+    end
+    doautocmd("skkeleton-enable-post")
+    return
+  end
+  if not opts.key and old.state.type == "input" and old:to_string() ~= "" then
+    old.vim_mode = vim_mode:sub(1, 1)
+    if not vim.g["skkeleton#enabled"] then
+      doautocmd("skkeleton-enable-pre")
+      map.save_options()
+      map.map()
+      vim.g["skkeleton#enabled"] = true
+      doautocmd("skkeleton-enable-post")
+    end
+    return
+  end
   -- Context を作り直す前に設定する
   kana.set_current(options.kanaTable)
   local ctx = store.init_context()
