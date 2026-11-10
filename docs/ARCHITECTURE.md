@@ -143,7 +143,7 @@ require("skkeleton.indicator").setup(opts)  -- opts は skkeleton_indicator と�
 ### 描画フロー（render）
 - insert モード: 確定文字列がある場合は `nvim_feedkeys(…, "nit")` で送出し、続けて `<Cmd>lua require('skkeleton.render').finish()<CR>` を実行する。`finish()` 内で extmark の再配置、候補ポップアップの表示、`User skkeleton-handled` の発火を行う。確定文字列がない場合はその場で `finish()` を直接呼び出す。
 - 送出する文字列に含まれる `0x80`（「、」などの UTF-8 バイト列に含まれる）は `0x80 0xfe 'X'` にエスケープし、末尾の `<Cmd>...<CR>` のみを `nvim_replace_termcodes` で変換して結合する。
-- pre-edit とバッファのずれは、`cleanup.lua` の `reset_if_stale()` の 1 か所で見つけて片付ける（#61）。判定は `render.is_stale()`。pre-edit を出している間は `nvim_buf_attach` の `on_bytes` でバッファの書き換えを受け、ずれた合図にする（#66）。extmark は `right_gravity = false`。
+- pre-edit とバッファのずれは、`cleanup.lua` の `reset_if_stale()` の 1 か所で見つけて片付ける（#61）。判定は `render.is_stale()`。pre-edit を出している間は `nvim_buf_attach` の `on_bytes` でバッファの書き換えを受ける（#66）。外から書き換えられた行の上に pre-edit が残っていれば、読みを捨てずにそのまま出す（#199）。extmark は `right_gravity = false`。
 - Vim のモードが移ったときの片付けは、`cleanup.lua` の `ModeChanged` 1 か所で受け、`MODE_TRANSITIONS` の表で片付け方を決める（#62）。insert から normal へ移るときは pre-edit を `<Esc>` と同じく確定してから片付ける（#70）。置換モード・visual / select・`<C-o>` で一瞬 normal に移って戻るときも確定し、`<C-o>:` から cmdline に入って戻るときは残す（#111、#117、#86）。
 - `guard.lua` は `vim.on_key` で、skkeleton が奪っていない物理の特殊キー（insert / cmdline）と、terminal の Ctrl + 文字を見つけたら、`main.commit_preedit()` で確定してから元のキーを流す（#56、#121）。
 - cmdline モードと terminal モードでは `ctx.preedit:output(ctx:to_string())` を送出する。cmdline の pre-edit の記録と片付けは `render/cmdline.lua`（`remember()`、`is_stale()`、`clean()`、`has_stale()`、`reset()`）が持つ（#98）。
