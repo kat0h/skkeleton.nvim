@@ -187,14 +187,10 @@ function M._on_key(key, typed)
   -- 同期でバッファへ書き、キーは捨てずにそのまま通す (#216)
   if vim.fn.reg_executing() ~= "" then
     local cleanup = require("skkeleton.cleanup")
-    local text = cleanup.commit_preedit_now("insert")
+    -- commit_preedit_now("insert") が、確定した文字の後ろへカーソルを移す
+    cleanup.commit_preedit_now("insert")
     require("skkeleton.render").clear()
     cleanup.update_state_variable()
-    if text and text ~= "" then
-      -- 確定した文字の後ろへカーソルを移す（<Esc> と同じ位置）
-      local row = vim.api.nvim_win_get_cursor(0)[1]
-      vim.api.nvim_win_set_cursor(0, { row, vim.fn.getcurpos()[3] - 1 })
-    end
     return
   end
   -- 打った読みを <Esc> と同じ形で確定してから、キーをそのまま流し直す。
