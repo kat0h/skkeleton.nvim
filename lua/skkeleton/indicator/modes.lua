@@ -12,7 +12,8 @@ local config = require("skkeleton.indicator.config")
 ---@field left_cap? string
 ---@field right_cap? string
 ---@field hl_name string
----@field cap_hl_name? string
+---@field left_cap_hl_name? string
+---@field right_cap_hl_name? string
 ---@field name skkeleton.IndicatorModeName
 ---@field width integer
 local Mode = {
@@ -62,15 +63,18 @@ function Mode.new(name)
     self.left_cap = Mode.LEFT_CAP
     self.right_cap = Mode.RIGHT_CAP
     self.text = Mode.LEFT_CAP .. raw_text .. Mode.RIGHT_CAP
-    self.cap_hl_name = self.hl_name .. "Cap"
+    self.left_cap_hl_name = self.hl_name .. "CapLeft"
+    self.right_cap_hl_name = self.hl_name .. "CapRight"
     local resolved = vim.api.nvim_get_hl(0, { name = self.hl_name, link = false })
     local normal = vim.api.nvim_get_hl(0, { name = "Normal", link = false })
-    vim.api.nvim_set_hl(0, self.cap_hl_name, {
+    local cap_hl = {
       fg = resolved.bg or hl.bg,
       bg = normal.bg or "NONE",
       ctermfg = resolved.ctermbg or hl.ctermbg,
       ctermbg = normal.ctermbg or "NONE",
-    })
+    }
+    vim.api.nvim_set_hl(0, self.left_cap_hl_name, cap_hl)
+    vim.api.nvim_set_hl(0, self.right_cap_hl_name, cap_hl)
   end
 
   self.width = vim.fn.strdisplaywidth(self.text)

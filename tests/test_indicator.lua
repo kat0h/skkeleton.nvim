@@ -15,6 +15,7 @@ local function prepare()
           local ns = vim.api.nvim_get_namespaces()["skkeleton-indicator"]
           local marks = vim.api.nvim_buf_get_extmarks(buf, ns, 0, -1, { details = true })
           table.insert(res, {
+            winid = w,
             text = vim.api.nvim_buf_get_lines(buf, 0, -1, false)[1],
             width = cfg.width,
             row = cfg.row,
@@ -348,9 +349,9 @@ T["hooks"]["style = minimal / pill と border = rounded、winblend が反映さ�
   local f3 = floats()[1]
   eq(f3.text, "\238\130\182あ\238\130\180")
   eq(#f3.marks, 3)
-  eq(f3.marks[1][4].hl_group, "SkkeletonIndicatorHiraCap")
+  eq(f3.marks[1][4].hl_group, "SkkeletonIndicatorHiraCapLeft")
   eq(f3.marks[2][4].hl_group, "SkkeletonIndicatorHira")
-  eq(f3.marks[3][4].hl_group, "SkkeletonIndicatorHiraCap")
+  eq(f3.marks[3][4].hl_group, "SkkeletonIndicatorHiraCapRight")
   child.type_keys("<Esc>")
 end
 
@@ -431,10 +432,58 @@ T["hooks"]["ColorScheme イベントでもハイライトが再作成される"]
   child.cmd("doautocmd ColorScheme")
   wait(30)
   local hl = child.lua_get("vim.api.nvim_get_hl(0, { name = 'SkkeletonIndicatorEiji' })")
-  local cap = child.lua_get("vim.api.nvim_get_hl(0, { name = 'SkkeletonIndicatorEijiCap' })")
+  local cap = child.lua_get("vim.api.nvim_get_hl(0, { name = 'SkkeletonIndicatorEijiCapLeft' })")
   eq(hl.bold, true)
   eq(cap.fg ~= nil, true)
   eq(#floats(), 1)
+end
+
+T["hooks"]["pill の左右端は下のセルの背景色を使う"] = function()
+  -- grid から読む左右の RGB 背景色を差し替えて検査する
+  child.lua([[
+    _G.real_inspect_cell = vim.api.nvim__inspect_cell
+    _G.cap_under_bg = { left = 0x112233, right = 0x445566 }
+    vim.api.nvim__inspect_cell = function(grid, row, col)
+      if grid == 1 and col == 2 then return { "L", { background = _G.cap_under_bg.left } } end
+      if grid == 1 and col == 5 then return { "R", { background = _G.cap_under_bg.right } } end
+      return _G.real_inspect_cell(grid, row, col)
+    end
+  ]])
+  setup({ style = "pill", fadeOutMs = 0 })
+  child.type_keys(":")
+  wait(30)
+  local bg = child.lua_get([[(function()
+    return {
+      vim.api.nvim_get_hl(0, { name = "SkkeletonIndicatorEijiCapLeft", link = false }).bg,
+      vim.api.nvim_get_hl(0, { name = "SkkeletonIndicatorEijiCapRight", link = false }).bg,
+    }
+  end)()]])
+  eq(bg, { 0x112233, 0x445566 })
+  child.lua("vim.api.nvim__inspect_cell = _G.real_inspect_cell")
+  child.type_keys("<Esc>")
+end
+
+T["hooks"]["pill の端は下地の背景色変更に追従する"] = function()
+  -- grid の左端色を変え、次の描画で追従することを検査する
+  child.lua([[
+    _G.real_inspect_cell = vim.api.nvim__inspect_cell
+    _G.cap_under_bg = { left = 0x112233, right = 0x445566 }
+    vim.api.nvim__inspect_cell = function(grid, row, col)
+      if grid == 1 and col == 2 then return { "L", { background = _G.cap_under_bg.left } } end
+      if grid == 1 and col == 5 then return { "R", { background = _G.cap_under_bg.right } } end
+      return _G.real_inspect_cell(grid, row, col)
+    end
+  ]])
+  setup({ style = "pill", fadeOutMs = 0 })
+  child.type_keys(":")
+  wait(30)
+  child.lua("_G.cap_under_bg.left = 0xabcdef")
+  child.cmd("redraw")
+  wait(30)
+  local bg = child.lua_get([[vim.api.nvim_get_hl(0, { name = "SkkeletonIndicatorEijiCapLeft", link = false }).bg]])
+  eq(bg, 0xabcdef)
+  child.lua("vim.api.nvim__inspect_cell = _G.real_inspect_cell")
+  child.type_keys("<Esc>")
 end
 
 T["hooks"]["insert 中に input() へ入り抜けてもインジケーターが連動する"] = function()
