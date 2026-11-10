@@ -117,6 +117,9 @@ lib:purge_candidate(type, word, candidate)
 lib:load(); lib:save(); lib:save_ranks()        -- save はユーザー辞書と補完ランク（completionRankFile）を書く
 -- 個々の辞書は :get_henkan_result(type, word) と :get_prefix(type, prefix, limit) を持つ
 ```
+補完ランク（`completionRankFile`）は、upstream と次の点で違う（#159）。
+- upstream はユーザー辞書が読めたときだけランクを読む。Lua 版は `userDictionary` が空でもランクを読み書きできる。`completionRankFile` だけを使う設定を許すため
+- upstream は新しいランクに `Date.now()` を入れる。Lua 版は通し番号。並び順は同じ
 DB の形式 v2（`lua/skkeleton/dictionary/db.lua`）:
 - 置き場所: `stdpath("cache")/skkeleton/<元の辞書の正規化した絶対パスの sha256 の先頭 16 文字>.db`（設定の `databasePath` があればそのディレクトリ）
 - `[0,128)` のヘッダは ASCII で `SKKDB <ver> <nari> <nnasi> <src_size> <src_mtime_sec> <src_mtime_nsec>\n` を空白で埋めたもの。ヘッダのサイズと mtime が元の辞書と合わなければ作り直す
