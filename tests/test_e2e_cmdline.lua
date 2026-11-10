@@ -36,6 +36,21 @@ T["<C-r>= leaves no marker in the cmdline"] = function()
   child.lua([[vim.wait(100)]])
 end
 
+-- <C-f> で cmdwin を開くとき、cmdline に書いた pre-edit が cmdwin に引き継がれる (#205)
+T["cmdwin keeps the pre-edit"] = function()
+  child.type_keys(":")
+  type("abc")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+  eq(child.fn.getcmdline(), "abc▽かn")
+  type("<C-f>")
+  eq(child.fn.getcmdwintype(), ":")
+  eq(child.api.nvim_buf_get_lines(0, 0, -1, false), { "abc▽かn" })
+  -- cmdwin を閉じて、cmdline に戻る
+  child.type_keys("<C-c>")
+  child.lua([[vim.wait(100)]])
+end
+
 T["pre-edit is written in the command line"] = function()
   enable_in_cmdline()
   type("Kan")
