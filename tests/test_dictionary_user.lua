@@ -324,6 +324,27 @@ T["load_ranks and save_ranks"] = function()
   )
 end
 
+-- 他の nvim が更新した rank を読み直す (#159)
+T["load_ranks reloads when the file changes"] = function()
+  eq(
+    run([[
+      local path = TMP .. "/reload_ranks.json"
+      write("reload_ranks.json", '["A","B"]')
+      local u = User.new()
+      u:load_ranks(path)
+      local first = u:get_ranks()
+
+      -- 他の nvim が更新したことにする
+      write("reload_ranks.json", '["C","A"]')
+      vim.uv.sleep(20)
+      u:load_ranks(path)
+
+      return { first, u:get_ranks() }
+    ]]),
+    { { A = 1, B = 2 }, { C = 1, A = 2 } }
+  )
+end
+
 T["load_ranks handles missing or invalid file gracefully"] = function()
   eq(
     run([[

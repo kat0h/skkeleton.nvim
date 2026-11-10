@@ -184,6 +184,8 @@ end
 function Library:load()
   if self.user_dict then
     self.user_dict:load({})
+    -- 他の nvim が更新した rank も読み直す (#159)
+    self.user_dict:load_ranks(config.options.completionRankFile)
   end
 end
 
