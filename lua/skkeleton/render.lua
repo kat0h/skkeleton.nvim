@@ -88,10 +88,15 @@ local FINISH_CMD = vim.api.nvim_replace_termcodes("<Cmd>lua require('skkeleton.r
 -- 「、」のように 0x80 を含む文字が、特殊キーの始まりと読まれないようにするため。
 -- insert モードでは "t" を外すことでマクロ記録（qa）やドットリピート（.）に
 -- feedkeys で流した確定文字列や FINISH_CMD が混入するのを防ぐ (#36)。
--- cmdline や terminal では BS による再描画や制御文字の処理のために "t" を残す。
+-- cmdline や terminal では BS による再描画や制御文字の処理のために "t" を残すが、
+-- マクロを記録しているあいだ（reg_recording が空でない）は、流した確定文字列や FINISH_CMD が
+-- レジスタに入らないように "t" を外す (#214)。
 local function feed(keys, cmd, mode)
   keys = keys:gsub("\128", "\128\254X")
   local flags = (mode == "i") and "ni" or "nit"
+  if vim.fn.reg_recording() ~= "" then
+    flags = flags:gsub("t", "")
+  end
   vim.api.nvim_feedkeys(keys .. (cmd or ""), flags, false)
 end
 
