@@ -79,6 +79,15 @@ local function has_preedit()
   return type(state) == "table" and (state.preedit or "") ~= ""
 end
 
+-- reverse のセルでは foreground が実際の背景色になる
+local function cell_background(cell)
+  local attrs = cell[2] or {}
+  if attrs.reverse then
+    return attrs.foreground or vim.api.nvim_get_hl(0, { name = "Normal", link = false }).fg or "NONE"
+  end
+  return attrs.background or "NONE"
+end
+
 -- 今のバッファでは出さない設定か
 ---@return boolean
 function Indicator:is_disabled()
@@ -171,8 +180,8 @@ end
 
 -- 描画後に既定 grid の下地色を読み、端の色が変わったときだけ反映する
 function Indicator:update_cap_backgrounds()
-  -- nvim__inspect_cell は実験的 API で、RGB 背景色だけを取得できる
-  if config.style ~= "pill" or not self:is_opened() or type(vim.api.nvim__inspect_cell) ~= "function" then
+  -- nvim__inspect_cell は実験的 API で、既定 grid の RGB 属性を読む
+  if config.style ~= "pill" or not self:is_opened() then
     return
   end
   local winid = self.winid[1]
@@ -192,8 +201,8 @@ function Indicator:update_cap_backgrounds()
   if not ok_left or not ok_right or not left or not right then
     return
   end
-  local left_bg = left[2] and left[2].background or "NONE"
-  local right_bg = right[2] and right[2].background or "NONE"
+  local left_bg = cell_background(left)
+  local right_bg = cell_background(right)
   local cached = self.cap_backgrounds[mode.name]
   if cached and cached[1] == left_bg and cached[2] == right_bg then
     return
@@ -209,6 +218,7 @@ function Indicator:update_cap_backgrounds()
     right_hl.bg = right_bg
     vim.api.nvim_set_hl(0, mode.left_cap_hl_name, left_hl)
     vim.api.nvim_set_hl(0, mode.right_cap_hl_name, right_hl)
+    vim.cmd("redraw")
   end)
 end
 

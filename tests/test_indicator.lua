@@ -486,6 +486,78 @@ T["hooks"]["pill の端は下地の背景色変更に追従する"] = function()
   child.type_keys("<Esc>")
 end
 
+T["hooks"]["reverse の statusline でも端の背景が実効色と一致する"] = function()
+  child.o.laststatus = 2
+  child.api.nvim_set_hl(0, "Normal", { fg = "#eeeeee", bg = "#112233" })
+  child.api.nvim_set_hl(0, "StatusLine", { fg = "#ddbb22", bg = "#336677", reverse = true })
+  child.o.statusline = "TESTTESTTESTTESTTESTTEST"
+  -- headless の default grid には反転 statusline の属性が出ないため、実際の highlight から補う
+  child.lua([[
+    _G.real_inspect_cell = vim.api.nvim__inspect_cell
+    local status = vim.api.nvim_get_hl(0, { name = "StatusLine", link = false })
+    vim.api.nvim__inspect_cell = function(grid, row, col)
+      if grid == 1 and row == vim.o.lines - 2 and (col == 2 or col == 5) then
+        return { "T", { foreground = status.fg, background = status.bg, reverse = status.reverse } }
+      end
+      return _G.real_inspect_cell(grid, row, col)
+    end
+  ]])
+  setup({ style = "pill", fadeOutMs = 0 })
+  child.type_keys(":")
+  wait(30)
+  local bg = child.lua_get([[(function()
+    local win = _G.floats()[1].winid
+    local p = vim.fn.screenpos(win, 1, 1)
+    local row, left_col = p.row - 1, p.col - 1
+    local left = vim.api.nvim__inspect_cell(1, row, left_col)
+    local right = vim.api.nvim__inspect_cell(1, row, left_col + 3)
+    local left_attrs, right_attrs = left[2], right[2]
+    local left_bg = left_attrs.reverse and (left_attrs.foreground or vim.api.nvim_get_hl(0, { name = "Normal" }).fg) or left_attrs.background
+    local right_bg = right_attrs.reverse and (right_attrs.foreground or vim.api.nvim_get_hl(0, { name = "Normal" }).fg) or right_attrs.background
+    local status = vim.api.nvim_eval_statusline(vim.o.statusline, { highlights = true, maxwidth = vim.o.columns })
+    return {
+      p.row, p.col, status.str,
+      status.highlights[1].groups[#status.highlights[1].groups],
+      left_attrs.reverse, right_attrs.reverse,
+      left_bg, right_bg,
+      vim.api.nvim_get_hl(0, { name = "SkkeletonIndicatorEijiCapLeft", link = false }).bg,
+      vim.api.nvim_get_hl(0, { name = "SkkeletonIndicatorEijiCapRight", link = false }).bg,
+    }
+  end)()]])
+  eq(bg[1], child.o.lines - 1)
+  eq(bg[3]:sub(bg[2], bg[2]), "S")
+  eq(bg[3]:sub(bg[2] + 3, bg[2] + 3), "E")
+  eq(bg[4], "StatusLine")
+  eq(bg[5], true)
+  eq(bg[6], true)
+  eq(bg[7], 0xddbb22)
+  eq(bg[8], 0xddbb22)
+  eq(bg[9], bg[7])
+  eq(bg[10], bg[8])
+  child.lua("vim.api.nvim__inspect_cell = _G.real_inspect_cell")
+  child.type_keys("<Esc>")
+end
+
+T["hooks"]["reverse で foreground 未指定なら Normal の foreground を使う"] = function()
+  child.lua([[
+    _G.real_inspect_cell = vim.api.nvim__inspect_cell
+    vim.api.nvim__inspect_cell = function(grid, row, col)
+      if grid == 1 and (col == 2 or col == 5) then
+        return { "S", { background = 0x336677, reverse = true } }
+      end
+      return _G.real_inspect_cell(grid, row, col)
+    end
+  ]])
+  child.api.nvim_set_hl(0, "Normal", { fg = "#eeeeee", bg = "#112233" })
+  setup({ style = "pill", fadeOutMs = 0 })
+  child.type_keys(":")
+  wait(30)
+  local bg = child.lua_get([[vim.api.nvim_get_hl(0, { name = "SkkeletonIndicatorEijiCapLeft", link = false }).bg]])
+  eq(bg, 0xeeeeee)
+  child.lua("vim.api.nvim__inspect_cell = _G.real_inspect_cell")
+  child.type_keys("<Esc>")
+end
+
 T["hooks"]["insert 中に input() へ入り抜けてもインジケーターが連動する"] = function()
   setup({ showInCmdline = true })
   child.type_keys("i")
