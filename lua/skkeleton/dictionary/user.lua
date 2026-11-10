@@ -31,6 +31,7 @@ function User.new()
     path = "",
     load_time = "",
     ranks = {},
+    sorted_keys_cache = {},
     rank_counter = 0,
   }, User)
 end
@@ -54,15 +55,32 @@ function User:get_henkan_result(kind, word)
   return filter(self.maps[kind][word] or {})
 end
 
+-- 読みのキーを辞書順に並べたもの。get_prefix のたびに全キーを並べ直さないよう、
+-- 辞書が変わったときだけ作り直す (#162)
+---@param kind "okuriari"|"okurinasi"
+---@return string[]
+function User:sorted_keys(kind)
+  local keys = self.sorted_keys_cache[kind]
+  if keys then
+    return keys
+  end
+  keys = {}
+  for k in pairs(self.maps[kind]) do
+    keys[#keys + 1] = k
+  end
+  table.sort(keys)
+  self.sorted_keys_cache[kind] = keys
+  return keys
+end
+
 -- 前方一致する読みを、バイト順に limit 件まで。{ { 読み, 候補の配列 }, ... }
 function User:get_prefix(kind, prefix, limit)
   local keys = {}
-  for k in pairs(self.maps[kind]) do
+  for _, k in ipairs(self:sorted_keys(kind)) do
     if vim.startswith(k, prefix) then
       keys[#keys + 1] = k
     end
   end
-  table.sort(keys)
   local out = {}
   for _, k in ipairs(keys) do
     local cands = filter(self.maps[kind][k])
@@ -96,6 +114,7 @@ function User:register_henkan_result(kind, word, candidate)
     end
   end
   self.maps[kind][word] = merged
+  self.sorted_keys_cache[kind] = nil
   self.rank_counter = (self.rank_counter or 0) + 1
   self.ranks[candidate] = self.rank_counter
 end
@@ -104,6 +123,7 @@ end
 ---@param word string
 ---@param candidate string
 function User:purge_candidate(kind, word, candidate)
+  self.sorted_keys_cache[kind] = nil
   local rest = {}
   for _, c in ipairs(self.maps[kind][word] or {}) do
     if c ~= candidate then
@@ -207,6 +227,7 @@ end
 
 ---@param path string
 function User:read_file(path)
+  self.sorted_keys_cache = {}
   local text = skk.read_file(path)
   local maps = { okuriari = {}, okurinasi = {} }
   local cur
