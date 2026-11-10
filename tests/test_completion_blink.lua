@@ -591,6 +591,24 @@ T["sort"]["sorts by user rank, then dictionary order"] = function()
   eq(res[8].rank, -5)
 end
 
+-- denops 版と同じく、rank は候補の文字列と完全に一致するものだけを照合する (#159)
+T["sort"]["matches ranks by the exact candidate string"] = function()
+  local res = child.lua_get([[(function()
+    local sort = require("skkeleton.completion.sort")
+    local input = {
+      { "かん", { "漢字;kanji annotation", "漢字" } },
+    }
+    -- 注釈を外した形の rank は使わない
+    local ranks = { ["漢字"] = 10 }
+    return sort.sort_completions(input, ranks)
+  end)()]])
+
+  eq(res[1].word, "漢字")
+  eq(res[1].rank, 10)
+  eq(res[2].word, "漢字;kanji annotation")
+  eq(res[2].rank, -1)
+end
+
 T["sort"]["deduplicates by kana and word while preserving first appearance"] = function()
   local res = child.lua_get([[(function()
     local sort = require("skkeleton.completion.sort")
