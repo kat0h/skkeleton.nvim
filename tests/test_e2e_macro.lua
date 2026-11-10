@@ -176,4 +176,37 @@ T["undo point (<C-g>u) works with feedkeys ni"] = function()
   eq(helpers.buffer(child), { "" })
 end
 
+-- cmdline で記録したマクロに、skk が feedkeys で流した確定文字列や FINISH_CMD が
+-- 入らないようにする (#214)。入ると @a の再生で E492 になる
+T["macro recording in the cmdline keeps only typed keys"] = function()
+  child.lua([[vim.keymap.set("c", "<C-j>", "<Plug>(skkeleton-toggle)")]])
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "x" })
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+
+  type("qa")
+  type(":")
+  type("<C-j>")
+  type("Kan")
+  type("<C-j>")
+  eq(child.fn.getcmdline(), "かん")
+  type("<C-c>")
+  type("q")
+
+  local reg_a = child.fn.getreg("a")
+  eq(reg_a:find("かん", 1, true), nil)
+  eq(reg_a:find("finish", 1, true), nil)
+
+  -- 再生すると、cmdline にもう一度 かん が入る
+  child.lua([[
+    _G.left = nil
+    vim.api.nvim_create_autocmd("CmdlineLeave", {
+      once = true,
+      callback = function() _G.left = vim.fn.getcmdline() end,
+    })
+  ]])
+  child.type_keys("@a")
+  child.lua([[vim.wait(300)]])
+  eq(child.lua_get("_G.left"), "かん")
+end
+
 return T
