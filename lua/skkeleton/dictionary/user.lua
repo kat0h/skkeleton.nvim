@@ -9,12 +9,18 @@ local util = require("skkeleton.util")
 local uv = vim.uv
 local bit = require("bit")
 
+local function mtime_of(path)
+  local st = uv.fs_stat(path)
+  return st and ("%d.%09d"):format(st.mtime.sec, st.mtime.nsec)
+end
+
 ---@class skkeleton.UserDictionary
 ---@field path string
 ---@field load_time string
 ---@field maps table<string, table<string, string[]>>
 ---@field ranks table<string, integer>
 ---@field rank_counter integer
+---@field ranks_load_time? string
 local User = {}
 User.__index = User
 
@@ -113,9 +119,15 @@ function User:load_ranks(path)
     return
   end
   local expanded = vim.fn.expand(path)
-  if expanded == "" or not uv.fs_stat(expanded) then
+  if expanded == "" then
     return
   end
+  -- 他の nvim が更新した rank を読み直せるように、更新日時が変わったときだけ読み直す (#159)
+  local time = mtime_of(expanded)
+  if not time or time == self.ranks_load_time then
+    return
+  end
+  self.ranks_load_time = time
   local fd = uv.fs_open(expanded, "r", 420)
   if not fd then
     return
@@ -188,11 +200,6 @@ function User:save_ranks(path)
       uv.fs_close(direct_fd)
     end
   end
-end
-
-local function mtime_of(path)
-  local st = uv.fs_stat(path)
-  return st and ("%d.%09d"):format(st.mtime.sec, st.mtime.nsec)
 end
 
 ---@param path string
