@@ -200,11 +200,39 @@ local function redraw_if_cmdline(winid)
   end
 end
 
+-- 閉じられなかったウィンドウは、あとで閉じ直せるように残す
+local function close_windows(winids)
+  local remaining = {}
+  for _, winid in ipairs(winids) do
+    if vim.api.nvim_win_is_valid(winid) then
+      -- バッファは bufhidden=wipe なので、ウィンドウと一緒に片付く
+      pcall(vim.api.nvim_win_close, winid, true)
+      if vim.api.nvim_win_is_valid(winid) then
+        remaining[#remaining + 1] = winid
+      end
+    end
+  end
+  return remaining
+end
+
 function Indicator:open()
   if self:is_disabled() or vim.fn.getcmdwintype() ~= "" then
     if self:is_opened() then
       self:close()
     end
+    return
+  end
+  -- 作り直しなどで管理から外れた、自身のウィンドウだけを回収する
+  local orphaned = {}
+  for _, winid in ipairs(vim.api.nvim_list_wins()) do
+    if vim.w[winid].skkeleton_indicator and not vim.tbl_contains(self.winid, winid) then
+      orphaned[#orphaned + 1] = winid
+    end
+  end
+  local remaining = close_windows(orphaned)
+  if #remaining > 0 then
+    vim.list_extend(self.winid, remaining)
+    self:close()
     return
   end
   if self:is_opened() then
@@ -222,6 +250,7 @@ function Indicator:open()
     zindex = config.zindex,
   })
   local winid = vim.api.nvim_open_win(buf, false, win_cfg)
+  vim.w[winid].skkeleton_indicator = true
   self:border_highlight(winid, mode)
   table.insert(self.winid, 1, winid)
   -- 出したときのカーソル位置。ここから動いたら閉じる
@@ -340,17 +369,21 @@ function Indicator:update()
   end)
 end
 
-function Indicator:close()
-  self.timer:stop()
-  for _, winid in ipairs(self.winid) do
-    if vim.api.nvim_win_is_valid(winid) then
-      local buf = vim.api.nvim_win_get_buf(winid)
-      pcall(vim.api.nvim_win_close, winid, true)
-      pcall(vim.api.nvim_buf_delete, buf, { force = true })
-    end
+---@param retrying? boolean
+function Indicator:close(retrying)
+  if not self.timer:is_closing() then
+    self.timer:stop()
   end
-  self.winid = {}
+  self.winid = close_windows(self.winid)
   self.opened_cursor = nil
+  -- textlock の外で一度だけ閉じ直す。再試行も失敗したら ID は保持する
+  if #self.winid > 0 and not retrying and not self.close_pending then
+    self.close_pending = true
+    vim.schedule(function()
+      self.close_pending = false
+      self:close(true)
+    end)
+  end
 end
 
 ---@return boolean
