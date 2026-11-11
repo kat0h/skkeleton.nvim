@@ -119,6 +119,9 @@ T["cancelling the expression restores the okuri state"] = function()
   type("<C-c>")
   eq(child.fn.getcmdline(), "▽かえ*r")
   eq((child.g["skkeleton#state"] or {}).phase, "input:okuriari")
+  -- 送り仮名の続きを打てる
+  type("u")
+  eq(child.fn.getcmdline(), "▼帰る")
   child.type_keys("<C-c>")
   child.lua([[vim.wait(100)]])
 end
@@ -134,6 +137,9 @@ T["cancelling the expression restores the henkan state"] = function()
   type("<C-c>")
   eq(child.fn.getcmdline(), "▼返る")
   eq((child.g["skkeleton#state"] or {}).phase, "henkan")
+  -- 候補を選んで確定できる
+  type("<C-j>")
+  eq(child.fn.getcmdline(), "返る")
   child.type_keys("<C-c>")
   child.lua([[vim.wait(100)]])
 end
