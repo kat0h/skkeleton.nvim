@@ -263,15 +263,17 @@ T["completionRankFile"]["purge without a match does not write the dictionary"] =
         immediatelyDictionaryRW = true,
       })
       write("user", ";; okuri-ari entries.\n;; okuri-nasi entries.\nあ /亜/\n")
+      -- rank を読んでおく（読んでいないと rank は書かない、#159）
+      write("ranks.json", "[]")
       local lib = dictionary.load()
       -- 辞書に無い候補を消そうとしても、書き込みは起きない
       lib:purge_candidate("okurinasi", "あ", "無い候補")
-      local after_miss = vim.uv.fs_stat(path) ~= nil
+      local after_miss = read(path)
       -- ある候補を消すと書く
       lib:purge_candidate("okurinasi", "あ", "亜")
-      return { after_miss, vim.uv.fs_stat(path) ~= nil }
+      return { after_miss, read(path) }
     ]]),
-    { false, true }
+    { "[]", "[]" }
   )
 end
 
