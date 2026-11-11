@@ -4,8 +4,11 @@ local eq = MiniTest.expect.equality
 
 local BLINK = vim.fn.expand("~/.local/share/nvim/lazy/blink.cmp")
 if vim.uv.fs_stat(BLINK) == nil then
+  -- 依存が無いときは、空のテストを成功として数えずに skip として記録する (#253)
   local T = MiniTest.new_set()
-  T["skipped when blink.cmp is not installed"] = function() end
+  T["blink.cmp is not installed"] = function()
+    MiniTest.skip(BLINK .. " is not installed")
+  end
   return T
 end
 
