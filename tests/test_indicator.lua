@@ -415,13 +415,23 @@ T["hooks"]["知らないオプションはエラー"] = function()
   eq(child.lua_get("(pcall(require('skkeleton.indicator').setup, { style = 'rounded' }))"), false)
 end
 
+-- OptionSet background で色を作り直す (#255)。
+-- eiji は dark と light で同じ色なので、色が違う hira で確かめる
 T["hooks"]["background が変わると色を作り直す"] = function()
   setup({})
+  child.o.background = "dark"
+  child.g["skkeleton#enabled"] = true
+  child.g["skkeleton#mode"] = "hira"
   child.type_keys("i")
+  child.lua("_G.fire('skkeleton-mode-changed')")
+  wait(30)
+  local dark = child.lua_get("vim.api.nvim_get_hl(0, { name = 'SkkeletonIndicatorHira' })")
   child.o.background = "light"
   wait(30)
-  local hl = child.lua_get("vim.api.nvim_get_hl(0, { name = 'SkkeletonIndicatorEiji' })")
-  eq(hl.bold, true)
+  local light = child.lua_get("vim.api.nvim_get_hl(0, { name = 'SkkeletonIndicatorHira' })")
+  -- 既定の色は dark が ctermfg=black、light が ctermfg=white
+  eq(dark.ctermfg, 0)
+  eq(light.ctermfg, 15)
   eq(#floats(), 1)
 end
 
