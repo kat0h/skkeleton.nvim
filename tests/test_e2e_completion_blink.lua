@@ -2,7 +2,8 @@
 local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 
-local BLINK = vim.fn.expand("~/.local/share/nvim/lazy/blink.cmp")
+-- 依存の場所は SKKELETON_BLINK_PATH で差し替えられる（CI はここに clone する） (#253)
+local BLINK = vim.env.SKKELETON_BLINK_PATH or vim.fn.expand("~/.local/share/nvim/lazy/blink.cmp")
 if vim.uv.fs_stat(BLINK) == nil then
   -- 依存が無いときは、空のテストを成功として数えずに skip として記録する (#253)
   local T = MiniTest.new_set()
