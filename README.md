@@ -179,4 +179,4 @@ make fmt
 
 `stylua` は `.tests/bin/stylua` が存在すればそちらを優先して使用します。内部設計は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) を参照してください。
 
-開発の決まり（issue、テスト、コミット、ブランチ）は [AGENTS.md](AGENTS.md) に、モデル検査の考え方と手順は [docs/MODEL_CHECKING.md](docs/MODEL_CHECKING.md) にあります。
+開発の決まり（issue、テスト、コミット、ブランチ）は [AGENTS.md](AGENTS.md) に、モデル検査の考え方と手順は [docs/MODEL_CHECKING.md](docs/MODEL_CHECKING.md) にあります。Neovim のモードと skkeleton の状態を合わせた「今の」振る舞いの仕様書は、`formal-semantics` ブランチの [`semantics/STATE_MACHINE.md`](https://github.com/kat0h/skkeleton.nvim/blob/formal-semantics/semantics/STATE_MACHINE.md) にあります。
