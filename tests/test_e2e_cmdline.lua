@@ -53,6 +53,38 @@ T["<C-r>= with conversion inside the expression"] = function()
   child.lua([[vim.wait(100)]])
 end
 
+-- 式入力の中で候補の無い読みで <Space> を押しても、式が壊れない (#244)
+T["<Space> in the expression prompt without a candidate"] = function()
+  child.type_keys(":")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+  eq(child.fn.getcmdline(), "▽かn")
+  type("<C-r>=")
+  type("Ka")
+  eq(child.fn.getcmdline(), "▽か")
+  type("<Space>")
+  -- 辞書登録のプロンプト（@）に移らず、読みが式に入る
+  eq(child.fn.getcmdtype(), "=")
+  eq(child.fn.getcmdline(), "か")
+  child.type_keys("<C-c>")
+  child.lua([[vim.wait(100)]])
+end
+
+-- 式入力の中で候補の無い読みを確定するとき、送り仮名も残す (#244)
+T["<Space> in the expression prompt keeps the okurigana"] = function()
+  child.type_keys(":")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+  eq(child.fn.getcmdline(), "▽かn")
+  type("<C-r>=")
+  type("KaKu")
+  -- 送り仮名の自動変換で候補が尽きる。読み全体を式に残す
+  eq(child.fn.getcmdtype(), "=")
+  eq(child.fn.getcmdline(), "かく")
+  child.type_keys("<C-c>")
+  child.lua([[vim.wait(100)]])
+end
+
 -- <C-f> で cmdwin を開くとき、cmdline に書いた pre-edit が cmdwin に引き継がれる (#205)
 T["cmdwin keeps the pre-edit"] = function()
   child.type_keys(":")
