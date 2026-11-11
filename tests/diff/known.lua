@@ -182,7 +182,8 @@ return {
     -- 打っていた式が消えるのは不具合なので、わざと変える: kat0h/skkeleton.nvim#244
     id = "expression-prompt-keeps-the-reading",
     applies = function(_, _, a, b)
-      return a.vim == "=" and b.vim == "@"
+      -- driver は cmdline の中では cmdtype を記録する（driver.lua の snapshot_code）
+      return a.cmdtype == "=" and b.cmdtype == "@"
     end,
   },
 }
