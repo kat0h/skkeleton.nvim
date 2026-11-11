@@ -36,6 +36,23 @@ T["<C-r>= leaves no marker in the cmdline"] = function()
   child.lua([[vim.wait(100)]])
 end
 
+-- 式入力の中でもかな変換すると、外側の読みの末尾が cmdline に残っていた (#206)
+T["<C-r>= with conversion inside the expression"] = function()
+  child.type_keys(":")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+  eq(child.fn.getcmdline(), "▽かn")
+  type("<C-r>=")
+  type("'Ka<C-j>'")
+  eq(child.fn.getcmdline(), "'か'")
+  eq(child.fn.getcmdtype(), "=")
+  type("<CR>")
+  -- 外側の読み（▽かn）は残らず、式の結果だけが入る
+  eq(child.fn.getcmdline(), "か")
+  child.type_keys("<C-c>")
+  child.lua([[vim.wait(100)]])
+end
+
 -- <C-f> で cmdwin を開くとき、cmdline に書いた pre-edit が cmdwin に引き継がれる (#205)
 T["cmdwin keeps the pre-edit"] = function()
   child.type_keys(":")

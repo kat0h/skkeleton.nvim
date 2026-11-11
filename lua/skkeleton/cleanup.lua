@@ -268,6 +268,15 @@ function M.setup()
       require("skkeleton.guard").clear_cmdwin_pending()
     end,
   })
+  -- <C-r>= などで cmdline が入れ子になるとき、外側の cmdline の記録を退避する (#206)
+  vim.api.nvim_create_autocmd("CmdlineEnter", {
+    group = group,
+    callback = function()
+      if vim.v.event.cmdtype == "=" then
+        cmdline.push()
+      end
+    end,
+  })
   -- cmdline を抜ける際（取り消しも含めて）に pre-edit を取り除き、履歴にマーカーを残さない
   vim.api.nvim_create_autocmd("CmdlineLeave", {
     group = group,
@@ -278,6 +287,9 @@ function M.setup()
       if require("skkeleton.guard").is_cmdwin_pending() then
         cmdline.reset()
         clear_preedit_state()
+      elseif vim.v.event.cmdtype == "=" then
+        -- <C-r>= の式を抜けたら、外側の cmdline の記録を戻す (#206)
+        cmdline.pop()
       elseif vim.v.event.cmdtype == ":" then
         drop_cmdline_preedit()
       end
