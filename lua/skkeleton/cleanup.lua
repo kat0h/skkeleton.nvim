@@ -164,6 +164,20 @@ local function check_stale()
   end
 end
 
+-- 式の cmdline を抜けたあと、外側の入力状態を戻す (#246)。
+-- 式の中で確定すると Context が作り直されるので、外側の読みと食い違ったままになる
+---@param saved { state: table, last_candidate: table?, current: string } 式に入る前の状態
+local function restore_cmdline_reading(saved)
+  local ctx = store.context()
+  -- 打ちかけのローマ字・送り仮名・候補の状態まで、式に入る前のものに戻す
+  ctx.state = saved.state
+  ctx.last_candidate = saved.last_candidate
+  -- 外側の cmdline には読みがもう書かれている。描き直すときに BS で消せるよう、
+  -- 前回の表示長を戻す (#241 と同じ)
+  ctx.preedit.current = saved.current
+  M.update_state_variable()
+end
+
 -- cmdline の pre-edit の記録と g:skkeleton#state.preedit を片付ける
 local function drop_cmdline_preedit()
   cmdline.clean()
@@ -289,7 +303,13 @@ function M.setup()
         clear_preedit_state()
       elseif vim.v.event.cmdtype == "=" then
         -- <C-r>= の式を抜けたら、外側の cmdline の記録を戻す (#206)
-        cmdline.pop()
+        local saved = cmdline.pop()
+        -- 式の中で打つと、外側の入力状態が式の中身で書き換わる。式を抜けたら、
+        -- 式に入る前の状態に戻す (#246)
+        local ctx = store.context()
+        if saved and not vim.deep_equal(ctx.state, saved.state) then
+          restore_cmdline_reading(saved)
+        end
       elseif vim.v.event.cmdtype == ":" then
         drop_cmdline_preedit()
       end

@@ -85,6 +85,85 @@ T["<Space> in the expression prompt keeps the okurigana"] = function()
   child.lua([[vim.wait(100)]])
 end
 
+-- 式を取り消して外側に戻ったとき、外側の読みが生きている (#246)
+T["cancelling the expression keeps the outer reading live"] = function()
+  child.type_keys(":")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+  eq(child.fn.getcmdline(), "▽かn")
+  type("<C-r>=")
+  type("'Ka<C-j>'")
+  eq(child.fn.getcmdline(), "'か'")
+  -- 式を取り消すと外側に戻る。読みはただの文字ではなく、生きている
+  type("<C-c>")
+  eq(child.fn.getcmdtype(), ":")
+  eq(child.fn.getcmdline(), "▽かn")
+  -- 打ちかけのローマ字 n も状態に戻る
+  eq((child.g["skkeleton#state"] or {}).preedit, "▽かn")
+  -- 続けて打った a は n とつながる
+  type("a")
+  eq(child.fn.getcmdline(), "▽かな")
+  eq((child.g["skkeleton#state"] or {}).preedit, "▽かな")
+  child.type_keys("<C-c>")
+  child.lua([[vim.wait(100)]])
+end
+
+-- 式を取り消したあと、送り仮名・候補の状態も戻る (#246)
+T["cancelling the expression restores the okuri state"] = function()
+  child.type_keys(":")
+  type("<Plug>(skkeleton-enable)")
+  type("KaeR")
+  eq(child.fn.getcmdline(), "▽かえ*r")
+  type("<C-r>=")
+  type("'Ka<C-j>'")
+  type("<C-c>")
+  eq(child.fn.getcmdline(), "▽かえ*r")
+  eq((child.g["skkeleton#state"] or {}).phase, "input:okuriari")
+  -- 送り仮名の続きを打てる
+  type("u")
+  eq(child.fn.getcmdline(), "▼帰る")
+  child.type_keys("<C-c>")
+  child.lua([[vim.wait(100)]])
+end
+
+-- 式を取り消したあと、候補選択の状態も戻る (#246)
+T["cancelling the expression restores the henkan state"] = function()
+  child.type_keys(":")
+  type("<Plug>(skkeleton-enable)")
+  type("KaeRu<Space>")
+  eq(child.fn.getcmdline(), "▼返る")
+  type("<C-r>=")
+  type("'Ka<C-j>'")
+  type("<C-c>")
+  eq(child.fn.getcmdline(), "▼返る")
+  eq((child.g["skkeleton#state"] or {}).phase, "henkan")
+  -- 候補を選んで確定できる
+  type("<C-j>")
+  eq(child.fn.getcmdline(), "返る")
+  child.type_keys("<C-c>")
+  child.lua([[vim.wait(100)]])
+end
+
+-- 式を確定せずに取り消しても、外側の状態が式の中身で汚れない (#246)
+T["cancelling the expression without converting keeps the outer state"] = function()
+  child.type_keys(":")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+  eq(child.fn.getcmdline(), "▽かn")
+  type("<C-r>=")
+  -- 式の中で打つだけで、確定はしない
+  type("'Ka'")
+  eq(child.fn.getcmdline(), "'▽か'")
+  type("<C-c>")
+  eq(child.fn.getcmdline(), "▽かn")
+  -- 式の中で打った「'」が外側の読みに混ざらない
+  eq((child.g["skkeleton#state"] or {}).preedit, "▽かn")
+  type("a")
+  eq(child.fn.getcmdline(), "▽かな")
+  child.type_keys("<C-c>")
+  child.lua([[vim.wait(100)]])
+end
+
 -- <C-f> で cmdwin を開くとき、cmdline に書いた pre-edit が cmdwin に引き継がれる (#205)
 T["cmdwin keeps the pre-edit"] = function()
   child.type_keys(":")
