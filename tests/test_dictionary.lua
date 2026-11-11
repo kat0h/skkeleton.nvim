@@ -237,6 +237,8 @@ T["completionRankFile"]["immediatelyDictionaryRW keeps the rank after purge (#12
         completionRankFile = path,
         immediatelyDictionaryRW = true,
       })
+      -- rank はユーザー辞書が読めるときだけ扱う (#159)
+      write("user", ";; okuri-ari entries.\n;; okuri-nasi entries.\n")
       local lib = dictionary.load()
       lib:register_henkan_result("okurinasi", "あ", "亜")
       local registered = read(path)
@@ -282,6 +284,8 @@ T["completionRankFile"]["save_user_dict writes the ranks on exit"] = function()
         completionRankFile = path,
         immediatelyDictionaryRW = false,
       })
+      -- rank はユーザー辞書が読めるときだけ扱う (#159)
+      write("user", ";; okuri-ari entries.\n;; okuri-nasi entries.\n")
       local lib = dictionary.load()
       store.set_library(lib)
       lib:register_henkan_result("okurinasi", "あ", "亜")

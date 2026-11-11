@@ -115,6 +115,10 @@ function User:register_henkan_result(kind, word, candidate)
   end
   self.maps[kind][word] = merged
   self.sorted_keys_cache[kind] = nil
+  -- denops 版と同じく、ユーザー辞書が読めていないときは rank を記録しない (#159)
+  if self.path == "" or mtime_of(self.path) == nil then
+    return
+  end
   self.rank_counter = (self.rank_counter or 0) + 1
   self.ranks[candidate] = self.rank_counter
 end
@@ -141,6 +145,13 @@ end
 ---@param path string
 function User:load_ranks(path)
   if not path or path == "" then
+    return
+  end
+  -- denops 版と同じく、ユーザー辞書が読めていないときは rank を読まない (#159)
+  if not self.load_time or self.load_time == "" then
+    return
+  end
+  if self.path == "" or mtime_of(self.path) == nil then
     return
   end
   local expanded = vim.fn.expand(path)
