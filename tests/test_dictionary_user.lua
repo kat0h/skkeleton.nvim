@@ -444,6 +444,26 @@ T["save_user_dict leaves the rank file alone without a user dictionary"] = funct
   )
 end
 
+-- 新しい辞書を作ったときも、そこから rank を記録・保存できる (#159)
+T["ranks work after the dictionary is created"] = function()
+  eq(
+    run([[
+      local path = TMP .. "/new_dict_rank.json"
+      local dict = TMP .. "/new_user_dict"
+      local u = User.new()
+      u:load({ path = dict })
+      -- 辞書ファイルがまだ無い状態で登録し、保存で辞書を作る
+      u:register_henkan_result("okurinasi", "あ", "亜")
+      u:save()
+      -- 辞書ができたあとは rank を記録できる
+      u:register_henkan_result("okurinasi", "い", "伊")
+      u:save_ranks(path)
+      return { u:get_ranks(), read(path) }
+    ]]),
+    { { ["伊"] = 1 }, '["伊"]' }
+  )
+end
+
 T["save_ranks creates parent directories"] = function()
   eq(
     run([[

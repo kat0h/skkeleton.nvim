@@ -401,6 +401,8 @@ function User:save()
     return
   end
   self.load_time = mtime_of(self.path) or ""
+  -- 辞書を新しく作ったときも、ここから rank を扱えるようにする (#159)
+  self.dict_loaded = true
 end
 
 function User:close() end
