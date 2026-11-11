@@ -119,6 +119,9 @@ local function enable(opts, vim_mode)
     kana.set_current(options.kanaTable)
     local ctx = store.init_context()
     ctx.vim_mode = vim_mode:sub(1, 1)
+    -- cmdline では pre-edit を実文字列で出しているので、前回の表示を引き継がないと
+    -- BS で消せず、確定した文字列が二重に入る (#241)
+    ctx.preedit.current = old.preedit.current
     ctx.preedit:do_kakutei(commit)
     doautocmd("skkeleton-enable-pre")
     map.save_options()

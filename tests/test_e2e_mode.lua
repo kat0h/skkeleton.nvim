@@ -208,6 +208,20 @@ T["enable during henkan commits the candidate"] = function()
   child.lua([[vim.wait(100)]])
 end
 
+-- cmdline の候補選択中に enable を呼んでも、確定した候補が二重に入らない (#241)
+T["enable during henkan in the cmdline commits once"] = function()
+  child.type_keys(":")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan<Space>")
+  eq(child.fn.getcmdline(), "▼缶")
+  type("<Plug>(skkeleton-enable)")
+  -- 前回の表示（▼缶）を BS で消してから確定する。▼缶缶 にならない
+  eq(child.fn.getcmdline(), "缶")
+  eq((child.g["skkeleton#state"] or {}).preedit, "")
+  child.type_keys("<C-c>")
+  child.lua([[vim.wait(100)]])
+end
+
 T["enable is refused in replace mode"] = function()
   child.type_keys("R")
   child.lua([[require("skkeleton").enable()]])
