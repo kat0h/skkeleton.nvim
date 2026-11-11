@@ -177,8 +177,9 @@ function Library:purge_candidate(kind, word, candidate)
   if not self.user_dict then
     return
   end
-  self.user_dict:purge_candidate(kind, word, candidate)
-  if self.immediately_rw then
+  -- 消した候補が無ければ、辞書は変わっていないので書かない (#161)
+  local changed = self.user_dict:purge_candidate(kind, word, candidate)
+  if changed and self.immediately_rw then
     self:save()
   end
 end

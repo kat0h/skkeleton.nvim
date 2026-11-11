@@ -249,6 +249,29 @@ T["completionRankFile"]["immediatelyDictionaryRW keeps the rank after purge (#12
   )
 end
 
+-- 消した候補が無いときは辞書を書かない (#161)
+T["completionRankFile"]["purge without a match does not write the dictionary"] = function()
+  eq(
+    run([[
+      local path = TMP .. "/ranks.json"
+      config.set({
+        userDictionary = TMP .. "/user",
+        completionRankFile = path,
+        immediatelyDictionaryRW = true,
+      })
+      write("user", ";; okuri-ari entries.\n;; okuri-nasi entries.\nあ /亜/\n")
+      local lib = dictionary.load()
+      -- 辞書に無い候補を消そうとしても、書き込みは起きない
+      lib:purge_candidate("okurinasi", "あ", "無い候補")
+      local after_miss = vim.uv.fs_stat(path) ~= nil
+      -- ある候補を消すと書く
+      lib:purge_candidate("okurinasi", "あ", "亜")
+      return { after_miss, vim.uv.fs_stat(path) ~= nil }
+    ]]),
+    { false, true }
+  )
+end
+
 T["completionRankFile"]["save_user_dict writes the ranks on exit"] = function()
   eq(
     run([[

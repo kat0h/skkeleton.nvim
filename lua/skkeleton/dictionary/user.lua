@@ -122,15 +122,20 @@ end
 ---@param kind "okuriari"|"okurinasi"
 ---@param word string
 ---@param candidate string
+---@return boolean changed 消した候補があったか
 function User:purge_candidate(kind, word, candidate)
   self.sorted_keys_cache[kind] = nil
   local rest = {}
+  local changed = false
   for _, c in ipairs(self.maps[kind][word] or {}) do
     if c ~= candidate then
       rest[#rest + 1] = c
+    else
+      changed = true
     end
   end
   self.maps[kind][word] = #rest > 0 and rest or nil
+  return changed
 end
 
 ---@param path string
