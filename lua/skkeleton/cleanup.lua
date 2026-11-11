@@ -164,24 +164,14 @@ local function check_stale()
   end
 end
 
--- 式の cmdline を抜けたあと、外側の cmdline に残っている読みを状態に戻す (#246)。
--- 式の中で確定すると状態が初期化されるので、外側の読みと食い違ったままになる
----@param saved { preedit: string, henkan_feed: string, current: string } 式に入る前の状態
+-- 式の cmdline を抜けたあと、外側の入力状態を戻す (#246)。
+-- 式の中で確定すると Context が作り直されるので、外側の読みと食い違ったままになる
+---@param saved { state: table, last_candidate: table?, current: string } 式に入る前の状態
 local function restore_cmdline_reading(saved)
   local ctx = store.context()
-  if ctx.state.type ~= "input" then
-    return
-  end
-  local reading = saved.henkan_feed
-  if reading == "" then
-    reading = saved.preedit:gsub("^[▽▼]", "")
-  end
-  if reading == "" then
-    return
-  end
-  ctx.state.mode = "okurinasi"
-  ctx.state.henkan_feed = reading
-  ctx.state.feed = ""
+  -- 打ちかけのローマ字・送り仮名・候補の状態まで、式に入る前のものに戻す
+  ctx.state = saved.state
+  ctx.last_candidate = saved.last_candidate
   -- 外側の cmdline には読みがもう書かれている。描き直すときに BS で消せるよう、
   -- 前回の表示長を戻す (#241 と同じ)
   ctx.preedit.current = saved.current
@@ -316,7 +306,7 @@ function M.setup()
         local saved = cmdline.pop()
         -- 式の中で確定すると入力状態は初期化される。外側の cmdline に読みが
         -- 残っているなら、その読みを状態に戻す (#246)
-        if saved and saved.preedit ~= "" and store.context():to_string() == "" then
+        if saved and store.context():to_string() == "" then
           restore_cmdline_reading(saved)
         end
       elseif vim.v.event.cmdtype == ":" then

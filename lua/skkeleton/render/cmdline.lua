@@ -77,27 +77,29 @@ local saved_marks = {}
 
 -- 内側の cmdline に入るときに、外側の記録を退避する
 function M.push()
-  -- 外側の cmdline の読みは、式に入った時点の公開状態と PreEdit から取る。
+  -- 外側の cmdline の状態は、式に入った時点の Context から取る。
   -- cmd_mark はまだ描いていないので空 (#246)
-  local st = vim.g["skkeleton#state"] or {}
+  local ctx = require("skkeleton.store").context()
+  local st = ctx.state
   table.insert(saved_marks, {
     cmdtype = vim.fn.getcmdtype(),
     mark = cmd_mark,
-    preedit = st.preedit or "",
-    henkan_feed = st.henkanFeed or "",
-    current = require("skkeleton.store").context().preedit.current,
+    -- 打ちかけのローマ字・送り仮名・候補の状態まで戻せるよう、state を丸ごと控える
+    state = vim.deepcopy(st),
+    last_candidate = vim.deepcopy(ctx.last_candidate),
+    current = ctx.preedit.current,
   })
   cmd_mark = nil
 end
 
 -- 内側の cmdline を抜けたときに、外側の記録を戻す
 -- 内側の cmdline を抜けたときに、外側の記録を戻す
----@return { preedit: string, henkan_feed: string, current: string }? 退避した外側の状態
+---@return { state: table, last_candidate: table?, current: string }? 退避した外側の状態
 function M.pop()
   local saved = table.remove(saved_marks)
   if saved then
     cmd_mark = saved.mark
-    return { preedit = saved.preedit, henkan_feed = saved.henkan_feed, current = saved.current }
+    return { state = saved.state, last_candidate = saved.last_candidate, current = saved.current }
   end
   return nil
 end
