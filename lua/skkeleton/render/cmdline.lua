@@ -70,14 +70,30 @@ local function drop_marker_and_reading(line, pos, cm)
   return new_line, math.max(1, new_pos)
 end
 
+-- <C-r>= の式のように cmdline が入れ子になるとき、外側の cmdline の記録を退避しておく。
+-- 内側の記録で外側を上書きしないため (#206)
+---@type { cmdtype: string, mark: table? }[]
+local saved_marks = {}
+
+-- 内側の cmdline に入るときに、外側の記録を退避する
+function M.push()
+  table.insert(saved_marks, { cmdtype = vim.fn.getcmdtype(), mark = cmd_mark })
+  cmd_mark = nil
+end
+
+-- 内側の cmdline を抜けたときに、外側の記録を戻す
+function M.pop()
+  local saved = table.remove(saved_marks)
+  if saved then
+    cmd_mark = saved.mark
+  end
+end
+
 -- cmdline に書いた pre-edit を覚える。text が空なら忘れる
 ---@param text string
 function M.remember(text)
   if text == "" then
-    -- <C-r>= の式の入力中は、外側の cmdline の記録を消さない (#206)
-    if vim.fn.getcmdtype() ~= "=" then
-      cmd_mark = nil
-    end
+    cmd_mark = nil
     return
   end
   local line = vim.fn.getcmdline()
@@ -162,6 +178,7 @@ end
 -- cmdline を抜けるときに、片付けられなかった記録を捨てる
 function M.reset()
   cmd_mark = nil
+  saved_marks = {}
 end
 
 return M
