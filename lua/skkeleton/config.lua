@@ -16,7 +16,7 @@ local function defaults()
     globalDictionaries = {},
     globalKanaTableFiles = {},
     immediatelyCancel = true,
-    immediatelyDictionaryRW = true,
+    immediatelyDictionaryRW = false,
     immediatelyOkuriConvert = true,
     kanaTable = "rom",
     keepMode = false,

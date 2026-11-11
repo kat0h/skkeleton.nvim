@@ -118,6 +118,8 @@ lib:purge_candidate(type, word, candidate)
 lib:load(); lib:save(); lib:save_ranks()        -- save はユーザー辞書と補完ランク（completionRankFile）を書く
 -- 個々の辞書は :get_henkan_result(type, word) と :get_prefix(type, prefix, limit) を持つ
 ```
+ユーザー辞書の保存のタイミングは upstream と違う（#161）。upstream は `immediatelyDictionaryRW` の既定が `true` で、登録・削除のたびに書き、終了時の保存はしない。ここでは既定を `false` にして、登録した語は `VimLeavePre` でまとめて保存する。登録のたびに数十ms待つのを避けるためで、正常に終了すれば登録は残るが、強制終了やクラッシュのときは残らない。`immediatelyDictionaryRW = true` にすると upstream と同じ即時保存になる。
+
 補完ランク（`completionRankFile`）は、upstream と次の点で違う（#159）。
 - upstream はユーザー辞書が読めたときだけランクを読む。Lua 版は `userDictionary` が空でもランクを読み書きできる。`completionRankFile` だけを使う設定を許すため
 - upstream は新しいランクに `Date.now()` を入れる。Lua 版は通し番号。並び順は同じ
