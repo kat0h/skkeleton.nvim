@@ -176,4 +176,13 @@ return {
       return conv_tail(a.lines[1], b.lines[1], conv)
     end,
   },
+  {
+    -- <C-r>= の式入力の中で候補の無い読みに <Space> を押すと、denops 版は式を消して
+    -- 辞書登録のプロンプト（cmdtype が @）に移る。Lua 版は式を残して読みを確定する。
+    -- 打っていた式が消えるのは不具合なので、わざと変える: kat0h/skkeleton.nvim#244
+    id = "expression-prompt-keeps-the-reading",
+    applies = function(_, _, a, b)
+      return a.vim == "=" and b.vim == "@"
+    end,
+  },
 }

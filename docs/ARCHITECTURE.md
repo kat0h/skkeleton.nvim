@@ -9,6 +9,7 @@ skkeleton.nvim のモジュールの構成と、モジュールのあいだの�
 - denops 版にあった非同期処理（`await`）はすべて同期呼び出しにする。
 - **入力エンジン（core）は Neovim の UI に直接触れない**。UI 操作が必要な処理（モード変更の通知、無効化、候補のポップアップ表示、`input()`、`confirm()`）はすべて `skkeleton.host` を経由して呼び出す。テスト時には `host` の関数をモックに差し替えられるようにする。
 - 表示方式: pre-edit（`▽かん` など）は**バッファに直接書き込まず**、`virt_text_pos = "inline"` の extmark で表示する。確定した文字列は upstream と同様に `nvim_feedkeys(str, "nit")` で送出する（`\n` による autoindent、`\x07u` による undo point、`\b` による削除を効かせるため）。cmdline モードと terminal モードのみ、upstream と同じく `<BS>` で消去して書き直す方式をとる。
+- 動きに迷ったら upstream に合わせる。ただし upstream でも再現する不具合（打った読みや式が消えるなど）は、upstream と同じであることを理由にそのままにはせず、直す。直したときは根拠・upstream の結果・直したあとの動きを `tests/diff/known.lua` とこの文書に書く（#220）。
 - 設定のキー名は upstream から移行しやすいよう、同じ camelCase（`markerHenkan` など）を維持する。
 - `state` などの内部テーブルのフィールド名は snake_case とする。ただし、関数の登録名（キーマップやかなテーブルで文字列として指定するもの）は upstream と同じ camelCase（`henkanFirst` など）にする。
 
@@ -126,6 +127,9 @@ DB の形式 v2（`lua/skkeleton/dictionary/db.lua`）:
 - `[128,…)` の索引: u32 LE の行頭オフセット。okuri-ari が nari 個＋終端、okuri-nasi が nnasi 個＋終端。行の長さはオフセットの差でわかる
 - データ部: UTF-8 の `読み 候補\n` を、種類ごとにバイト順（LuaJIT の文字列比較と同じ）でソートしたもの
 - 書き込みは `.tmp` に書いてから rename する。同じ読みが 2 回以上あれば、あとのものを使う（#48）
+
+### cmdline（upstream と変えているところ）
+- `<C-r>=` の式入力の中で候補の無い読みに `<Space>` を押すと、upstream は式を消して辞書登録のプロンプト（`getcmdtype()` が `@`）に移る。Lua 版は式の cmdline のまま、読みを確定して式に残す（#244）。打っていた式が消えるのは不具合と判断した
 
 ### indicator（インジケータ）
 ```lua
