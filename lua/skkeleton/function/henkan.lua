@@ -10,6 +10,7 @@ local store = require("skkeleton.store")
 local util = require("skkeleton.util")
 
 local common = util.lazy("skkeleton.function.common")
+local mode = util.lazy("skkeleton.mode")
 local dictionary = util.lazy("skkeleton.function.dictionary")
 local input = util.lazy("skkeleton.function.input")
 local keymap = util.lazy("skkeleton.keymap")
@@ -99,6 +100,17 @@ function M.henkan_forward(ctx)
     state.candidate_index = state.candidate_index + 1
   end
   if #state.candidates <= state.candidate_index then
+    -- <C-r>= の式の cmdline では辞書登録の input() を開かない。開くと式の cmdline が
+    -- 壊れるので、候補が無いときは読みをそのまま確定して式に戻す (#244)
+    if vim.fn.getcmdtype() == "=" then
+      local reading = state.henkan_feed
+      if state.converter then
+        reading = state.converter(reading)
+      end
+      ctx:kakutei_with_undo_point(reading)
+      mode.initialize_state_with_abbrev(ctx, { "converter", "table" })
+      return
+    end
     if dictionary.register_word(ctx) then
       return
     end
