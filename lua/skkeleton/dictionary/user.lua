@@ -167,6 +167,9 @@ function User:load_ranks(path)
   if time == self.ranks_load_time then
     return
   end
+  -- 読み直しに失敗したら、読めなかった内容で上書きしないよう、
+  -- 保存できる状態ではなくす (#159)
+  self.ranks_loaded = false
   self.ranks_load_time = time
   local fd = uv.fs_open(expanded, "r", 420)
   if not fd then

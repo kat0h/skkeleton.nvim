@@ -534,6 +534,28 @@ T["a broken rank file is left alone"] = function()
   )
 end
 
+-- 一度読めたあとで読み直しに失敗したら、読めなかった内容で上書きしない (#159)
+T["a failed reload does not overwrite the rank file"] = function()
+  eq(
+    run([[
+      local path = write("reload_fail_rank.json", '["old"]')
+      local dict = write("reload_fail_dict", ";; okuri-ari entries.\n;; okuri-nasi entries.\n")
+      local u = User.new()
+      u:load({ path = dict })
+      u:load_ranks(path)
+      local first = u:get_ranks()
+      -- 他の nvim が壊れた内容で上書きしたことにする
+      write("reload_fail_rank.json", "{ broken")
+      vim.uv.sleep(20)
+      u:load_ranks(path)
+      u:register_henkan_result("okurinasi", "あ", "亜")
+      u:save_ranks(path)
+      return { first, read(path) }
+    ]]),
+    { { old = 1 }, "{ broken" }
+  )
+end
+
 T["save_ranks creates parent directories"] = function()
   eq(
     run([[
