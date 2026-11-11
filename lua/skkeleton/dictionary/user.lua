@@ -156,7 +156,15 @@ function User:load_ranks(path)
   end
   -- 他の nvim が更新した rank を読み直せるように、更新日時が変わったときだけ読み直す (#159)
   local time = mtime_of(expanded)
-  if not time or time == self.ranks_load_time then
+  if not time then
+    -- rank ファイルがまだ無い。初回の利用なので、空の rank として扱って
+    -- ここから学習できるようにする (#159)
+    self.ranks = {}
+    self.rank_counter = 0
+    self.ranks_loaded = true
+    return
+  end
+  if time == self.ranks_load_time then
     return
   end
   self.ranks_load_time = time

@@ -499,6 +499,41 @@ T["exit save keeps the rank file when the dictionary is new"] = function()
   )
 end
 
+-- 初回利用（rank ファイルがまだ無い）でも、そこから学習できる (#159)
+T["ranks start from empty when the rank file does not exist"] = function()
+  eq(
+    run([[
+      local path = TMP .. "/first_rank.json"
+      local dict = write("first_dict", ";; okuri-ari entries.\n;; okuri-nasi entries.\n")
+      local u = User.new()
+      u:load({ path = dict })
+      -- rank ファイルはまだ無い
+      u:load_ranks(path)
+      u:register_henkan_result("okurinasi", "あ", "亜")
+      u:save_ranks(path)
+      return { u:get_ranks(), read(path) }
+    ]]),
+    { { ["亜"] = 1 }, '["亜"]' }
+  )
+end
+
+-- 壊れた rank ファイルは読まない（上書きもしない） (#159)
+T["a broken rank file is left alone"] = function()
+  eq(
+    run([[
+      local path = write("broken_rank.json", "{ broken")
+      local dict = write("broken_dict", ";; okuri-ari entries.\n;; okuri-nasi entries.\n")
+      local u = User.new()
+      u:load({ path = dict })
+      u:load_ranks(path)
+      u:register_henkan_result("okurinasi", "あ", "亜")
+      u:save_ranks(path)
+      return read(path)
+    ]]),
+    "{ broken"
+  )
+end
+
 T["save_ranks creates parent directories"] = function()
   eq(
     run([[
