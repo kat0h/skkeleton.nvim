@@ -130,7 +130,7 @@ DB の形式 v2（`lua/skkeleton/dictionary/db.lua`）:
 
 ### cmdline（upstream と変えているところ）
 - `<C-r>=` の式入力の中で候補の無い読みに `<Space>` を押すと、upstream は式を消して辞書登録のプロンプト（`getcmdtype()` が `@`）に移る。Lua 版は式の cmdline のまま、読みを確定して式に残す（#244）。打っていた式が消えるのは不具合と判断した。この差は `make difftest` では観測できない（driver が式入力の中で skk を有効にした状態を作らない）ので、`tests/diff/known.lua` には入れず、`tests/test_e2e_cmdline.lua` の回帰テストで押さえている。比べた upstream は `e78aca1`
-- 式を取り消して外側の cmdline に戻ったとき、upstream は外側の読みをただの文字として残す。Lua 版は外側の読みを状態に戻し、続けて打った文字が読みに足されるようにする（#246）。表示と状態が食い違うのは不具合と判断した
+- 式を取り消して外側の cmdline に戻ったとき、upstream は外側の読みをただの文字として残す。Lua 版は外側の入力状態（打ちかけのローマ字・送り仮名・候補の選択・かなモード）を丸ごと戻し、続けて打った文字が読みに足されるようにする（#246）。表示と状態が食い違うのは不具合と判断した。この差も `make difftest` では観測できない（driver の `vim` は cmdtype ではなく `nvim_get_mode().mode` で、cmdline では両方 `c` になる）ので、`tests/diff/known.lua` には入れず、`tests/test_e2e_cmdline.lua` の回帰テストで押さえている。比べた upstream は `e78aca1`
 
 ### indicator（インジケータ）
 ```lua
