@@ -129,7 +129,7 @@ DB の形式 v2（`lua/skkeleton/dictionary/db.lua`）:
 - 書き込みは `.tmp` に書いてから rename する。同じ読みが 2 回以上あれば、あとのものを使う（#48）
 
 ### cmdline（upstream と変えているところ）
-- `<C-r>=` の式入力の中で候補の無い読みに `<Space>` を押すと、upstream は式を消して辞書登録のプロンプト（`getcmdtype()` が `@`）に移る。Lua 版は式の cmdline のまま、読みを確定して式に残す（#244）。打っていた式が消えるのは不具合と判断した
+- `<C-r>=` の式入力の中で候補の無い読みに `<Space>` を押すと、upstream は式を消して辞書登録のプロンプト（`getcmdtype()` が `@`）に移る。Lua 版は式の cmdline のまま、読みを確定して式に残す（#244）。打っていた式が消えるのは不具合と判断した。この差は `make difftest` では観測できない（driver が式入力の中で skk を有効にした状態を作らない）ので、`tests/diff/known.lua` には入れず、`tests/test_e2e_cmdline.lua` の回帰テストで押さえている
 
 ### indicator（インジケータ）
 ```lua
