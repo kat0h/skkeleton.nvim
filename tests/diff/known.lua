@@ -176,4 +176,13 @@ return {
       return conv_tail(a.lines[1], b.lines[1], conv)
     end,
   },
+  {
+    -- <C-r>= の式を取り消して外側に戻ったとき、denops 版は外側の読みをただの文字として
+    -- 残す。Lua 版は読みを状態に戻して生きている状態にする。表示と状態が食い違うのは
+    -- 不具合なので、わざと変える: kat0h/skkeleton.nvim#246
+    id = "expression-cancel-keeps-the-reading-live",
+    applies = function(_, _, a, b)
+      return a.vim == ":" and b.vim == ":" and a.lines ~= nil and b.lines ~= nil
+    end,
+  },
 }

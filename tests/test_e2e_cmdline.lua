@@ -85,6 +85,29 @@ T["<Space> in the expression prompt keeps the okurigana"] = function()
   child.lua([[vim.wait(100)]])
 end
 
+-- 式を取り消して外側に戻ったとき、外側の読みが生きている (#246)
+T["cancelling the expression keeps the outer reading live"] = function()
+  child.type_keys(":")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+  eq(child.fn.getcmdline(), "▽かn")
+  type("<C-r>=")
+  type("'Ka<C-j>'")
+  eq(child.fn.getcmdline(), "'か'")
+  -- 式を取り消すと外側に戻る。読みはただの文字ではなく、生きている
+  type("<C-c>")
+  eq(child.fn.getcmdtype(), ":")
+  eq(child.fn.getcmdline(), "▽かn")
+  -- 打ちかけのローマ字 n も状態に戻る
+  eq((child.g["skkeleton#state"] or {}).preedit, "▽かn")
+  -- 続けて打った a は n とつながる
+  type("a")
+  eq(child.fn.getcmdline(), "▽かな")
+  eq((child.g["skkeleton#state"] or {}).preedit, "▽かな")
+  child.type_keys("<C-c>")
+  child.lua([[vim.wait(100)]])
+end
+
 -- <C-f> で cmdwin を開くとき、cmdline に書いた pre-edit が cmdwin に引き継がれる (#205)
 T["cmdwin keeps the pre-edit"] = function()
   child.type_keys(":")
