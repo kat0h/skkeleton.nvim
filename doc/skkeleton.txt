@@ -418,9 +418,13 @@ immediatelyCancel                         *skkeleton-config-immediatelyCancel*
 	した際、1 段階ずつ戻るのではなく一気に未入力状態へ戻ります。
 
 immediatelyDictionaryRW             *skkeleton-config-immediatelyDictionaryRW*
-	(既定値: true)
+	(既定値: false)
 	真にすると、変換や確定のたびにユーザー辞書を読み書きします。複数の
 	Neovim インスタンス間でユーザー辞書を共有する場合に有効です。
+	既定では、登録した語は Neovim を終了するときにまとめて保存します
+	（|VimLeavePre|）。正常に終了すれば登録は残りますが、強制終了や
+	クラッシュのときは、その回に登録した語は残りません。すぐに書きたい
+	ときは |skkeleton.save_user_dict()| を呼ぶか、この設定を真にします。
 
 immediatelyOkuriConvert             *skkeleton-config-immediatelyOkuriConvert*
 	(既定値: true)

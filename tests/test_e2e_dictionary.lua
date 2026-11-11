@@ -2,7 +2,8 @@
 local helpers = require("helpers")
 local eq = MiniTest.expect.equality
 
-local T, child = helpers.e2e_set()
+-- 辞書ファイルを直接読むテストがあるので、このファイルでは即時保存にする (#161)
+local T, child = helpers.e2e_set({ config = { immediatelyDictionaryRW = true } })
 local type = function(...)
   helpers.type(child, ...)
 end
@@ -580,6 +581,41 @@ T["registers word when markerHenkan is empty string (#55)"] = function()
   eq(helpers.buffer(child), { "か" })
   local content = user_dictionary()
   eq(content:find("か /か/", 1, true) ~= nil, true)
+end
+
+-- 既定（終了時保存）でも、正常に終了すればユーザー辞書と補完ランクが残る (#161)。
+-- 終了は子のプロセスが終わってから親で確かめるので、専用の子を使う
+T["register"]["a word registered with the default settings is saved on exit"] = function()
+  local exitChild = MiniTest.new_child_neovim()
+  exitChild.restart({ "-u", helpers.root .. "/tests/minimal_init.lua" })
+  local dir = vim.fn.tempname()
+  vim.fn.mkdir(dir, "p")
+  local dict = dir .. "/dict"
+  local f = assert(io.open(dict, "w"))
+  f:write(helpers.dict_text)
+  f:close()
+  local rank = dir .. "/ranks.json"
+  vim.fn.writefile({ "[]" }, rank)
+  exitChild.lua("require('skkeleton').setup(...)", {
+    {
+      globalDictionaries = { { dict, "utf-8" } },
+      userDictionary = dir .. "/user",
+      completionRankFile = rank,
+      databasePath = dir .. "/db",
+      indicator = false,
+    },
+  })
+  exitChild.type_keys("i")
+  helpers.type(exitChild, "<Plug>(skkeleton-enable)")
+  helpers.type(exitChild, "Yomi<Space>")
+  helpers.type(exitChild, "yomi<CR>")
+  eq(helpers.buffer(exitChild), { "よみ" })
+  -- 既定は終了時保存なので、終了するまでは書かない
+  eq(vim.fn.filereadable(dir .. "/user"), 0)
+  -- 子を終了させ、VimLeavePre から保存されたかを親から確かめる
+  exitChild.stop()
+  eq(vim.tbl_contains(vim.fn.readfile(dir .. "/user"), "よみ /よみ/"), true)
+  eq(vim.fn.readfile(rank), { '["よみ"]' })
 end
 
 return T
