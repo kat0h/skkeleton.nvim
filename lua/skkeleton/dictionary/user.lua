@@ -31,6 +31,8 @@ function User.new()
     path = "",
     load_time = "",
     ranks = {},
+    dict_loaded = false,
+    ranks_loaded = false,
     sorted_keys_cache = {},
     rank_counter = 0,
   }, User)
@@ -115,6 +117,11 @@ function User:register_henkan_result(kind, word, candidate)
   end
   self.maps[kind][word] = merged
   self.sorted_keys_cache[kind] = nil
+  -- rank を読めていないときは記録しない。読んでいない rank に足すと、
+  -- 既存のランクファイルを上書きしてしまう (#159)
+  if not self.ranks_loaded then
+    return
+  end
   self.rank_counter = (self.rank_counter or 0) + 1
   self.ranks[candidate] = self.rank_counter
 end
@@ -149,9 +156,20 @@ function User:load_ranks(path)
   end
   -- 他の nvim が更新した rank を読み直せるように、更新日時が変わったときだけ読み直す (#159)
   local time = mtime_of(expanded)
-  if not time or time == self.ranks_load_time then
+  if not time then
+    -- rank ファイルがまだ無い。初回の利用なので、空の rank として扱って
+    -- ここから学習できるようにする (#159)
+    self.ranks = {}
+    self.rank_counter = 0
+    self.ranks_loaded = true
     return
   end
+  if time == self.ranks_load_time then
+    return
+  end
+  -- 読み直しに失敗したら、読めなかった内容で上書きしないよう、
+  -- 保存できる状態ではなくす (#159)
+  self.ranks_loaded = false
   self.ranks_load_time = time
   local fd = uv.fs_open(expanded, "r", 420)
   if not fd then
@@ -164,6 +182,10 @@ function User:load_ranks(path)
   end
   uv.fs_close(fd)
   if content == "" then
+    -- 空のファイルは「rank が 1 つも無い」として読めたと扱う
+    self.ranks = {}
+    self.rank_counter = 0
+    self.ranks_loaded = true
     return
   end
   local ok, data = pcall(vim.json.decode, content)
@@ -178,11 +200,17 @@ function User:load_ranks(path)
       self.ranks[word] = self.rank_counter
     end
   end
+  self.ranks_loaded = true
 end
 
 ---@param path string
 function User:save_ranks(path)
   if not path or path == "" then
+    return
+  end
+  -- rank を読んでいないときは書かない。書くと、読まなかった既存のランクファイルを
+  -- 空で上書きしてしまう (#159)。辞書を書けることと、rank を読めたことは別
+  if not self.ranks_loaded then
     return
   end
   local expanded = vim.fn.expand(path)
@@ -276,6 +304,7 @@ function User:load(opts)
   local ok = pcall(self.read_file, self, self.path)
   if ok then
     self.load_time = time
+    self.dict_loaded = true
   end
 end
 
@@ -382,6 +411,8 @@ function User:save()
     return
   end
   self.load_time = mtime_of(self.path) or ""
+  -- 辞書を新しく作ったときも、ここから rank を扱えるようにする (#159)
+  self.dict_loaded = true
 end
 
 function User:close() end
