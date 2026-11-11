@@ -102,8 +102,9 @@ function M.henkan_forward(ctx)
   if #state.candidates <= state.candidate_index then
     -- <C-r>= の式の cmdline では辞書登録の input() を開かない。開くと式の cmdline が
     -- 壊れるので、候補が無いときは読みをそのまま確定して式に戻す (#244)
-    if vim.fn.getcmdtype() == "=" then
-      local reading = state.henkan_feed
+    if host.is_in_expression() then
+      -- 送り仮名も含めて、打った読み全体を確定する
+      local reading = state.henkan_feed .. state.okuri_feed
       if state.converter then
         reading = state.converter(reading)
       end

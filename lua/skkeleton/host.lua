@@ -58,6 +58,12 @@ function M.is_in_input()
   return #input_stack > 0
 end
 
+-- <C-r>= の式の cmdline にいるか。式の中では辞書登録の input() を開けない (#244)
+---@return boolean
+function M.is_in_expression()
+  return vim.fn.getcmdtype() == "="
+end
+
 ---@return integer
 function M.in_input_depth()
   return #input_stack
