@@ -304,9 +304,10 @@ function M.setup()
       elseif vim.v.event.cmdtype == "=" then
         -- <C-r>= の式を抜けたら、外側の cmdline の記録を戻す (#206)
         local saved = cmdline.pop()
-        -- 式の中で確定すると入力状態は初期化される。外側の cmdline に読みが
-        -- 残っているなら、その読みを状態に戻す (#246)
-        if saved and store.context():to_string() == "" then
+        -- 式の中で打つと、外側の入力状態が式の中身で書き換わる。式を抜けたら、
+        -- 式に入る前の状態に戻す (#246)
+        local ctx = store.context()
+        if saved and not vim.deep_equal(ctx.state, saved.state) then
           restore_cmdline_reading(saved)
         end
       elseif vim.v.event.cmdtype == ":" then
