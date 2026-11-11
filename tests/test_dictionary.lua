@@ -237,8 +237,9 @@ T["completionRankFile"]["immediatelyDictionaryRW keeps the rank after purge (#12
         completionRankFile = path,
         immediatelyDictionaryRW = true,
       })
-      -- rank はユーザー辞書が読めるときだけ扱う (#159)
+      -- rank は読み込んだときだけ扱う (#159)
       write("user", ";; okuri-ari entries.\n;; okuri-nasi entries.\n")
+      write("ranks.json", "[]")
       local lib = dictionary.load()
       lib:register_henkan_result("okurinasi", "あ", "亜")
       local registered = read(path)
@@ -284,18 +285,20 @@ T["completionRankFile"]["save_user_dict writes the ranks on exit"] = function()
         completionRankFile = path,
         immediatelyDictionaryRW = false,
       })
-      -- rank はユーザー辞書が読めるときだけ扱う (#159)
+      -- rank は読み込んだときだけ扱う (#159)
       write("user", ";; okuri-ari entries.\n;; okuri-nasi entries.\n")
+      write("ranks.json", "[]")
       local lib = dictionary.load()
       store.set_library(lib)
       lib:register_henkan_result("okurinasi", "あ", "亜")
       lib:register_henkan_result("okurinasi", "い", "伊")
-      local before = vim.uv.fs_stat(path) ~= nil
+      -- 保存前は、まだ書いていない（遅延保存）
+      local before = read(path)
       require("skkeleton").save_user_dict()
       return { before, read(path), read(TMP .. "/user") }
     ]]),
     {
-      false,
+      "[]",
       '["亜","伊"]',
       ";; okuri-ari entries.\n;; okuri-nasi entries.\nあ /亜/\nい /伊/\n",
     }

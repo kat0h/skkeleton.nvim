@@ -57,8 +57,10 @@ T["purging a candidate keeps its rank for other readings (#129)"] = function()
   eq(
     run([[
       local path = write("purge_rank", ";; okuri-ari entries.\n;; okuri-nasi entries.\n")
+      local rank = write("purge_rank.json", "[]")
       local u = User.new()
       u:load({ path = path })
+      u:load_ranks(rank)
       u:register_henkan_result("okurinasi", "かん", "漢")
       u:register_henkan_result("okurinasi", "かんじ", "漢")
       local before = u:get_ranks()["漢"]
@@ -302,8 +304,10 @@ T["load_ranks and save_ranks"] = function()
     run([[
       local path = TMP .. "/ranks.json"
       local dict = write("rank_dict", ";; okuri-ari entries.\n;; okuri-nasi entries.\n")
+      write("ranks_empty.json", "[]")
       local u = User.new()
       u:load({ path = dict })
+      u:load_ranks(TMP .. "/ranks_empty.json")
       u:register_henkan_result("okurinasi", "かんじ", "感じ")
       u:register_henkan_result("okurinasi", "かんじ", "漢字")
       u:save_ranks(path)
@@ -369,34 +373,46 @@ T["load_ranks handles missing or invalid file gracefully"] = function()
   )
 end
 
--- ユーザー辞書が無いときは rank を扱わない（denops 版と同じ、#159）
-T["rank is not used without a user dictionary"] = function()
+-- rank ファイルは、ユーザー辞書が無くても読める（denops 版と同じ、#159）
+T["rank is read without a user dictionary"] = function()
   eq(
     run([[
       local path = write("no_dict_rank.json", '["A","B"]')
       local u = User.new()
       u:load_ranks(path)
-      local loaded = u:get_ranks()
-      u:register_henkan_result("okurinasi", "あ", "亜")
-      return { loaded, u:get_ranks() }
+      return u:get_ranks()
     ]]),
-    { {}, {} }
+    { A = 1, B = 2 }
   )
 end
 
--- ユーザー辞書のパスはあるが読めないときも rank を扱わない（denops 版と同じ、#159）
-T["rank is not used when the user dictionary cannot be read"] = function()
+-- ユーザー辞書のパスはあるが読めなくても、rank ファイルは読める（denops 版と同じ、#159）
+T["rank is read when the user dictionary cannot be read"] = function()
   eq(
     run([[
       local path = write("missing_dict_rank.json", '["A","B"]')
       local u = User.new()
       u:load({ path = TMP .. "/does_not_exist_dict" })
       u:load_ranks(path)
-      local loaded = u:get_ranks()
-      u:register_henkan_result("okurinasi", "あ", "亜")
-      return { loaded, u:get_ranks() }
+      return u:get_ranks()
     ]]),
-    { {}, {} }
+    { A = 1, B = 2 }
+  )
+end
+
+-- rank を読んでいないセッションでは、既存の rank ファイルを書き換えない (#159)
+T["save_ranks leaves the file alone when ranks were not read"] = function()
+  eq(
+    run([[
+      local path = write("unread_rank.json", '["old","older"]')
+      local u = User.new()
+      u:load({ path = TMP .. "/does_not_exist_dict" })
+      u:register_henkan_result("okurinasi", "あ", "亜")
+      u:save()
+      u:save_ranks(path)
+      return read(path)
+    ]]),
+    '["old","older"]'
   )
 end
 
@@ -444,23 +460,42 @@ T["save_user_dict leaves the rank file alone without a user dictionary"] = funct
   )
 end
 
--- 新しい辞書を作ったときも、そこから rank を記録・保存できる (#159)
+-- 新しい辞書を作ったあとも、rank を記録・保存できる (#159)
 T["ranks work after the dictionary is created"] = function()
   eq(
     run([[
       local path = TMP .. "/new_dict_rank.json"
       local dict = TMP .. "/new_user_dict"
+      write("new_rank.json", "[]")
       local u = User.new()
       u:load({ path = dict })
+      u:load_ranks(TMP .. "/new_rank.json")
       -- 辞書ファイルがまだ無い状態で登録し、保存で辞書を作る
       u:register_henkan_result("okurinasi", "あ", "亜")
       u:save()
-      -- 辞書ができたあとは rank を記録できる
       u:register_henkan_result("okurinasi", "い", "伊")
       u:save_ranks(path)
       return { u:get_ranks(), read(path) }
     ]]),
-    { { ["伊"] = 1 }, '["伊"]' }
+    { { ["亜"] = 1, ["伊"] = 2 }, '["亜","伊"]' }
+  )
+end
+
+-- 辞書パスはあるがファイルがまだ無い状態で終了保存を通しても、既存の rank を消さない (#159)
+T["exit save keeps the rank file when the dictionary is new"] = function()
+  eq(
+    run([[
+      local path = write("new_dict_exit_rank.json", '["old","older"]')
+      local u = User.new()
+      u:load({ path = TMP .. "/new_user_for_exit" })
+      -- 辞書ファイルはまだ無い。rank も読んでいない
+      u:register_henkan_result("okurinasi", "あ", "亜")
+      -- 終了保存と同じ順で呼ぶ
+      u:save()
+      u:save_ranks(path)
+      return { read(path), vim.uv.fs_stat(TMP .. "/new_user_for_exit") ~= nil }
+    ]]),
+    { '["old","older"]', true }
   )
 end
 
@@ -469,8 +504,10 @@ T["save_ranks creates parent directories"] = function()
     run([[
       local deep_path = TMP .. "/deep/nested/ranks/rank.json"
       local dict = write("deep_dict", ";; okuri-ari entries.\n;; okuri-nasi entries.\n")
+      write("deep_rank.json", "[]")
       local u = User.new()
       u:load({ path = dict })
+      u:load_ranks(TMP .. "/deep_rank.json")
       u:register_henkan_result("okurinasi", "あ", "亜")
       u:save_ranks(deep_path)
       return { vim.uv.fs_stat(deep_path) ~= nil, vim.json.decode(read(deep_path)) }

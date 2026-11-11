@@ -32,6 +32,7 @@ function User.new()
     load_time = "",
     ranks = {},
     dict_loaded = false,
+    ranks_loaded = false,
     sorted_keys_cache = {},
     rank_counter = 0,
   }, User)
@@ -116,8 +117,9 @@ function User:register_henkan_result(kind, word, candidate)
   end
   self.maps[kind][word] = merged
   self.sorted_keys_cache[kind] = nil
-  -- denops 版と同じく、ユーザー辞書が読めていないときは rank を記録しない (#159)
-  if self.path == "" or mtime_of(self.path) == nil then
+  -- rank を読めていないときは記録しない。読んでいない rank に足すと、
+  -- 既存のランクファイルを上書きしてしまう (#159)
+  if not self.ranks_loaded then
     return
   end
   self.rank_counter = (self.rank_counter or 0) + 1
@@ -148,13 +150,6 @@ function User:load_ranks(path)
   if not path or path == "" then
     return
   end
-  -- denops 版と同じく、ユーザー辞書が読めていないときは rank を読まない (#159)
-  if not self.load_time or self.load_time == "" then
-    return
-  end
-  if self.path == "" or mtime_of(self.path) == nil then
-    return
-  end
   local expanded = vim.fn.expand(path)
   if expanded == "" then
     return
@@ -176,6 +171,10 @@ function User:load_ranks(path)
   end
   uv.fs_close(fd)
   if content == "" then
+    -- 空のファイルは「rank が 1 つも無い」として読めたと扱う
+    self.ranks = {}
+    self.rank_counter = 0
+    self.ranks_loaded = true
     return
   end
   local ok, data = pcall(vim.json.decode, content)
@@ -190,6 +189,7 @@ function User:load_ranks(path)
       self.ranks[word] = self.rank_counter
     end
   end
+  self.ranks_loaded = true
 end
 
 ---@param path string
@@ -197,10 +197,9 @@ function User:save_ranks(path)
   if not path or path == "" then
     return
   end
-  -- ユーザー辞書が読めていないときは rank を読んでいないので、書かない。
-  -- 書くと、読まなかった既存のランクファイルを空で上書きしてしまう (#159)
-  -- User:save() が load_time を入れるので、辞書を読んだかどうかは別に覚えておく
-  if not self.dict_loaded then
+  -- rank を読んでいないときは書かない。書くと、読まなかった既存のランクファイルを
+  -- 空で上書きしてしまう (#159)。辞書を書けることと、rank を読めたことは別
+  if not self.ranks_loaded then
     return
   end
   local expanded = vim.fn.expand(path)
