@@ -2,6 +2,8 @@
 
 skkeleton.nvim のバグの多くは、モデル検査で見つけています。このリポジトリで初めて作業する人やエージェントが、検査を流し、結果を仕分け、issue にして直すまでを、一通りできるように書きました。道具の細かい説明（プロファイルの一覧、性質の一覧、オプション）は、`poc/formal-ui` ブランチの `docs/FORMAL.md` にあります。
 
+Neovim のモードと skkeleton の状態を合わせた「今の」振る舞いを、状態機械として書き出した仕様書は、`formal-semantics` ブランチの [`semantics/STATE_MACHINE.md`](https://github.com/kat0h/skkeleton.nvim/blob/formal-semantics/semantics/STATE_MACHINE.md) にあります（#179）。この仕様書は `semantics/model/model.lua` から生成するもので、モデルと生成の道具も同じブランチにあります。main には写しを置いていません（写すと更新されない文書になり、すぐ実際の振る舞いとずれるため）。用語と性質 P1–P15 の一覧は `semantics/GLOSSARY.md` にあります。
+
 ## なぜやるのか
 
 skkeleton の不具合は、決まった形で出ることが多いです。たとえば次のようなものです。
