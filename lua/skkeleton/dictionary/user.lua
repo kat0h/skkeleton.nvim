@@ -31,6 +31,7 @@ function User.new()
     path = "",
     load_time = "",
     ranks = {},
+    dict_loaded = false,
     sorted_keys_cache = {},
     rank_counter = 0,
   }, User)
@@ -196,6 +197,12 @@ function User:save_ranks(path)
   if not path or path == "" then
     return
   end
+  -- ユーザー辞書が読めていないときは rank を読んでいないので、書かない。
+  -- 書くと、読まなかった既存のランクファイルを空で上書きしてしまう (#159)
+  -- User:save() が load_time を入れるので、辞書を読んだかどうかは別に覚えておく
+  if not self.dict_loaded then
+    return
+  end
   local expanded = vim.fn.expand(path)
   if expanded == "" then
     return
@@ -287,6 +294,7 @@ function User:load(opts)
   local ok = pcall(self.read_file, self, self.path)
   if ok then
     self.load_time = time
+    self.dict_loaded = true
   end
 end
 

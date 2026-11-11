@@ -400,6 +400,50 @@ T["rank is not used when the user dictionary cannot be read"] = function()
   )
 end
 
+-- ユーザー辞書が読めていないときは、既存のランクファイルを書き換えない (#159)
+T["save_ranks leaves the file alone without a user dictionary"] = function()
+  eq(
+    run([[
+      local path = write("keep_rank.json", '["old","older"]')
+      local u = User.new()
+      u:load_ranks(path)
+      u:save_ranks(path)
+      return read(path)
+    ]]),
+    '["old","older"]'
+  )
+end
+
+-- ユーザー辞書のパスはあるが読めないときも、既存のランクファイルを書き換えない (#159)
+T["save_ranks leaves the file alone when the dictionary cannot be read"] = function()
+  eq(
+    run([[
+      local path = write("keep_rank2.json", '["old","older"]')
+      local u = User.new()
+      u:load({ path = TMP .. "/does_not_exist_dict" })
+      u:load_ranks(path)
+      u:save_ranks(path)
+      return read(path)
+    ]]),
+    '["old","older"]'
+  )
+end
+
+-- 終了時の保存を通しても、読まなかった既存のランクファイルは変わらない (#159)
+T["save_user_dict leaves the rank file alone without a user dictionary"] = function()
+  eq(
+    run([[
+      local path = write("exit_rank.json", '["old","older"]')
+      local u = User.new()
+      u:load_ranks(path)
+      u:save()
+      u:save_ranks(path)
+      return read(path)
+    ]]),
+    '["old","older"]'
+  )
+end
+
 T["save_ranks creates parent directories"] = function()
   eq(
     run([[
