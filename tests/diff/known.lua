@@ -143,6 +143,22 @@ return {
     end,
   },
   {
+    -- 送りの n のあと q を押したとき、Lua 版は n を「ん」にしてからモード変換する。
+    -- 送りが揃ったことを理由に henkanFirst を呼ぶと登録欄が開くため、ここでは変換を始めない（#270、V4）。
+    -- この経路の upstream 動作は DECISIONS.md の比較推測に基づく。未確認。
+    id = "okuri-pending-n-kana-function-does-not-convert",
+    applies = function(_, index, a, b, r)
+      local before, step = r.a.steps[index - 1], r.a.steps[index]
+      if not (step and step.key == "q" and before and before.lines and before.cursor and a.vim == "i") then
+        return false
+      end
+      local line = before.lines[before.cursor[1]] or ""
+      return line:find("*", 1, true) ~= nil
+        and line:sub(before.cursor[2], before.cursor[2]) == "n"
+        and (b.vim or ""):sub(1, 1) == "c"
+    end,
+  },
+  {
     -- 打ちかけの n のあとの L（全角モード）。denops 版は L を送り仮名の印（henkanPoint）として扱い、
     -- 続く l でモードが外れる（enabled が false になる）。Lua 版は L をキーマップで受けるので（#67）、
     -- n を「ん」にしてから全角モードに入る

@@ -59,6 +59,41 @@ T["no candidates: input state returns when nothing is registered"] = function()
   eq(child.lua_get([[#H.called("input")]]), 1)
 end
 
+T["empty okuri converts as okurinasi"] = function()
+  init()
+  child.lua([[ctx = Context.new(); H.dispatch(ctx, ";ka; ")]])
+  eq(child.lua_get([[ctx.state.type]]), "input")
+  eq(child.lua_get([[ctx.state.mode]]), "okurinasi")
+  eq(child.lua_get([[ctx:to_string()]]), "▽か")
+  eq(child.lua_get([=[H.called("input")[1][2]]=]), "[辞書登録] か: ")
+end
+
+T["> in okuri does not start prefix conversion"] = function()
+  init()
+  child.lua([[
+    ctx = Context.new()
+    H.dispatch(ctx, ";ka;")
+    input = require("skkeleton.function.input")
+    input.prefix(ctx, ">")
+  ]])
+  eq(child.lua_get([[ctx.state.type]]), "input")
+  eq(child.lua_get([[ctx.state.mode]]), "okuriari")
+  eq(child.lua_get([[ctx:to_string()]]), "▽か*")
+  eq(child.lua_get([[#H.called("input")]]), 0)
+end
+
+T["kana function flushes n without starting okuri conversion"] = function()
+  init()
+  child.lua([[
+    ctx = Context.new()
+    H.dispatch(ctx, ";ka;n")
+    require("skkeleton.keymap").handle_key(ctx, "q")
+  ]])
+  eq(child.lua_get([[ctx.state.type]]), "input")
+  eq(child.lua_get([[ctx.preedit:output("")]]), "カン")
+  eq(child.lua_get([[#H.called("input")]]), 0)
+end
+
 T["register word prompt"] = function()
   init()
   child.lua([[H.ret.input = "穂毛"]])
