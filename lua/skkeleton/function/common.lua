@@ -108,7 +108,7 @@ function M.purge_candidate(ctx)
   local msg = ("Really purge? %s /%s/"):format(word, cand)
   if host.confirm(msg) then
     store.library():purge_candidate(type, word, cand)
-    state.initialize(st)
+    state.initialize(st, { "converter", "table", "table_name" })
     ctx.last_candidate.word = ""
   end
 end
