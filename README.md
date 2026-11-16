@@ -60,7 +60,7 @@ require("skkeleton").setup({ indicator = false })
 
 送りなし入力中に blink.cmp を利用できます。
 
-補完候補は、**読みの長さ（短い順）** → **選択履歴ランク（頻度順）** → **辞書の出現順** の 3 段階でソートされます。
+補完候補は、**選択履歴のランク（最後に確定した時刻が新しい順）** で並びます。ランクのない候補は、**読みの辞書順**、同じ読みなら**辞書の出現順**です。
 
 ### blink.cmp
 
@@ -98,6 +98,7 @@ require("skkeleton").setup({
 
 - `require("skkeleton").get_prefix()`: 現在の読み（かな）を取得
 - `require("skkeleton").get_preedit()`: 現在の pre-edit 文字列を取得
+- `require("skkeleton").is_composing()`: 今、変換中か（pre-edit があるか）を取得
 - `require("skkeleton").get_completion_result()`: 補完候補一覧を取得
 - `require("skkeleton").get_completion_ranks()`: 候補のランクテーブルを取得
 - `require("skkeleton").complete(kana, word, kind)`: 候補を確定してバッファに挿入し、辞書とランクに登録
@@ -177,5 +178,7 @@ make fmt
 ```
 
 `stylua` は `.tests/bin/stylua` が存在すればそちらを優先して使用します。内部設計は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) を参照してください。
+
+状態遷移の仕様は [STATE_MACHINE.md](https://github.com/kat0h/skkeleton.nvim/blob/formal-semantics/semantics/STATE_MACHINE.md) を参照してください。これは `formal-semantics` ブランチでモデルから生成した文書です。
 
 開発の決まり（issue、テスト、コミット、ブランチ）は [AGENTS.md](AGENTS.md) に、モデル検査の考え方と手順は [docs/MODEL_CHECKING.md](docs/MODEL_CHECKING.md) にあります。

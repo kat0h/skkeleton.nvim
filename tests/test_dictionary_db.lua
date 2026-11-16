@@ -483,10 +483,11 @@ T["db"]["uses separate DBs for different encodings of the same file"] = function
   eq(
     run([[
       local src = write("s", ";; coding: utf-8\n;; okuri-nasi entries.\nあ /亜/\n")
-      local a = db.path_for(src, TMP, "utf-8")
-      local b = db.path_for(src, TMP, "euc-jp")
-      local c = db.path_for(src, TMP)
-      return { a ~= b, a ~= c, c == db.path_for(src, TMP, "") }
+      local p = {}
+      for i, enc in ipairs({ "utf-8", "euc-jp", "" }) do
+        p[i] = db.path_for(src, TMP, enc)
+      end
+      return { p[1] ~= p[2], p[1] ~= p[3], p[3] == db.path_for(src, TMP) }
     ]]),
     { true, true, true }
   )
@@ -542,6 +543,31 @@ T["db"]["path_for normalizes encoding"] = function()
       return { p1 == p2, p1 == p3 }
     ]]),
     { true, true }
+  )
+end
+
+-- #197: NUL を含む文字列を sha256() に渡すと Blob 扱いになり E976 で落ちていた
+T["db"]["path_for works with an encoding on Neovim that rejects NUL in sha256"] = function()
+  eq(
+    run([[
+      local dir = TMP .. "/db"
+      local ok, p = pcall(db.path_for, "dict", dir, "utf-8")
+      p = ok and p or ""
+      return { ok, p:match("^" .. vim.pesc(dir)) ~= nil, p:match("%.db$") ~= nil }
+    ]]),
+    { true, true, true }
+  )
+end
+
+T["db"]["ensure builds a DB with an explicit encoding"] = function()
+  eq(
+    run([[
+      local src = write("s_enc", ";; coding: utf-8\n;; okuri-nasi entries.\nあ /亜/\n")
+      local dst = db.ensure(src, { dir = TMP .. "/db", encoding = "utf-8", force = true })
+      local d = db.open(dst)
+      return { vim.uv.fs_stat(dst) ~= nil, d:get_henkan_result("okurinasi", "あ") }
+    ]]),
+    { true, { "亜" } }
   )
 end
 
