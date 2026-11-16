@@ -70,14 +70,15 @@ function M.cache_dir(database_path)
 end
 
 -- 元の辞書に対応する DB のパス。ファイル名は元の辞書の絶対パスの sha256 の先頭 16 文字。
--- エンコーディングを明示したときは、違う指定で古い DB を使わないようにハッシュに含める
+-- エンコーディングを明示したときは、違う指定で古い DB を使わないようにハッシュに含める。
+-- 文字列の連結は sha256() に渡す前に行う（NUL を混ぜた文字列は Blob 扱いになり E976 になる）
 ---@param src string
 ---@param dir string
 ---@param encoding? string
 function M.path_for(src, dir, encoding)
   local key = vim.fs.normalize(vim.fn.fnamemodify(src, ":p"))
   if encoding and encoding ~= "" then
-    key = key .. "\0" .. skk.normalize_encoding(encoding)
+    key = key .. "\n" .. skk.normalize_encoding(encoding)
   end
   return vim.fs.joinpath(dir, vim.fn.sha256(key):sub(1, 16) .. ".db")
 end

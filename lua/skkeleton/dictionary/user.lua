@@ -9,12 +9,18 @@ local util = require("skkeleton.util")
 local uv = vim.uv
 local bit = require("bit")
 
+local function mtime_of(path)
+  local st = uv.fs_stat(path)
+  return st and ("%d.%09d"):format(st.mtime.sec, st.mtime.nsec)
+end
+
 ---@class skkeleton.UserDictionary
 ---@field path string
 ---@field load_time string
 ---@field maps table<string, table<string, string[]>>
 ---@field ranks table<string, integer>
 ---@field rank_counter integer
+---@field ranks_load_time? string
 local User = {}
 User.__index = User
 
@@ -25,6 +31,9 @@ function User.new()
     path = "",
     load_time = "",
     ranks = {},
+    dict_loaded = false,
+    ranks_loaded = false,
+    sorted_keys_cache = {},
     rank_counter = 0,
   }, User)
 end
@@ -48,15 +57,32 @@ function User:get_henkan_result(kind, word)
   return filter(self.maps[kind][word] or {})
 end
 
+-- 読みのキーを辞書順に並べたもの。get_prefix のたびに全キーを並べ直さないよう、
+-- 辞書が変わったときだけ作り直す (#162)
+---@param kind "okuriari"|"okurinasi"
+---@return string[]
+function User:sorted_keys(kind)
+  local keys = self.sorted_keys_cache[kind]
+  if keys then
+    return keys
+  end
+  keys = {}
+  for k in pairs(self.maps[kind]) do
+    keys[#keys + 1] = k
+  end
+  table.sort(keys)
+  self.sorted_keys_cache[kind] = keys
+  return keys
+end
+
 -- 前方一致する読みを、バイト順に limit 件まで。{ { 読み, 候補の配列 }, ... }
 function User:get_prefix(kind, prefix, limit)
   local keys = {}
-  for k in pairs(self.maps[kind]) do
+  for _, k in ipairs(self:sorted_keys(kind)) do
     if vim.startswith(k, prefix) then
       keys[#keys + 1] = k
     end
   end
-  table.sort(keys)
   local out = {}
   for _, k in ipairs(keys) do
     local cands = filter(self.maps[kind][k])
@@ -90,6 +116,12 @@ function User:register_henkan_result(kind, word, candidate)
     end
   end
   self.maps[kind][word] = merged
+  self.sorted_keys_cache[kind] = nil
+  -- rank を読めていないときは記録しない。読んでいない rank に足すと、
+  -- 既存のランクファイルを上書きしてしまう (#159)
+  if not self.ranks_loaded then
+    return
+  end
   self.rank_counter = (self.rank_counter or 0) + 1
   self.ranks[candidate] = self.rank_counter
 end
@@ -97,14 +129,20 @@ end
 ---@param kind "okuriari"|"okurinasi"
 ---@param word string
 ---@param candidate string
+---@return boolean changed 消した候補があったか
 function User:purge_candidate(kind, word, candidate)
+  self.sorted_keys_cache[kind] = nil
   local rest = {}
+  local changed = false
   for _, c in ipairs(self.maps[kind][word] or {}) do
     if c ~= candidate then
       rest[#rest + 1] = c
+    else
+      changed = true
     end
   end
   self.maps[kind][word] = #rest > 0 and rest or nil
+  return changed
 end
 
 ---@param path string
@@ -113,9 +151,26 @@ function User:load_ranks(path)
     return
   end
   local expanded = vim.fn.expand(path)
-  if expanded == "" or not uv.fs_stat(expanded) then
+  if expanded == "" then
     return
   end
+  -- 他の nvim が更新した rank を読み直せるように、更新日時が変わったときだけ読み直す (#159)
+  local time = mtime_of(expanded)
+  if not time then
+    -- rank ファイルがまだ無い。初回の利用なので、空の rank として扱って
+    -- ここから学習できるようにする (#159)
+    self.ranks = {}
+    self.rank_counter = 0
+    self.ranks_loaded = true
+    return
+  end
+  if time == self.ranks_load_time then
+    return
+  end
+  -- 読み直しに失敗したら、読めなかった内容で上書きしないよう、
+  -- 保存できる状態ではなくす (#159)
+  self.ranks_loaded = false
+  self.ranks_load_time = time
   local fd = uv.fs_open(expanded, "r", 420)
   if not fd then
     return
@@ -127,6 +182,10 @@ function User:load_ranks(path)
   end
   uv.fs_close(fd)
   if content == "" then
+    -- 空のファイルは「rank が 1 つも無い」として読めたと扱う
+    self.ranks = {}
+    self.rank_counter = 0
+    self.ranks_loaded = true
     return
   end
   local ok, data = pcall(vim.json.decode, content)
@@ -141,11 +200,17 @@ function User:load_ranks(path)
       self.ranks[word] = self.rank_counter
     end
   end
+  self.ranks_loaded = true
 end
 
 ---@param path string
 function User:save_ranks(path)
   if not path or path == "" then
+    return
+  end
+  -- rank を読んでいないときは書かない。書くと、読まなかった既存のランクファイルを
+  -- 空で上書きしてしまう (#159)。辞書を書けることと、rank を読めたことは別
+  if not self.ranks_loaded then
     return
   end
   local expanded = vim.fn.expand(path)
@@ -174,7 +239,6 @@ function User:save_ranks(path)
   local wrote = false
   if fd then
     wrote = uv.fs_write(fd, content, 0) == #content
-    wrote = uv.fs_fsync(fd) ~= nil and wrote
     uv.fs_close(fd)
     wrote = wrote and uv.fs_rename(tmp, target) ~= nil
     if not wrote then
@@ -184,19 +248,19 @@ function User:save_ranks(path)
   if not wrote then
     local direct_fd = uv.fs_open(target, "w", 420)
     if direct_fd then
-      uv.fs_write(direct_fd, content, 0)
+      wrote = uv.fs_write(direct_fd, content, 0) == #content
       uv.fs_close(direct_fd)
     end
   end
-end
-
-local function mtime_of(path)
-  local st = uv.fs_stat(path)
-  return st and ("%d.%09d"):format(st.mtime.sec, st.mtime.nsec)
+  if not wrote then
+    -- denops 版と同じく、書けなかったときは警告を出す (#159)
+    vim.notify(("skkeleton: can't write candidate rank data to %s"):format(expanded), vim.log.levels.WARN)
+  end
 end
 
 ---@param path string
 function User:read_file(path)
+  self.sorted_keys_cache = {}
   local text = skk.read_file(path)
   local maps = { okuriari = {}, okurinasi = {} }
   local cur
@@ -240,6 +304,7 @@ function User:load(opts)
   local ok = pcall(self.read_file, self, self.path)
   if ok then
     self.load_time = time
+    self.dict_loaded = true
   end
 end
 
@@ -335,7 +400,6 @@ function User:save()
   local fd = uv.fs_open(tmp, "w", stat and bit.band(stat.mode, 511) or 420)
   if fd then
     ok = uv.fs_write(fd, content, 0) == #content
-    ok = uv.fs_fsync(fd) ~= nil and ok
     uv.fs_close(fd)
     ok = ok and uv.fs_rename(tmp, target) ~= nil
     if not ok then
@@ -347,6 +411,8 @@ function User:save()
     return
   end
   self.load_time = mtime_of(self.path) or ""
+  -- 辞書を新しく作ったときも、ここから rank を扱えるようにする (#159)
+  self.dict_loaded = true
 end
 
 function User:close() end

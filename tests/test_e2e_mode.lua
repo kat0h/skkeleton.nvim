@@ -168,6 +168,60 @@ T["<C-j> assigned to toggle works as kakutei while converting"] = function()
   eq(vim_mode(), "hira")
 end
 
+-- 変換中に <Plug>(skkeleton-enable) を押しても、打った読みを捨てない (#210)。
+-- 期待値は upstream（vim-skk/skkeleton e78aca1）に同じキー列を流した結果に合わせている
+T["enable during conversion keeps the reading"] = function()
+  -- ▽ の読み
+  type("i")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan")
+  eq(helpers.preedit(child), "▽かn")
+  type("<Plug>(skkeleton-enable)")
+  eq(helpers.preedit(child), "▽かn")
+  eq(helpers.buffer(child), { "" })
+  type("<Esc>")
+  eq(helpers.buffer(child), { "かん" })
+
+  -- 打ちかけのローマ字
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "" })
+  type("i")
+  type("<Plug>(skkeleton-enable)")
+  type("K")
+  eq(helpers.preedit(child), "▽k")
+  type("<Plug>(skkeleton-enable)")
+  eq(helpers.preedit(child), "▽k")
+  child.type_keys("<Esc>")
+  child.lua([[vim.wait(100)]])
+end
+
+T["enable during henkan commits the candidate"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "" })
+  type("i")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan<Space>")
+  eq(helpers.preedit(child), "▼缶")
+  type("<Plug>(skkeleton-enable)")
+  -- 候補を確定してから有効になる（upstream と同じ）
+  eq(helpers.buffer(child), { "缶" })
+  eq(helpers.preedit(child), "")
+  child.type_keys("<Esc>")
+  child.lua([[vim.wait(100)]])
+end
+
+-- cmdline の候補選択中に enable を呼んでも、確定した候補が二重に入らない (#241)
+T["enable during henkan in the cmdline commits once"] = function()
+  child.type_keys(":")
+  type("<Plug>(skkeleton-enable)")
+  type("Kan<Space>")
+  eq(child.fn.getcmdline(), "▼缶")
+  type("<Plug>(skkeleton-enable)")
+  -- 前回の表示（▼缶）を BS で消してから確定する。▼缶缶 にならない
+  eq(child.fn.getcmdline(), "缶")
+  eq((child.g["skkeleton#state"] or {}).preedit, "")
+  child.type_keys("<C-c>")
+  child.lua([[vim.wait(100)]])
+end
+
 T["enable is refused in replace mode"] = function()
   child.type_keys("R")
   child.lua([[require("skkeleton").enable()]])
@@ -292,12 +346,40 @@ T["g:skkeleton#mapped_keys adds keys"] = function()
   eq(child.lua_get([[vim.fn.maparg("<F3>", "i", false, true).desc]]), "skkeleton")
 end
 
-T["leaving the window disables"] = function()
+-- バッファを指定して pre-edit の文字列を取る
+local function preedit_in(buf)
+  return child.lua_get(
+    [[(function(buf)
+      local ns = vim.api.nvim_get_namespaces()["skkeleton-preedit"]
+      local text = ""
+      for _, m in ipairs(vim.api.nvim_buf_get_extmarks(buf, ns, 0, -1, { details = true })) do
+        for _, chunk in ipairs(m[4].virt_text or {}) do
+          text = text .. chunk[1]
+        end
+      end
+      return text
+    end)(...)]],
+    { buf }
+  )
+end
+
+T["leaving the window keeps the pre-edit (#169)"] = function()
   enable()
   type("Ka")
+  local buf = child.api.nvim_get_current_buf()
   child.cmd("new")
-  eq(child.g["skkeleton#enabled"], false)
-  eq(helpers.preedit(child), "")
+  eq(child.g["skkeleton#enabled"], true)
+  -- 元のバッファに pre-edit が残る
+  eq(preedit_in(buf), "▽か")
+end
+
+T["leaving the buffer drops the pre-edit (#169)"] = function()
+  enable()
+  type("Ka")
+  local buf = child.api.nvim_get_current_buf()
+  type("<C-o>:enew<CR>")
+  eq(preedit_in(buf), "")
+  eq(child.g["skkeleton#state"].preedit, "")
 end
 
 T["leaving insert mode with <C-c> disables"] = function()
@@ -403,8 +485,12 @@ T["the state is exposed in g:skkeleton#state"] = function()
   eq(child.g["skkeleton#state"].henkanFeed, "か")
   type("n<Space>")
   eq(child.g["skkeleton#state"].phase, "henkan")
-  -- ウィンドウを移ったり normal に戻ったりして状態が初期化されたら g:skkeleton#state も初期化される
+  -- ウィンドウを移っても pre-edit は保持される (#169)
   child.cmd("botright new")
+  eq(child.g["skkeleton#state"].preedit, "▼缶")
+  -- バッファを離れて状態が初期化されたら g:skkeleton#state も初期化される
+  child.cmd("wincmd p")
+  type("<C-o>:enew<CR>")
   eq(child.g["skkeleton#state"], { phase = "input", henkanFeed = "", preedit = "" })
 end
 

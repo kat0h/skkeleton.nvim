@@ -9,6 +9,7 @@ skkeleton.nvim のモジュールの構成と、モジュールのあいだの�
 - denops 版にあった非同期処理（`await`）はすべて同期呼び出しにする。
 - **入力エンジン（core）は Neovim の UI に直接触れない**。UI 操作が必要な処理（モード変更の通知、無効化、候補のポップアップ表示、`input()`、`confirm()`）はすべて `skkeleton.host` を経由して呼び出す。テスト時には `host` の関数をモックに差し替えられるようにする。
 - 表示方式: pre-edit（`▽かん` など）は**バッファに直接書き込まず**、`virt_text_pos = "inline"` の extmark で表示する。確定した文字列は upstream と同様に `nvim_feedkeys(str, "nit")` で送出する（`\n` による autoindent、`\x07u` による undo point、`\b` による削除を効かせるため）。cmdline モードと terminal モードのみ、upstream と同じく `<BS>` で消去して書き直す方式をとる。
+- 動きに迷ったら upstream に合わせる。ただし upstream でも再現する不具合（打った読みや式が消えるなど）は、upstream と同じであることを理由にそのままにはせず、直す。直したときは根拠・upstream の結果・直したあとの動きを `tests/diff/known.lua` とこの文書に書く（#220）。
 - 設定のキー名は upstream から移行しやすいよう、同じ camelCase（`markerHenkan` など）を維持する。
 - `state` などの内部テーブルのフィールド名は snake_case とする。ただし、関数の登録名（キーマップやかなテーブルで文字列として指定するもの）は upstream と同じ camelCase（`henkanFirst` など）にする。
 
@@ -117,12 +118,19 @@ lib:purge_candidate(type, word, candidate)
 lib:load(); lib:save(); lib:save_ranks()        -- save はユーザー辞書と補完ランク（completionRankFile）を書く
 -- 個々の辞書は :get_henkan_result(type, word) と :get_prefix(type, prefix, limit) を持つ
 ```
+ユーザー辞書の保存のタイミングは upstream と違う（#161）。upstream は `immediatelyDictionaryRW` の既定が `true` で、登録・削除のたびに書き、終了時の保存はしない。ここでは既定を `false` にして、登録した語は `VimLeavePre` でまとめて保存する。登録のたびに数十ms待つのを避けるためで、正常に終了すれば登録は残るが、強制終了やクラッシュのときは残らない。`immediatelyDictionaryRW = true` にすると upstream と同じ即時保存になる。
+
+補完ランク（`completionRankFile`）は、rank ファイルを読めたときだけ記録・保存する（#159）。rank ファイルが無いとき（初回）は空の rank として扱い、そこから学習する。ファイルはあるが読めないとき（壊れた JSON など）は、読まなかった rank で上書きしないよう、記録も保存もしない。ユーザー辞書の有無とは関係しない（upstream はユーザー辞書が読めたときだけ rank を読むが、ここでは rank ファイルだけでも使える）。ランクの値は upstream の `Date.now()` ではなく通し番号だが、並び順は同じ。
 DB の形式 v2（`lua/skkeleton/dictionary/db.lua`）:
 - 置き場所: `stdpath("cache")/skkeleton/<元の辞書の正規化した絶対パスの sha256 の先頭 16 文字>.db`（設定の `databasePath` があればそのディレクトリ）
 - `[0,128)` のヘッダは ASCII で `SKKDB <ver> <nari> <nnasi> <src_size> <src_mtime_sec> <src_mtime_nsec>\n` を空白で埋めたもの。ヘッダのサイズと mtime が元の辞書と合わなければ作り直す
 - `[128,…)` の索引: u32 LE の行頭オフセット。okuri-ari が nari 個＋終端、okuri-nasi が nnasi 個＋終端。行の長さはオフセットの差でわかる
 - データ部: UTF-8 の `読み 候補\n` を、種類ごとにバイト順（LuaJIT の文字列比較と同じ）でソートしたもの
 - 書き込みは `.tmp` に書いてから rename する。同じ読みが 2 回以上あれば、あとのものを使う（#48）
+
+### cmdline（upstream と変えているところ）
+- `<C-r>=` の式入力の中で候補の無い読みに `<Space>` を押すと、upstream は式を消して辞書登録のプロンプト（`getcmdtype()` が `@`）に移る。Lua 版は式の cmdline のまま、読みを確定して式に残す（#244）。打っていた式が消えるのは不具合と判断した。この差は `make difftest` では観測できない（driver が式入力の中で skk を有効にした状態を作らない）ので、`tests/diff/known.lua` には入れず、`tests/test_e2e_cmdline.lua` の回帰テストで押さえている。比べた upstream は `e78aca1`
+- 式を取り消して外側の cmdline に戻ったとき、upstream は外側の読みをただの文字として残す。Lua 版は外側の入力状態（打ちかけのローマ字・送り仮名・候補の選択・かなモード）を丸ごと戻し、続けて打った文字が読みに足されるようにする（#246）。表示と状態が食い違うのは不具合と判断した。この差も `make difftest` では観測できない（driver の `vim` は cmdtype ではなく `nvim_get_mode().mode` で、cmdline では両方 `c` になる）ので、`tests/diff/known.lua` には入れず、`tests/test_e2e_cmdline.lua` の回帰テストで押さえている。比べた upstream は `e78aca1`
 
 ### indicator（インジケータ）
 ```lua
@@ -143,7 +151,7 @@ require("skkeleton.indicator").setup(opts)  -- opts は skkeleton_indicator と�
 ### 描画フロー（render）
 - insert モード: 確定文字列がある場合は `nvim_feedkeys(…, "nit")` で送出し、続けて `<Cmd>lua require('skkeleton.render').finish()<CR>` を実行する。`finish()` 内で extmark の再配置、候補ポップアップの表示、`User skkeleton-handled` の発火を行う。確定文字列がない場合はその場で `finish()` を直接呼び出す。
 - 送出する文字列に含まれる `0x80`（「、」などの UTF-8 バイト列に含まれる）は `0x80 0xfe 'X'` にエスケープし、末尾の `<Cmd>...<CR>` のみを `nvim_replace_termcodes` で変換して結合する。
-- pre-edit とバッファのずれは、`cleanup.lua` の `reset_if_stale()` の 1 か所で見つけて片付ける（#61）。判定は `render.is_stale()`。pre-edit を出している間は `nvim_buf_attach` の `on_bytes` でバッファの書き換えを受け、ずれた合図にする（#66）。extmark は `right_gravity = false`。
+- pre-edit とバッファのずれは、`cleanup.lua` の `reset_if_stale()` の 1 か所で見つけて片付ける（#61）。判定は `render.is_stale()`。pre-edit を出している間は `nvim_buf_attach` の `on_bytes` でバッファの書き換えを受ける（#66）。外から書き換えられた行の上に pre-edit が残っていれば、読みを捨てずにそのまま出す（#199）。extmark は `right_gravity = false`。
 - Vim のモードが移ったときの片付けは、`cleanup.lua` の `ModeChanged` 1 か所で受け、`MODE_TRANSITIONS` の表で片付け方を決める（#62）。insert から normal へ移るときは pre-edit を `<Esc>` と同じく確定してから片付ける（#70）。置換モード・visual / select・`<C-o>` で一瞬 normal に移って戻るときも確定し、`<C-o>:` から cmdline に入って戻るときは残す（#111、#117、#86）。
 - `guard.lua` は `vim.on_key` で、skkeleton が奪っていない物理の特殊キー（insert / cmdline）と、terminal の Ctrl + 文字を見つけたら、`main.commit_preedit()` で確定してから元のキーを流す（#56、#121）。
 - cmdline モードと terminal モードでは `ctx.preedit:output(ctx:to_string())` を送出する。cmdline の pre-edit の記録と片付けは `render/cmdline.lua`（`remember()`、`is_stale()`、`clean()`、`has_stale()`、`reset()`）が持つ（#98）。

@@ -128,7 +128,9 @@ function Library:get_completion_result(prefix, feed, limit)
         if #order >= limit then
           break
         end
-        for _, e in ipairs(dic:get_prefix("okurinasi", p, limit)) do
+        -- すでに集めた分を引いた残りだけ取る。内側でも limit で止まるので、
+        -- ヒットの多い prefix で余分に読まない (#162)
+        for _, e in ipairs(dic:get_prefix("okurinasi", p, limit - #order)) do
           gather(order, map, seen, e[1], e[2])
         end
       end
@@ -175,8 +177,9 @@ function Library:purge_candidate(kind, word, candidate)
   if not self.user_dict then
     return
   end
-  self.user_dict:purge_candidate(kind, word, candidate)
-  if self.immediately_rw then
+  -- 消した候補が無ければ、辞書は変わっていないので書かない (#161)
+  local changed = self.user_dict:purge_candidate(kind, word, candidate)
+  if changed and self.immediately_rw then
     self:save()
   end
 end
@@ -184,6 +187,8 @@ end
 function Library:load()
   if self.user_dict then
     self.user_dict:load({})
+    -- 他の nvim が更新した rank も読み直す (#159)
+    self.user_dict:load_ranks(config.options.completionRankFile)
   end
 end
 

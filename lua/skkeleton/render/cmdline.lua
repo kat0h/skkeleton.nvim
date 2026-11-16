@@ -70,6 +70,40 @@ local function drop_marker_and_reading(line, pos, cm)
   return new_line, math.max(1, new_pos)
 end
 
+-- <C-r>= の式のように cmdline が入れ子になるとき、外側の cmdline の記録を退避しておく。
+-- 内側の記録で外側を上書きしないため (#206)
+---@type { cmdtype: string, mark: table? }[]
+local saved_marks = {}
+
+-- 内側の cmdline に入るときに、外側の記録を退避する
+function M.push()
+  -- 外側の cmdline の状態は、式に入った時点の Context から取る。
+  -- cmd_mark はまだ描いていないので空 (#246)
+  local ctx = require("skkeleton.store").context()
+  local st = ctx.state
+  table.insert(saved_marks, {
+    cmdtype = vim.fn.getcmdtype(),
+    mark = cmd_mark,
+    -- 打ちかけのローマ字・送り仮名・候補の状態まで戻せるよう、state を丸ごと控える
+    state = vim.deepcopy(st),
+    last_candidate = vim.deepcopy(ctx.last_candidate),
+    current = ctx.preedit.current,
+  })
+  cmd_mark = nil
+end
+
+-- 内側の cmdline を抜けたときに、外側の記録を戻す
+-- 内側の cmdline を抜けたときに、外側の記録を戻す
+---@return { state: table, last_candidate: table?, current: string }? 退避した外側の状態
+function M.pop()
+  local saved = table.remove(saved_marks)
+  if saved then
+    cmd_mark = saved.mark
+    return { state = saved.state, last_candidate = saved.last_candidate, current = saved.current }
+  end
+  return nil
+end
+
 -- cmdline に書いた pre-edit を覚える。text が空なら忘れる
 ---@param text string
 function M.remember(text)
@@ -159,6 +193,7 @@ end
 -- cmdline を抜けるときに、片付けられなかった記録を捨てる
 function M.reset()
   cmd_mark = nil
+  saved_marks = {}
 end
 
 return M
