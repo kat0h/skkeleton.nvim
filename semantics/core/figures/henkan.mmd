@@ -1,0 +1,53 @@
+flowchart LR
+  direct["読みなし"]
+  pre0["▽（空）"]
+  pre["▽"]
+  prep["▽ 打ちかけ"]
+  oku["▽ 送り"]
+  okup["▽ 送り 打ちかけ"]
+  sel["▼"]
+  list["▼ 一覧"]
+  reg["辞書登録"]
+  pre -->|"#lt;Space#gt;／1 つ目の候補（R-HK-01）<br/>#gt;／接頭辞として変換（R-HK-06）"| sel
+  prep -->|"#lt;Space#gt;／1 つ目の候補（R-HK-01）<br/>#gt;／接頭辞として変換（R-HK-06）"| sel
+  oku -->|"#lt;Space#gt;／1 つ目の候補（R-HK-01）"| sel
+  okup -->|"#lt;Space#gt;／1 つ目の候補（R-HK-01）"| sel
+  pre -->|"#lt;Space#gt;／登録の欄を開く（R-HK-02）<br/>#gt;／接頭辞として変換（R-HK-06）"| reg
+  prep -->|"#lt;Space#gt;／登録の欄を開く（R-HK-02）<br/>#gt;／接頭辞として変換（R-HK-06）"| reg
+  oku -->|"#lt;Space#gt;／登録の欄を開く（R-HK-02）"| reg
+  okup -->|"#lt;Space#gt;／登録の欄を開く（R-HK-02）"| reg
+  pre0 -->|"#lt;Space#gt;／何も起きない（R-HK-03）"| pre0
+  pre0 -->|"#lt;Space#gt;／何も起きない（R-HK-03）"| prep
+  prep -->|"#lt;Space#gt;／何も起きない（R-HK-03）"| pre0
+  prep -->|"#lt;Space#gt;／何も起きない（R-HK-03）"| prep
+  prep -->|"#lt;Space#gt;／打ちかけを隠して変換（R-HK-04）"| sel
+  prep -->|"#lt;Space#gt;／打ちかけを隠して変換（R-HK-04）"| reg
+  okup -->|"#lt;Space#gt;／打ちかけを隠して変換（R-HK-04）<br/>#gt;／#gt; が送りに入る（R-HK-07）"| sel
+  okup -->|"#lt;Space#gt;／打ちかけを隠して変換（R-HK-04）<br/>#gt;／#gt; が送りに入る（R-HK-07）"| reg
+  oku -->|"#lt;Space#gt;／空の送りで引く（R-HK-05）<br/>#gt;／#gt; が送りに入る（R-HK-07）"| reg
+  oku -->|"#lt;Space#gt;／空の送りで引く（R-HK-05）<br/>#gt;／#gt; が送りに入る（R-HK-07）"| sel
+  sel -->|"#lt;Space#gt;／次の候補（R-HK-08）<br/>x／前の候補（R-HK-12）<br/>X／何も起きない（R-PG-02）"| sel
+  sel -->|"#lt;Space#gt;／次の候補（R-HK-08）<br/>X／何も起きない（R-PG-02）"| list
+  list -->|"#lt;Space#gt;／7 つ進む（R-HK-09）<br/>x／7 つ戻る（R-HK-13）<br/>選択キー／何も起きない（R-HK-15）<br/>X／何も起きない（R-PG-02）"| list
+  sel -->|"#lt;Space#gt;／登録の欄を開く（R-HK-10）"| reg
+  list -->|"#lt;Space#gt;／登録の欄を開く（R-HK-10）"| reg
+  pre -->|"#lt;Space#gt;／読みを確定（R-HK-11）"| direct
+  prep -->|"#lt;Space#gt;／読みを確定（R-HK-11）"| direct
+  oku -->|"#lt;Space#gt;／読みを確定（R-HK-11）"| direct
+  okup -->|"#lt;Space#gt;／読みを確定（R-HK-11）"| direct
+  sel -->|"#lt;Space#gt;／読みを確定（R-HK-11）"| direct
+  list -->|"#lt;Space#gt;／読みを確定（R-HK-11）<br/>選択キー／その候補を確定（R-HK-14）"| direct
+  sel -->|"x／前の候補（R-HK-12）<br/>#gt;／確定して ▽#gt;（R-HK-16）"| pre
+  sel -->|"x／前の候補（R-HK-12）"| oku
+  list -->|"x／7 つ戻る（R-HK-13）<br/>X／何も起きない（R-PG-02）"| sel
+  list -->|"#gt;／確定して ▽#gt;（R-HK-16）"| pre
+  sel -->|"X／候補を辞書から消す（R-PG-01）"| direct
+  list -->|"X／候補を辞書から消す（R-PG-01）"| direct
+  linkStyle 12 stroke:#d64545,color:#d64545
+  linkStyle 13 stroke:#d64545,color:#d64545
+  linkStyle 14 stroke:#d64545,color:#d64545
+  linkStyle 15 stroke:#d64545,color:#d64545
+  linkStyle 16 stroke:#d64545,color:#d64545
+  linkStyle 17 stroke:#d64545,color:#d64545
+  linkStyle 33 stroke:#d64545,color:#d64545
+  linkStyle 34 stroke:#d64545,color:#d64545

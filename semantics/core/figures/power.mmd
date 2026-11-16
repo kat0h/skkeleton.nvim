@@ -1,0 +1,62 @@
+flowchart LR
+  off["無効"]
+  direct["読みなし"]
+  pending["打ちかけ"]
+  pre0["▽（空）"]
+  pre["▽"]
+  prep["▽ 打ちかけ"]
+  oku["▽ 送り"]
+  okup["▽ 送り 打ちかけ"]
+  sel["▼"]
+  list["▼ 一覧"]
+  direct -->|"l／確定して無効（R-EN-01）<br/>#lt;Esc#gt;／確定して #lt;Esc#gt;（R-EN-02）<br/>disable／確定して無効（R-EN-07）"| off
+  pending -->|"l／確定して無効（R-EN-01）<br/>#lt;Esc#gt;／確定して #lt;Esc#gt;（R-EN-02）<br/>disable／確定して無効（R-EN-07）"| off
+  pre0 -->|"l／確定して無効（R-EN-01）<br/>#lt;Esc#gt;／確定して #lt;Esc#gt;（R-EN-02）<br/>disable／確定して無効（R-EN-07）"| off
+  pre -->|"l／確定して無効（R-EN-01）<br/>#lt;Esc#gt;／確定して #lt;Esc#gt;（R-EN-02）<br/>disable／確定して無効（R-EN-07）"| off
+  prep -->|"l／確定して無効（R-EN-01）<br/>#lt;Esc#gt;／確定して #lt;Esc#gt;（R-EN-02）<br/>disable／確定して無効（R-EN-07）"| off
+  oku -->|"l／確定して無効（R-EN-01）<br/>#lt;Esc#gt;／確定して #lt;Esc#gt;（R-EN-02）<br/>disable／確定して無効（R-EN-07）"| off
+  okup -->|"l／確定して無効（R-EN-01）<br/>#lt;Esc#gt;／確定して #lt;Esc#gt;（R-EN-02）<br/>disable／確定して無効（R-EN-07）"| off
+  off -->|"enable／有効にする（R-EN-03）"| direct
+  direct -->|"enable／作り直す（R-EN-04）"| direct
+  pending -->|"enable／何も起きない（R-EN-05）"| pending
+  pending -->|"enable／何も起きない（R-EN-05）"| pre0
+  pending -->|"enable／何も起きない（R-EN-05）"| pre
+  pending -->|"enable／何も起きない（R-EN-05）"| prep
+  pending -->|"enable／何も起きない（R-EN-05）"| oku
+  pending -->|"enable／何も起きない（R-EN-05）"| okup
+  pre0 -->|"enable／何も起きない（R-EN-05）"| pending
+  pre0 -->|"enable／何も起きない（R-EN-05）"| pre0
+  pre0 -->|"enable／何も起きない（R-EN-05）"| pre
+  pre0 -->|"enable／何も起きない（R-EN-05）"| prep
+  pre0 -->|"enable／何も起きない（R-EN-05）"| oku
+  pre0 -->|"enable／何も起きない（R-EN-05）"| okup
+  pre -->|"enable／何も起きない（R-EN-05）"| pending
+  pre -->|"enable／何も起きない（R-EN-05）"| pre0
+  pre -->|"enable／何も起きない（R-EN-05）"| pre
+  pre -->|"enable／何も起きない（R-EN-05）"| prep
+  pre -->|"enable／何も起きない（R-EN-05）"| oku
+  pre -->|"enable／何も起きない（R-EN-05）"| okup
+  prep -->|"enable／何も起きない（R-EN-05）"| pending
+  prep -->|"enable／何も起きない（R-EN-05）"| pre0
+  prep -->|"enable／何も起きない（R-EN-05）"| pre
+  prep -->|"enable／何も起きない（R-EN-05）"| prep
+  prep -->|"enable／何も起きない（R-EN-05）"| oku
+  prep -->|"enable／何も起きない（R-EN-05）"| okup
+  oku -->|"enable／何も起きない（R-EN-05）"| pending
+  oku -->|"enable／何も起きない（R-EN-05）"| pre0
+  oku -->|"enable／何も起きない（R-EN-05）"| pre
+  oku -->|"enable／何も起きない（R-EN-05）"| prep
+  oku -->|"enable／何も起きない（R-EN-05）"| oku
+  oku -->|"enable／何も起きない（R-EN-05）"| okup
+  okup -->|"enable／何も起きない（R-EN-05）"| pending
+  okup -->|"enable／何も起きない（R-EN-05）"| pre0
+  okup -->|"enable／何も起きない（R-EN-05）"| pre
+  okup -->|"enable／何も起きない（R-EN-05）"| prep
+  okup -->|"enable／何も起きない（R-EN-05）"| oku
+  okup -->|"enable／何も起きない（R-EN-05）"| okup
+  sel -->|"enable／確定して作り直す（R-EN-06）"| direct
+  list -->|"enable／確定して作り直す（R-EN-06）"| direct
+  sel -->|"disable／確定して無効（R-EN-07）"| off
+  list -->|"disable／確定して無効（R-EN-07）"| off
+  off -->|"どのキーでも／届かない（R-EN-08）"| off
+  off -.->|"どのキーでも／エラー（R-EN-09）"| off

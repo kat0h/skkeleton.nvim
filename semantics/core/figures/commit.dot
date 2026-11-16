@@ -1,0 +1,31 @@
+digraph {
+  rankdir=LR; splines=true; nodesep=0.45; ranksep=0.8;
+  node [shape=box, style="rounded,filled", fillcolor="#ffffff", color="#2f6feb", fontname="Noto Sans CJK JP", fontsize=11];
+  edge [fontname="Noto Sans CJK JP", fontsize=9, color="#3b5bdb", fontcolor="#3b5bdb"];
+  "direct" [label="読みなし"];
+  "pending" [label="打ちかけ"];
+  "pre0" [label="▽（空）"];
+  "pre" [label="▽"];
+  "prep" [label="▽ 打ちかけ"];
+  "oku" [label="▽ 送り"];
+  "okup" [label="▽ 送り 打ちかけ"];
+  "sel" [label="▼"];
+  "list" [label="▼ 一覧"];
+  "direct" -> "direct" [label="<C-g>／打ちかけを消す（R-CK-01）\n<C-j>／ひらがなに戻す（R-CK-05）\n<CR>／確定して改行（R-CK-09）"];
+  "pending" -> "direct" [label="<C-g>／打ちかけを消す（R-CK-01）\n<C-j>／打ちかけを確定（R-CK-06）\n<CR>／確定して改行（R-CK-09）"];
+  "pre0" -> "direct" [label="<C-g>／読みを消す（R-CK-02）\n<C-j>／読みを確定（R-CK-07）\n<CR>／確定（＋改行）（R-CK-10）"];
+  "pre" -> "direct" [label="<C-g>／読みを消す（R-CK-02）\n<C-j>／読みを確定（R-CK-07）\n<CR>／確定（＋改行）（R-CK-10）"];
+  "prep" -> "direct" [label="<C-g>／読みを消す（R-CK-02）\n<C-j>／読みを確定（R-CK-07）\n<CR>／確定（＋改行）（R-CK-10）"];
+  "oku" -> "direct" [label="<C-g>／読みを消す（R-CK-02）\n<C-j>／読みを確定（R-CK-07）\n<CR>／確定（＋改行）（R-CK-10）"];
+  "okup" -> "direct" [label="<C-g>／読みを消す（R-CK-02）\n<C-j>／読みを確定（R-CK-07）\n<CR>／確定（＋改行）（R-CK-10）"];
+  "sel" -> "direct" [label="<C-g>／読みごと消す（R-CK-03）\n<BS>／確定して 1 文字消す（R-CK-13）", color="#d64545", fontcolor="#d64545"];
+  "list" -> "direct" [label="<C-g>／読みごと消す（R-CK-03）\n<BS>／確定して 1 文字消す（R-CK-13）", color="#d64545", fontcolor="#d64545"];
+  "sel" -> "pre" [label="<C-g>／▽ に戻る（R-CK-04）"];
+  "sel" -> "oku" [label="<C-g>／▽ に戻る（R-CK-04）"];
+  "list" -> "pre" [label="<C-g>／▽ に戻る（R-CK-04）"];
+  "list" -> "oku" [label="<C-g>／▽ に戻る（R-CK-04）"];
+  "sel" -> "direct" [label="<C-j>／候補を確定（R-CK-08）\n<CR>／確定（＋改行）（R-CK-11）\n文字・大文字・l・q・;・/・L・<C-q>・<Esc>／確定して打ち直す（R-CK-12）"];
+  "list" -> "direct" [label="<C-j>／候補を確定（R-CK-08）\n<CR>／確定（＋改行）（R-CK-11）\n文字・大文字・l・q・;・/・L・<C-q>・<Esc>／確定して打ち直す（R-CK-12）"];
+  "sel" -> "direct" [label="どのキーでも／error が入る（R-CK-14）", style=dashed, color="#d64545", fontcolor="#d64545"];
+  "list" -> "direct" [label="どのキーでも／error が入る（R-CK-14）", style=dashed, color="#d64545", fontcolor="#d64545"];
+}

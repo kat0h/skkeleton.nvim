@@ -1,0 +1,31 @@
+flowchart LR
+  direct["読みなし"]
+  pending["打ちかけ"]
+  pre0["▽（空）"]
+  pre["▽"]
+  prep["▽ 打ちかけ"]
+  oku["▽ 送り"]
+  okup["▽ 送り 打ちかけ"]
+  sel["▼"]
+  list["▼ 一覧"]
+  direct -->|"#lt;C-g#gt;／打ちかけを消す（R-CK-01）<br/>#lt;C-j#gt;／ひらがなに戻す（R-CK-05）<br/>#lt;CR#gt;／確定して改行（R-CK-09）"| direct
+  pending -->|"#lt;C-g#gt;／打ちかけを消す（R-CK-01）<br/>#lt;C-j#gt;／打ちかけを確定（R-CK-06）<br/>#lt;CR#gt;／確定して改行（R-CK-09）"| direct
+  pre0 -->|"#lt;C-g#gt;／読みを消す（R-CK-02）<br/>#lt;C-j#gt;／読みを確定（R-CK-07）<br/>#lt;CR#gt;／確定（＋改行）（R-CK-10）"| direct
+  pre -->|"#lt;C-g#gt;／読みを消す（R-CK-02）<br/>#lt;C-j#gt;／読みを確定（R-CK-07）<br/>#lt;CR#gt;／確定（＋改行）（R-CK-10）"| direct
+  prep -->|"#lt;C-g#gt;／読みを消す（R-CK-02）<br/>#lt;C-j#gt;／読みを確定（R-CK-07）<br/>#lt;CR#gt;／確定（＋改行）（R-CK-10）"| direct
+  oku -->|"#lt;C-g#gt;／読みを消す（R-CK-02）<br/>#lt;C-j#gt;／読みを確定（R-CK-07）<br/>#lt;CR#gt;／確定（＋改行）（R-CK-10）"| direct
+  okup -->|"#lt;C-g#gt;／読みを消す（R-CK-02）<br/>#lt;C-j#gt;／読みを確定（R-CK-07）<br/>#lt;CR#gt;／確定（＋改行）（R-CK-10）"| direct
+  sel -->|"#lt;C-g#gt;／読みごと消す（R-CK-03）<br/>#lt;BS#gt;／確定して 1 文字消す（R-CK-13）"| direct
+  list -->|"#lt;C-g#gt;／読みごと消す（R-CK-03）<br/>#lt;BS#gt;／確定して 1 文字消す（R-CK-13）"| direct
+  sel -->|"#lt;C-g#gt;／▽ に戻る（R-CK-04）"| pre
+  sel -->|"#lt;C-g#gt;／▽ に戻る（R-CK-04）"| oku
+  list -->|"#lt;C-g#gt;／▽ に戻る（R-CK-04）"| pre
+  list -->|"#lt;C-g#gt;／▽ に戻る（R-CK-04）"| oku
+  sel -->|"#lt;C-j#gt;／候補を確定（R-CK-08）<br/>#lt;CR#gt;／確定（＋改行）（R-CK-11）<br/>文字・大文字・l・q・#59;・/・L・#lt;C-q#gt;・#lt;Esc#gt;／確定して打ち直す（R-CK-12）"| direct
+  list -->|"#lt;C-j#gt;／候補を確定（R-CK-08）<br/>#lt;CR#gt;／確定（＋改行）（R-CK-11）<br/>文字・大文字・l・q・#59;・/・L・#lt;C-q#gt;・#lt;Esc#gt;／確定して打ち直す（R-CK-12）"| direct
+  sel -.->|"どのキーでも／error が入る（R-CK-14）"| direct
+  list -.->|"どのキーでも／error が入る（R-CK-14）"| direct
+  linkStyle 7 stroke:#d64545,color:#d64545
+  linkStyle 8 stroke:#d64545,color:#d64545
+  linkStyle 15 stroke:#d64545,color:#d64545
+  linkStyle 16 stroke:#d64545,color:#d64545
