@@ -11,6 +11,7 @@ local state = require("skkeleton.state")
 ---@field preedit skkeleton.PreEdit
 ---@field vim_mode string "i"|"c"|"t"|""
 ---@field last_candidate { type: skkeleton.HenkanType, word: string, candidate: string }
+---@field abbrev_state? { mode: string, table: skkeleton.KanaTable, converter: (fun(s: string): string)? }
 local Context = {}
 Context.__index = Context
 
@@ -22,6 +23,7 @@ function Context.new()
     preedit = PreEdit.new(),
     vim_mode = "",
     last_candidate = { type = "okurinasi", word = "", candidate = "" },
+    abbrev_state = nil,
   }, Context)
 end
 

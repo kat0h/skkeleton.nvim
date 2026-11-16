@@ -312,6 +312,7 @@ local fixed = {
   "Ko1<BS>",
   "Ko1<C-j>",
   -- abbrev
+  "q/a<NL>ka",
   "/abc<Space>",
   "/abc<Space><C-j>",
   "/abc<Space><Space>",

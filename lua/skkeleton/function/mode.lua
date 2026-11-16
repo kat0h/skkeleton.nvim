@@ -20,6 +20,11 @@ function M.abbrev(ctx)
   if ctx.state.type ~= "input" or ctx.state.mode ~= "direct" then
     return
   end
+  ctx.abbrev_state = {
+    mode = ctx.mode,
+    table = ctx.state.table,
+    converter = ctx.state.converter,
+  }
   input.henkan_point(ctx)
   local s = ctx.state
   s.table = kana.KanaTable.new({})

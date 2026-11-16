@@ -50,6 +50,7 @@ local cases = {
   { "/ ; l q are literal in abbrev", "/a;lq", { "" }, "▽a;lq", "abbrev" },
   { "abbrev", "/abc<Space>", { "" }, "▼ＡＢＣ", "abbrev" },
   { "abbrev: kakutei", "/abc<Space><C-j>", { "ＡＢＣ" }, "", "hira" },
+  { "abbrev returns to the previous mode", "q/a<NL>ka", { "aカ" }, "", "kata" },
   { "<C-j> without pre-edit is hiragana", "q<C-j>ka", { "か" }, "", "hira" },
   { "symbols", ",.", { "、。" }, "", "hira" },
   { "symbols with a sequence", "z,", { "‥" }, "", "hira" },

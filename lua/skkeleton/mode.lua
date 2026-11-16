@@ -24,13 +24,20 @@ end
 ---@param ignore? string[]
 function M.initialize_state_with_abbrev(ctx, ignore)
   ignore = ignore or {}
+  local abbrev_state
   if ctx.mode == "abbrev" then
-    M.mode_change(ctx, "hira")
+    abbrev_state = ctx.abbrev_state
+    ctx.abbrev_state = nil
+    M.mode_change(ctx, abbrev_state and abbrev_state.mode or "hira")
     ignore = vim.tbl_filter(function(key)
       return key ~= "converter" and key ~= "table"
     end, ignore)
   end
   state.initialize(ctx.state, ignore)
+  if abbrev_state then
+    ctx.state.table = abbrev_state.table
+    ctx.state.converter = abbrev_state.converter
+  end
 end
 
 return M

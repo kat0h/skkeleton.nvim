@@ -65,6 +65,20 @@ return {
     end,
   },
   {
+    -- abbrev を確定したあとは、入る前のモードを戻す（#272）。upstream はひらがなに戻る。
+    id = "abbrev-restores-previous-mode",
+    applies = function(_, index, a, b, r)
+      local pa, pb = r.a.steps[index - 1], r.b.steps[index - 1]
+      return pa ~= nil
+        and pb ~= nil
+        and pa.mode == "abbrev"
+        and pb.mode == "abbrev"
+        and (a.mode == "kata" or a.mode == "hankata")
+        and b.mode == "hira"
+        and same_lines(a, b)
+    end,
+  },
+  {
     -- 「n」を打った直後に「>」（接頭辞の印）を打つと、Lua 版は保留中の n を「ん」にしてから > を置く（かん>）。
     -- denops 版は n が消える（か>）。打った文字が落ちる denops 版の挙動は引き継がない（21732b2 で意図して直した）
     id = "prefix-flushes-pending-n",
