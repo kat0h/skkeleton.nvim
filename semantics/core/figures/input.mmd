@@ -1,0 +1,58 @@
+flowchart LR
+  direct["読みなし"]
+  pending["打ちかけ"]
+  pre0["▽（空）"]
+  pre["▽"]
+  prep["▽ 打ちかけ"]
+  oku["▽ 送り"]
+  okup["▽ 送り 打ちかけ"]
+  sel["▼"]
+  reg["辞書登録"]
+  direct -->|"文字／かなを確定（R-IN-01）<br/>文字／そのまま確定（R-IN-05）<br/>#lt;Space#gt;・#gt;／文字として打つ（R-IN-06）<br/>#lt;BS#gt;／host へ BS（R-IN-07）"| direct
+  pending -->|"文字／かなを確定（R-IN-01）<br/>#lt;Space#gt;・#gt;／文字として打つ（R-IN-06）<br/>#lt;BS#gt;／打ちかけを 1 文字消す（R-IN-08）"| direct
+  direct -->|"文字／打ちかけに積む（R-IN-02）"| pending
+  pending -->|"文字／打ちかけに積む（R-IN-02）<br/>文字／っ を確定（R-IN-03）<br/>#lt;BS#gt;／打ちかけを 1 文字消す（R-IN-08）"| pending
+  pending -->|"文字／片付けて打ち直す（R-IN-04）"| direct
+  pending -->|"文字／片付けて打ち直す（R-IN-04）"| pending
+  direct -->|"大文字／▽ を開く（R-IN-09）<br/>#59;／▽ を開く（R-IN-10）"| pre0
+  direct -->|"大文字／▽ を開く（R-IN-09）"| prep
+  pending -->|"大文字／▽ を開く（R-IN-09）<br/>#59;／▽ を開く（R-IN-10）"| pre0
+  pending -->|"大文字／▽ を開く（R-IN-09）"| prep
+  pre0 -->|"文字／読みに足す（R-PR-01）<br/>文字／読みに足す（R-PR-05）<br/>#gt;／読みに #gt; を足す（R-PR-06）"| pre
+  pre -->|"文字／読みに足す（R-PR-01）<br/>文字／読みに足す（R-PR-05）<br/>#lt;BS#gt;／読みを 1 文字消す（R-PR-08）"| pre
+  prep -->|"文字／読みに足す（R-PR-01）<br/>#gt;／読みに #gt; を足す（R-PR-06）<br/>#lt;BS#gt;／打ちかけを 1 文字消す（R-PR-09）"| pre
+  pre0 -->|"文字／打ちかけに積む（R-PR-02）<br/>大文字・#59;／送りは始まらない（R-PR-10）"| prep
+  pre -->|"文字／打ちかけに積む（R-PR-02）"| prep
+  prep -->|"文字／打ちかけに積む（R-PR-02）<br/>文字／っ を読みに足す（R-PR-03）<br/>#lt;BS#gt;／打ちかけを 1 文字消す（R-PR-09）<br/>大文字・#59;／送りは始まらない（R-PR-10）"| prep
+  prep -->|"文字／片付けて打ち直す（R-PR-04）"| pre
+  prep -->|"文字／片付けて打ち直す（R-PR-04）"| prep
+  prep -->|"文字／片付けて打ち直す（R-PR-04）"| pre0
+  pre0 -->|"#lt;BS#gt;／▽ を閉じる（R-PR-07）"| direct
+  pre -->|"#lt;BS#gt;／読みを 1 文字消す（R-PR-08）"| pre0
+  prep -->|"#lt;BS#gt;／打ちかけを 1 文字消す（R-PR-09）<br/>大文字・#59;／送りは始まらない（R-PR-10）"| pre0
+  pre0 -->|"大文字・#59;／送りは始まらない（R-PR-10）"| pre0
+  pre -->|"大文字／送りを始める（R-PR-11）<br/>#59;／送りを始める（R-PR-12）"| oku
+  prep -->|"大文字／送りを始める（R-PR-13）<br/>#59;／片付けて送りを始める（R-PR-14）"| oku
+  prep -->|"大文字／送りを始める（R-PR-13）"| okup
+  oku -->|"文字／送りに足して変換（R-OK-01）"| sel
+  oku -->|"文字／送りに足して変換（R-OK-01）"| reg
+  okup -->|"文字／送りに足して変換（R-OK-01）"| sel
+  okup -->|"文字／送りに足して変換（R-OK-01）"| reg
+  oku -->|"文字／打ちかけに積む（R-OK-02）<br/>大文字／小文字として打つ（R-OK-06）"| okup
+  okup -->|"文字／打ちかけに積む（R-OK-02）<br/>文字／っ を送りに足す（R-OK-03）<br/>大文字／小文字として打つ（R-OK-06）<br/>#lt;BS#gt;／打ちかけを 1 文字消す（R-OK-09）"| okup
+  okup -->|"文字／片付けて打ち直す（R-OK-04）"| okup
+  okup -->|"文字／片付けて打ち直す（R-OK-04）"| oku
+  oku -->|"文字／送りに足す（R-OK-05）<br/>大文字／小文字として打つ（R-OK-06）<br/>#59;／何も起きない（R-OK-07）<br/>#lt;BS#gt;／送りを 1 文字消す（R-OK-08）"| oku
+  okup -->|"大文字／小文字として打つ（R-OK-06）<br/>#59;／何も起きない（R-OK-07）<br/>#lt;BS#gt;／打ちかけを 1 文字消す（R-OK-09）"| oku
+  oku -->|"#lt;BS#gt;／送りを 1 文字消す（R-OK-08）"| pre
+  okup -->|"l・q・#59;・/・L／ん で変換が走る（R-ST-01）"| sel
+  okup -->|"l・q・#59;・/・L／ん で変換が走る（R-ST-01）"| reg
+  linkStyle 4 stroke:#d64545,color:#d64545
+  linkStyle 5 stroke:#d64545,color:#d64545
+  linkStyle 16 stroke:#d64545,color:#d64545
+  linkStyle 17 stroke:#d64545,color:#d64545
+  linkStyle 18 stroke:#d64545,color:#d64545
+  linkStyle 32 stroke:#d64545,color:#d64545
+  linkStyle 33 stroke:#d64545,color:#d64545
+  linkStyle 37 stroke:#d64545,color:#d64545
+  linkStyle 38 stroke:#d64545,color:#d64545

@@ -1,0 +1,31 @@
+digraph {
+  rankdir=LR; splines=true; nodesep=0.45; ranksep=0.8;
+  node [shape=box, style="rounded,filled", fillcolor="#ffffff", color="#2f6feb", fontname="Noto Sans CJK JP", fontsize=11];
+  edge [fontname="Noto Sans CJK JP", fontsize=9, color="#3b5bdb", fontcolor="#3b5bdb"];
+  "hira" [label="ひらがな"];
+  "kata" [label="カタカナ"];
+  "hankata" [label="半角カナ"];
+  "zenkaku" [label="全英"];
+  "abbrev" [label="abbrev"];
+  "none" [label="（無効）"];
+  "hira" -> "kata" [label="q（R-MD-01）"];
+  "kata" -> "hira" [label="q（R-MD-01）\n<C-j>（読みなし）（R-CK-05）"];
+  "hankata" -> "hira" [label="q（R-MD-01）\n<C-q>（R-MD-02）\n<C-j>（読みなし）（R-CK-05）"];
+  "hira" -> "hankata" [label="<C-q>（R-MD-02）"];
+  "kata" -> "hankata" [label="<C-q>（R-MD-02）"];
+  "zenkaku" -> "hankata" [label="<C-q>（R-MD-02）"];
+  "hira" -> "zenkaku" [label="L（R-MD-04）"];
+  "kata" -> "zenkaku" [label="L（R-MD-04）"];
+  "hankata" -> "zenkaku" [label="L（R-MD-04）"];
+  "hira" -> "abbrev" [label="/（R-MD-06）"];
+  "kata" -> "abbrev" [label="/（R-MD-06）"];
+  "hankata" -> "abbrev" [label="/（R-MD-06）"];
+  "abbrev" -> "hira" [label="確定・取り消し（R-MD-10）", color="#d64545", fontcolor="#d64545"];
+  "zenkaku" -> "hira" [label="<C-j>（R-CK-05）"];
+  "none" -> "hira" [label="enable（R-EN-03）"];
+  "hira" -> "none" [label="l・<Esc>・disable（R-EN-01）"];
+  "kata" -> "none" [label="l・<Esc>・disable（R-EN-01）"];
+  "hankata" -> "none" [label="l・<Esc>・disable（R-EN-01）"];
+  "zenkaku" -> "none" [label="<Esc>・disable（R-EN-02）"];
+  "abbrev" -> "none" [label="<Esc>・disable（R-EN-02）"];
+}

@@ -1,0 +1,60 @@
+flowchart LR
+  direct["読みなし"]
+  pending["打ちかけ"]
+  pre0["▽（空）"]
+  pre["▽"]
+  prep["▽ 打ちかけ"]
+  oku["▽ 送り"]
+  okup["▽ 送り 打ちかけ"]
+  sel["▼"]
+  list["▼ 一覧"]
+  direct -->|"q／カタカナ ↔ ひらがな（R-MD-01）<br/>#lt;C-q#gt;／半角カナ ↔ ひらがな（R-MD-02）<br/>L／全英へ（R-MD-04）<br/>文字・大文字・l・q・#59;・/・L・#gt;・#lt;Space#gt;／全角で確定（R-MD-11）"| direct
+  pending -->|"q／カタカナ ↔ ひらがな（R-MD-01）<br/>#lt;C-q#gt;／半角カナ ↔ ひらがな（R-MD-02）<br/>L／全英へ（R-MD-04）"| direct
+  direct -->|"#lt;C-q#gt;／半角カナ ↔ ひらがな（R-MD-02）"| pending
+  pending -->|"#lt;C-q#gt;／半角カナ ↔ ひらがな（R-MD-02）"| pending
+  pre0 -->|"q・#lt;C-q#gt;／逆のかなで確定（R-MD-03）<br/>#lt;C-j#gt;・#lt;CR#gt;・#lt;C-g#gt;・#lt;BS#gt;・文字／ひらがなに戻る（R-MD-10）"| direct
+  pre -->|"q・#lt;C-q#gt;／逆のかなで確定（R-MD-03）<br/>#lt;C-j#gt;・#lt;CR#gt;・#lt;C-g#gt;・#lt;BS#gt;・文字／ひらがなに戻る（R-MD-10）"| direct
+  prep -->|"q・#lt;C-q#gt;／逆のかなで確定（R-MD-03）"| direct
+  oku -->|"q・#lt;C-q#gt;／逆のかなで確定（R-MD-03）"| direct
+  okup -->|"q・#lt;C-q#gt;／逆のかなで確定（R-MD-03）"| direct
+  pre0 -->|"L／確定して全英へ（R-MD-05）"| direct
+  pre -->|"L／確定して全英へ（R-MD-05）"| direct
+  prep -->|"L／確定して全英へ（R-MD-05）"| direct
+  oku -->|"L／確定して全英へ（R-MD-05）"| direct
+  okup -->|"L／確定して全英へ（R-MD-05）"| direct
+  direct -->|"/／abbrev を始める（R-MD-06）"| pre0
+  pending -->|"/／abbrev を始める（R-MD-06）"| pre0
+  pre0 -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| pre0
+  pre0 -->|"/／何も起きない（R-MD-07）<br/>文字・大文字・l・q・#59;・/・L・#gt;／読みにそのまま足す（R-MD-08）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| pre
+  pre0 -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| prep
+  pre0 -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| oku
+  pre0 -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| okup
+  pre -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| pre0
+  pre -->|"/／何も起きない（R-MD-07）<br/>文字・大文字・l・q・#59;・/・L・#gt;／読みにそのまま足す（R-MD-08）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| pre
+  pre -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| prep
+  pre -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| oku
+  pre -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| okup
+  prep -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| pre0
+  prep -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| pre
+  prep -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| prep
+  prep -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| oku
+  prep -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| okup
+  oku -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| pre0
+  oku -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| pre
+  oku -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| prep
+  oku -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| oku
+  oku -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| okup
+  okup -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| pre0
+  okup -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| pre
+  okup -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| prep
+  okup -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| oku
+  okup -->|"/／何も起きない（R-MD-07）<br/>#lt;C-q#gt;／何も起きない（R-MD-09）"| okup
+  sel -->|"#lt;C-j#gt;・#lt;CR#gt;・#lt;C-g#gt;・#lt;BS#gt;・文字／ひらがなに戻る（R-MD-10）"| direct
+  list -->|"#lt;C-j#gt;・#lt;CR#gt;・#lt;C-g#gt;・#lt;BS#gt;・文字／ひらがなに戻る（R-MD-10）"| direct
+  linkStyle 4 stroke:#d64545,color:#d64545
+  linkStyle 5 stroke:#d64545,color:#d64545
+  linkStyle 6 stroke:#d64545,color:#d64545
+  linkStyle 7 stroke:#d64545,color:#d64545
+  linkStyle 8 stroke:#d64545,color:#d64545
+  linkStyle 41 stroke:#d64545,color:#d64545
+  linkStyle 42 stroke:#d64545,color:#d64545

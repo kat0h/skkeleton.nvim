@@ -1,0 +1,28 @@
+flowchart LR
+  hira["ひらがな"]
+  kata["カタカナ"]
+  hankata["半角カナ"]
+  zenkaku["全英"]
+  abbrev["abbrev"]
+  none["（無効）"]
+  hira -->|"q（R-MD-01）"| kata
+  kata -->|"q（R-MD-01）<br/>#lt;C-j#gt;（読みなし）（R-CK-05）"| hira
+  hankata -->|"q（R-MD-01）<br/>#lt;C-q#gt;（R-MD-02）<br/>#lt;C-j#gt;（読みなし）（R-CK-05）"| hira
+  hira -->|"#lt;C-q#gt;（R-MD-02）"| hankata
+  kata -->|"#lt;C-q#gt;（R-MD-02）"| hankata
+  zenkaku -->|"#lt;C-q#gt;（R-MD-02）"| hankata
+  hira -->|"L（R-MD-04）"| zenkaku
+  kata -->|"L（R-MD-04）"| zenkaku
+  hankata -->|"L（R-MD-04）"| zenkaku
+  hira -->|"/（R-MD-06）"| abbrev
+  kata -->|"/（R-MD-06）"| abbrev
+  hankata -->|"/（R-MD-06）"| abbrev
+  abbrev -->|"確定・取り消し（R-MD-10）"| hira
+  zenkaku -->|"#lt;C-j#gt;（R-CK-05）"| hira
+  none -->|"enable（R-EN-03）"| hira
+  hira -->|"l・#lt;Esc#gt;・disable（R-EN-01）"| none
+  kata -->|"l・#lt;Esc#gt;・disable（R-EN-01）"| none
+  hankata -->|"l・#lt;Esc#gt;・disable（R-EN-01）"| none
+  zenkaku -->|"#lt;Esc#gt;・disable（R-EN-02）"| none
+  abbrev -->|"#lt;Esc#gt;・disable（R-EN-02）"| none
+  linkStyle 12 stroke:#d64545,color:#d64545

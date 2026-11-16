@@ -1,0 +1,28 @@
+digraph {
+  rankdir=LR; splines=true; nodesep=0.45; ranksep=0.8;
+  node [shape=box, style="rounded,filled", fillcolor="#ffffff", color="#2f6feb", fontname="Noto Sans CJK JP", fontsize=11];
+  edge [fontname="Noto Sans CJK JP", fontsize=9, color="#3b5bdb", fontcolor="#3b5bdb"];
+  "direct" [label="読みなし"];
+  "pre" [label="▽"];
+  "prep" [label="▽ 打ちかけ"];
+  "oku" [label="▽ 送り"];
+  "okup" [label="▽ 送り 打ちかけ"];
+  "sel" [label="▼"];
+  "list" [label="▼ 一覧"];
+  "reg" [label="辞書登録"];
+  "reg" -> "reg" [label="（欄が開く）／内側の機械を作る（R-RG-01）", color="#d64545", fontcolor="#d64545"];
+  "reg" -> "reg" [label="どのキーでも／内側の機械が受ける（R-RG-02）"];
+  "reg" -> "direct" [label="答え：語／語＋送りを確定（R-RG-03）"];
+  "reg" -> "pre" [label="答え：取り消し／▽ に戻る（R-RG-04）"];
+  "reg" -> "prep" [label="答え：取り消し／▽ に戻る（R-RG-04）"];
+  "reg" -> "oku" [label="答え：取り消し／▽ に戻る（R-RG-04）"];
+  "reg" -> "okup" [label="答え：取り消し／▽ に戻る（R-RG-04）"];
+  "reg" -> "sel" [label="答え：取り消し／最後の候補に戻る（R-RG-05）"];
+  "reg" -> "list" [label="答え：取り消し／最後の候補に戻る（R-RG-05）"];
+  "reg" -> "pre" [label="<C-g>・<Esc>／登録ごと取り消す（R-RG-06）", color="#d64545", fontcolor="#d64545"];
+  "reg" -> "oku" [label="<C-g>・<Esc>／登録ごと取り消す（R-RG-06）", color="#d64545", fontcolor="#d64545"];
+  "reg" -> "sel" [label="<C-g>・<Esc>／登録ごと取り消す（R-RG-06）", color="#d64545", fontcolor="#d64545"];
+  "reg" -> "list" [label="<C-g>・<Esc>／登録ごと取り消す（R-RG-06）", color="#d64545", fontcolor="#d64545"];
+  "reg" -> "direct" [label="答え：語／テーブルが外に漏れる（R-RG-07）", color="#d64545", fontcolor="#d64545"];
+  "reg" -> "reg" [label="l／内側だけ無効（R-RG-08）\nenable・disable／受けない（R-RG-09）", style=dashed];
+}

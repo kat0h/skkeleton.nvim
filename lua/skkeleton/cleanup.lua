@@ -164,6 +164,20 @@ local function check_stale()
   end
 end
 
+-- 式の cmdline を抜けたあと、外側の入力状態を戻す (#246)。
+-- 式の中で確定すると Context が作り直されるので、外側の読みと食い違ったままになる
+---@param saved { state: table, last_candidate: table?, current: string } 式に入る前の状態
+local function restore_cmdline_reading(saved)
+  local ctx = store.context()
+  -- 打ちかけのローマ字・送り仮名・候補の状態まで、式に入る前のものに戻す
+  ctx.state = saved.state
+  ctx.last_candidate = saved.last_candidate
+  -- 外側の cmdline には読みがもう書かれている。描き直すときに BS で消せるよう、
+  -- 前回の表示長を戻す (#241 と同じ)
+  ctx.preedit.current = saved.current
+  M.update_state_variable()
+end
+
 -- cmdline の pre-edit の記録と g:skkeleton#state.preedit を片付ける
 local function drop_cmdline_preedit()
   cmdline.clean()
@@ -222,6 +236,11 @@ function M.setup()
       elseif action == "safe_reset" then
         -- insert から normal へ抜けたときは、捨てずに <Esc> と同じく確定する
         local commit = old_mode:sub(1, 1) == "i"
+        -- niI / nt へ入っただけ（<C-o> など）では SafeState を登録しない。
+        -- そこから先の遷移（niI→n など）が自分で片付けを登録する (#169)
+        if vim.startswith(new_mode, "ni") or vim.startswith(new_mode, "nt") then
+          return
+        end
         vim.api.nvim_create_autocmd("SafeState", {
           group = group,
           once = true,
@@ -237,6 +256,12 @@ function M.setup()
               and not vim.startswith(m, "nt")
               and not host.is_in_input()
             then
+              local ctx = store.context()
+              -- <C-o> から normal へ抜けるとき（:stopinsert など）は、insert の pre-edit を
+              -- 確定も捨てもせず保持する (#169)
+              if not commit and ctx.vim_mode == "i" and ctx:to_string() ~= "" and render.preedit_position() then
+                return
+              end
               if commit then
                 -- <C-c> などで insert を抜けたとき、確定した文字の末尾へ移す (#142)
                 commit_preedit("normal")
@@ -250,11 +275,44 @@ function M.setup()
     end,
   })
 
+  -- cmdwin を開いたら印を消す。開けなかったときも、次の CmdlineLeave で消える
+  vim.api.nvim_create_autocmd({ "CmdwinEnter", "CmdlineEnter" }, {
+    group = group,
+    callback = function()
+      require("skkeleton.guard").clear_cmdwin_pending()
+    end,
+  })
+  -- <C-r>= などで cmdline が入れ子になるとき、外側の cmdline の記録を退避する (#206)
+  vim.api.nvim_create_autocmd("CmdlineEnter", {
+    group = group,
+    callback = function()
+      if vim.v.event.cmdtype == "=" then
+        cmdline.push()
+      end
+    end,
+  })
   -- cmdline を抜ける際（取り消しも含めて）に pre-edit を取り除き、履歴にマーカーを残さない
   vim.api.nvim_create_autocmd("CmdlineLeave", {
     group = group,
     callback = function()
-      drop_cmdline_preedit()
+      -- <C-f> で cmdwin を開くときは、cmdline の文字列を Neovim が cmdwin に写す。
+      -- 写すまで pre-edit を消さない (#205)
+      -- <C-r>= などの内側の cmdline を抜けるときは、外側の cmdline の記録を残す (#206)
+      if require("skkeleton.guard").is_cmdwin_pending() then
+        cmdline.reset()
+        clear_preedit_state()
+      elseif vim.v.event.cmdtype == "=" then
+        -- <C-r>= の式を抜けたら、外側の cmdline の記録を戻す (#206)
+        local saved = cmdline.pop()
+        -- 式の中で打つと、外側の入力状態が式の中身で書き換わる。式を抜けたら、
+        -- 式に入る前の状態に戻す (#246)
+        local ctx = store.context()
+        if saved and not vim.deep_equal(ctx.state, saved.state) then
+          restore_cmdline_reading(saved)
+        end
+      elseif vim.v.event.cmdtype == ":" then
+        drop_cmdline_preedit()
+      end
       -- <C-o>: から戻ったときなど、insert の pre-edit が残っていればその値を保つ (#86)
       M.update_state_variable()
       local cmdtype = vim.v.event.cmdtype
@@ -272,8 +330,28 @@ function M.setup()
       if host.is_in_input() then
         return
       end
-      if vim.fn.mode():sub(1, 1) == "c" then
+      -- <C-f> で cmdwin を開くときは、cmdline の文字列を Neovim が cmdwin に写す。
+      -- 写すまで pre-edit を消さない (#205)
+      if vim.fn.mode():sub(1, 1) == "c" and not require("skkeleton.guard").is_cmdwin_pending() then
         drop_cmdline_preedit()
+      end
+      local ctx = store.context()
+      -- insert の pre-edit が出ている間にウィンドウやタブを移るとき（<C-o>:wincmd w など）は、
+      -- 移動が済んでから元のバッファがまだ表示されているかで判断する。表示されていれば
+      -- pre-edit を保持し、バッファを離れていれば従来通り捨てる (#169)
+      if ctx.vim_mode == "i" and ctx:to_string() ~= "" then
+        local pbuf = render.preedit_buffer()
+        if pbuf then
+          vim.schedule(function()
+            if vim.api.nvim_buf_is_valid(pbuf) and #vim.fn.win_findbuf(pbuf) > 0 then
+              M.update_state_variable()
+            else
+              reset()
+              host.disable()
+            end
+          end)
+          return
+        end
       end
       reset()
       host.disable()

@@ -590,12 +590,30 @@ T["stale preedit: on_bytes detects line modification during pre-edit (#66)"] = f
   start()
   type("Kan")
   eq(helpers.preedit(child), "▽かn")
-  -- 外部から現在行が書き換えられた場合
+  -- 外部から現在行が書き換えられた場合。読みは捨てず、カーソルが pre-edit の位置に残っていれば描き直す (#199)
   child.lua([[vim.api.nvim_buf_set_lines(0, 0, 1, false, { "modified" })]])
   helpers.settle(child)
-  local marks =
-    child.lua_get([[vim.api.nvim_buf_get_extmarks(0, vim.api.nvim_get_namespaces()["skkeleton-preedit"], 0, -1, {})]])
-  eq(#marks, 0)
+  eq(helpers.preedit(child), "▽かn")
+  eq(helpers.buffer(child), { "modified" })
+end
+
+T["an external change keeps the pre-edit and the reading (#199)"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "abc" })
+  child.api.nvim_win_set_cursor(0, { 1, 0 })
+  child.type_keys("A")
+  type("<Plug>(skkeleton-enable)")
+  type(";ka")
+  eq(helpers.preedit(child), "▽か")
+  -- 外から行末に文字が入っても、読みは捨てずに pre-edit を出したままにする
+  child.lua([[vim.api.nvim_buf_set_text(0, 0, 3, 0, 3, { "X" })]])
+  helpers.settle(child)
+  eq(helpers.buffer(child), { "abcX" })
+  eq(helpers.preedit(child), "▽か")
+  -- そのあと打った読みは続きに入り、<Esc> は pre-edit の位置に確定する
+  type("a")
+  eq(helpers.preedit(child), "▽かあ")
+  type("<Esc>")
+  eq(helpers.buffer(child), { "abcかあX" })
   eq(helpers.preedit(child), "")
 end
 

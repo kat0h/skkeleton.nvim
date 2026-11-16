@@ -1,0 +1,30 @@
+flowchart LR
+  direct["読みなし"]
+  pre["▽"]
+  prep["▽ 打ちかけ"]
+  oku["▽ 送り"]
+  okup["▽ 送り 打ちかけ"]
+  sel["▼"]
+  list["▼ 一覧"]
+  reg["辞書登録"]
+  reg -->|"（欄が開く）／内側の機械を作る（R-RG-01）"| reg
+  reg -->|"どのキーでも／内側の機械が受ける（R-RG-02）"| reg
+  reg -->|"答え：語／語＋送りを確定（R-RG-03）"| direct
+  reg -->|"答え：取り消し／▽ に戻る（R-RG-04）"| pre
+  reg -->|"答え：取り消し／▽ に戻る（R-RG-04）"| prep
+  reg -->|"答え：取り消し／▽ に戻る（R-RG-04）"| oku
+  reg -->|"答え：取り消し／▽ に戻る（R-RG-04）"| okup
+  reg -->|"答え：取り消し／最後の候補に戻る（R-RG-05）"| sel
+  reg -->|"答え：取り消し／最後の候補に戻る（R-RG-05）"| list
+  reg -->|"#lt;C-g#gt;・#lt;Esc#gt;／登録ごと取り消す（R-RG-06）"| pre
+  reg -->|"#lt;C-g#gt;・#lt;Esc#gt;／登録ごと取り消す（R-RG-06）"| oku
+  reg -->|"#lt;C-g#gt;・#lt;Esc#gt;／登録ごと取り消す（R-RG-06）"| sel
+  reg -->|"#lt;C-g#gt;・#lt;Esc#gt;／登録ごと取り消す（R-RG-06）"| list
+  reg -->|"答え：語／テーブルが外に漏れる（R-RG-07）"| direct
+  reg -.->|"l／内側だけ無効（R-RG-08）<br/>enable・disable／受けない（R-RG-09）"| reg
+  linkStyle 0 stroke:#d64545,color:#d64545
+  linkStyle 9 stroke:#d64545,color:#d64545
+  linkStyle 10 stroke:#d64545,color:#d64545
+  linkStyle 11 stroke:#d64545,color:#d64545
+  linkStyle 12 stroke:#d64545,color:#d64545
+  linkStyle 13 stroke:#d64545,color:#d64545

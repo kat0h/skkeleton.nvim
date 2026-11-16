@@ -14,8 +14,9 @@ local ns_annot = vim.api.nvim_create_namespace("skkeleton-annotation")
 -- 今出している extmark。line は描いたときの行の文字列
 ---@type { buf: integer, id: integer, annot_id?: integer, row: integer, col: integer, line: string }?
 local mark
--- pre-edit の行が外部から書き換えられたフラグ
-local mark_bytes_changed = false
+-- 外から書き換えられた行。pre-edit の行が含まれる間は、ずれの検出で読みを捨てない (#199)
+---@type integer?
+local changed_row = nil
 ---@type integer?
 local attached_buf = nil
 -- finish で描く pre-edit と、そのときの vim_mode
@@ -88,10 +89,15 @@ local FINISH_CMD = vim.api.nvim_replace_termcodes("<Cmd>lua require('skkeleton.r
 -- 「、」のように 0x80 を含む文字が、特殊キーの始まりと読まれないようにするため。
 -- insert モードでは "t" を外すことでマクロ記録（qa）やドットリピート（.）に
 -- feedkeys で流した確定文字列や FINISH_CMD が混入するのを防ぐ (#36)。
--- cmdline や terminal では BS による再描画や制御文字の処理のために "t" を残す。
+-- cmdline や terminal では BS による再描画や制御文字の処理のために "t" を残すが、
+-- マクロを記録しているあいだ（reg_recording が空でない）は、流した確定文字列や FINISH_CMD が
+-- レジスタに入らないように "t" を外す (#214)。
 local function feed(keys, cmd, mode)
   keys = keys:gsub("\128", "\128\254X")
   local flags = (mode == "i") and "ni" or "nit"
+  if vim.fn.reg_recording() ~= "" then
+    flags = flags:gsub("t", "")
+  end
   vim.api.nvim_feedkeys(keys .. (cmd or ""), flags, false)
 end
 
@@ -104,10 +110,19 @@ function M.preedit_position()
   return mark.buf, mark.row, mark.col
 end
 
+-- 今出している pre-edit があるバッファ。出していなければ nil
+---@return integer?
+function M.preedit_buffer()
+  if mark and vim.api.nvim_buf_is_valid(mark.buf) then
+    return mark.buf
+  end
+  return nil
+end
+
 -- pre-edit の extmark を消す
 function M.clear()
   pending = false
-  mark_bytes_changed = false
+  changed_row = nil
   if mark then
     if vim.api.nvim_buf_is_valid(mark.buf) then
       pcall(vim.api.nvim_buf_del_extmark, mark.buf, ns, mark.id)
@@ -129,7 +144,7 @@ function M.freeze()
   local frozen = { mark }
   mark = nil
   pending = false
-  mark_bytes_changed = false
+  changed_row = nil
   return frozen
 end
 
@@ -160,7 +175,7 @@ function M.thaw(frozen)
   end
   mark = frozen[1]
   pending = false
-  mark_bytes_changed = false
+  changed_row = nil
 end
 
 -- pre-edit を出している間、バッファの書き換えを on_bytes で受ける
@@ -170,7 +185,8 @@ local function attach_buf(buf)
   end
   attached_buf = buf
   pcall(vim.api.nvim_buf_attach, buf, false, {
-    on_bytes = function(_, _, b, start_row, _, _, old_end_row, _, _, new_end_row, _, _)
+    -- 2 番目の引数が書き換えられたバッファ。3 番目は変わった行の位置で、バッファではない
+    on_bytes = function(_, b, _, start_row, _, _, old_end_row, _, _, new_end_row, _, _)
       if attached_buf ~= b then
         return true
       end
@@ -183,7 +199,9 @@ local function attach_buf(buf)
       end
       local max_end_row = start_row + math.max(old_end_row, new_end_row)
       if start_row <= mark.row and mark.row <= max_end_row then
-        mark_bytes_changed = true
+        -- 外から書き換えられた行だけ覚えておき、ずれの検出で読みを捨てさせない (#199)。
+        -- カーソルが pre-edit の位置に残っていればそのまま、動いていれば片付ける
+        changed_row = start_row
         vim.schedule(function()
           if M.on_stale then
             M.on_stale()
@@ -239,7 +257,7 @@ local function draw(text, chunks, annot)
   end
   local cur_line = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1] or ""
   mark = { buf = buf, id = id, annot_id = annot_id, row = row, col = col, line = cur_line }
-  mark_bytes_changed = false
+  changed_row = nil
   attach_buf(buf)
 end
 
@@ -271,14 +289,16 @@ function M.is_stale(ctx, vim_mode)
   if pre == "" then
     return false
   end
-  if mark_bytes_changed then
-    return true
-  end
-  if ctx.vim_mode ~= vim_mode then
+  -- <C-o>: などで insert の pre-edit を残したまま cmdline に入ったときは、cmdline 側の
+  -- ずれ検査の対象にしない (#169)
+  if ctx.vim_mode ~= vim_mode and not (vim_mode == "c" and ctx.vim_mode == "i") then
     return true
   end
   if vim_mode == "c" then
-    return cmdline.is_stale(pre)
+    if ctx.vim_mode == "c" then
+      return cmdline.is_stale(pre)
+    end
+    return false
   elseif vim_mode == "t" then
     return false
   end
@@ -287,7 +307,9 @@ function M.is_stale(ctx, vim_mode)
   end
   local buf = vim.api.nvim_get_current_buf()
   if mark.buf ~= buf then
-    return true
+    -- 別のウィンドウ・タブに移っている間は pre-edit を保持する。バッファがどこにも
+    -- 表示されなくなったときだけずれとみなす (#169)
+    return not vim.api.nvim_buf_is_valid(mark.buf) or #vim.fn.win_findbuf(mark.buf) == 0
   end
   local pos = vim.api.nvim_win_get_cursor(0)
   if pos[1] - 1 ~= mark.row or pos[2] ~= mark.col then
@@ -298,7 +320,11 @@ function M.is_stale(ctx, vim_mode)
     return true
   end
   local cur_line = vim.api.nvim_buf_get_lines(buf, mark.row, mark.row + 1, false)[1] or ""
-  return cur_line ~= mark.line
+  if cur_line == mark.line then
+    return false
+  end
+  -- 外から書き換えられた行の上に pre-edit が残っているなら、読みは捨てない (#199)
+  return changed_row ~= mark.row
 end
 
 -- pre-edit は出たままだが、カーソルだけが動いているか（insert）。
@@ -307,7 +333,7 @@ end
 ---@param vim_mode string
 ---@return boolean
 function M.is_cursor_only_stale(ctx, vim_mode)
-  if vim_mode ~= "i" or mark_bytes_changed or ctx.vim_mode ~= vim_mode then
+  if vim_mode ~= "i" or ctx.vim_mode ~= vim_mode then
     return false
   end
   if ctx:to_string() == "" or not mark then

@@ -56,6 +56,8 @@ local function run_batch(batch)
           MINI_PATH = mini,
           SKKELETON_TEST_CACHE = cache,
           SKKELETON_TEST_STATE = state,
+          -- 補完の E2E が使う blink.cmp の場所（CI は clone した先を渡す） (#253)
+          SKKELETON_BLINK_PATH = os.getenv("SKKELETON_BLINK_PATH"),
         },
       }),
     }
