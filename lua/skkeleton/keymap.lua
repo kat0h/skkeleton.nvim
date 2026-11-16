@@ -62,6 +62,10 @@ end
 ---@param ctx skkeleton.Context
 ---@param key string 正規化した表記
 function M.handle_key(ctx, key)
+  -- Esc 後は無効化済みなので、遅れて届いたキーを無視する (#273)
+  if ctx.state.type == "escape" then
+    return
+  end
   local keymap = get_keymaps()[ctx.state.type]
   if not keymap then
     error("Illegal State: " .. tostring(ctx.state.type), 0)
