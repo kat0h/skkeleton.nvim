@@ -28,6 +28,7 @@ function M.kakutei(ctx)
     if st.converter then
       okuri_str = st.converter(okuri_str)
     end
+    -- 候補 0 件なら henkan_forward が input 状態へ戻すため、通常入力では到達しない (#273)
     ctx:kakutei_with_undo_point((cand_mod or "error") .. okuri_str)
   elseif st.type == "input" then
     input.kakutei_feed(ctx)

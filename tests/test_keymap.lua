@@ -120,10 +120,11 @@ T["default keymap of henkan state"] = function()
   eq(child.lua_get([[ctx.state.type]]), "input")
 end
 
-T["handle_key rejects illegal state"] = function()
+T["handle_key ignores a key delivered after escape (#273)"] = function()
   init()
-  child.lua([[ctx = Context.new(); ctx.state.type = "escape"]])
-  eq(child.lua_get([[select(2, pcall(keymap.handle_key, ctx, "a"))]]), "Illegal State: escape")
+  child.lua([[ctx = Context.new(); press(ctx, { "<Esc>", "a" })]])
+  eq(child.lua_get([[ctx.state.type]]), "escape")
+  eq(child.lua_get([[ctx:to_string()]]), "\27")
 end
 
 T["longer kanatable entry takes precedence over keymap function (#42)"] = function()
