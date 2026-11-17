@@ -175,8 +175,9 @@ get_completion_result()
 
                                            *skkeleton.get_completion_ranks()*
 get_completion_ranks()
-	ユーザー辞書および |skkeleton-config-completionRankFile| に保存され
-	ている候補のランクテーブル（`table<string, integer>`）を返します。
+	補完候補のランクテーブル（`table<string, integer>`）を返します。値
+	が大きいほど最近確定した候補です。|skkeleton-config-completionRankFile|
+	も見てください。
 
                                                         *skkeleton.complete()*
 complete({kana}, {word} [, {kind}])
@@ -372,6 +373,10 @@ completionRankFile                       *skkeleton-config-completionRankFile*
 	を指定します。指定した場合、候補確定時の順位が記録され、以後の補
 	完候補の並び替えに反映されます。空文字列の場合は
 	ファイルへの永続化を行いません。
+	|skkeleton-config-userDictionary| とは別に使えます。ユーザー辞書を
+	指定していなくても、ランクは記録されます。ファイルはあるが読めない
+	とき（壊れた JSON など）は、元のランクを上書きしないよう、記録も保
+	存もしません。
 
 databasePath                                   *skkeleton-config-databasePath*
 	(既定値: "")
