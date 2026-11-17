@@ -1,0 +1,166 @@
+return {
+  ["impl"] = "denops",
+  ["version"] = "770b265dd115dba96ea5314642e35764654ef08f",
+  ["settings"] = {},
+  ["results"] = {
+    ["C15"] = {
+      ["observe"] = {
+        ["text"] = "",
+        ["mode"] = "hira",
+        ["stage"] = "none",
+      },
+    },
+    ["C09"] = {
+      ["observe"] = {
+        ["mode"] = "hira",
+        ["text"] = "",
+        ["candidate"] = "蚊",
+        ["stage"] = "select",
+      },
+    },
+    ["C16"] = {
+      ["observe"] = {
+        ["text"] = "漢",
+        ["mode"] = "hira",
+        ["stage"] = "none",
+      },
+    },
+    ["C02"] = {
+      ["observe"] = {
+        ["mode"] = "hira",
+        ["text"] = "",
+        ["candidate"] = "漢字",
+        ["stage"] = "select",
+      },
+    },
+    ["C11"] = {
+      ["observe"] = {
+        ["reading"] = "かん",
+        ["text"] = "",
+        ["okuri"] = "す",
+        ["mode"] = "hira",
+        ["candidate"] = "関",
+        ["stage"] = "select",
+      },
+    },
+    ["C05"] = {
+      ["observe"] = {
+        ["reading"] = "か",
+        ["text"] = "",
+        ["okuri"] = "く",
+        ["mode"] = "hira",
+        ["candidate"] = "書",
+        ["stage"] = "select",
+      },
+    },
+    ["C03"] = {
+      ["observe"] = {
+        ["text"] = "漢字",
+        ["mode"] = "hira",
+        ["stage"] = "none",
+      },
+    },
+    ["C10"] = {
+      ["observe"] = {
+        ["text"] = "蚊",
+        ["mode"] = "hira",
+        ["stage"] = "none",
+      },
+    },
+    ["C06"] = {
+      ["observe"] = {
+        ["text"] = "t",
+        ["mode"] = "hira",
+        ["stage"] = "none",
+      },
+    },
+    ["C18"] = {
+      ["observe"] = {
+        ["text"] = "漢字あ",
+        ["mode"] = "hira",
+        ["stage"] = "none",
+      },
+    },
+    ["C19"] = {
+      ["observe"] = {
+        ["text"] = "カ",
+        ["mode"] = "kata",
+        ["stage"] = "none",
+      },
+    },
+    ["C13"] = {
+      ["observe"] = {
+        ["reading"] = "つか",
+        ["text"] = "",
+        ["okuri"] = "った",
+        ["mode"] = "hira",
+        ["candidate"] = "使",
+        ["stage"] = "select",
+      },
+    },
+    ["C17"] = {
+      ["observe"] = {
+        ["reading"] = "かんじ",
+        ["text"] = "",
+        ["okuri"] = "",
+        ["mode"] = "hira",
+        ["stage"] = "reading",
+      },
+    },
+    ["C12"] = {
+      ["observe"] = {
+        ["reading"] = "さっ",
+        ["text"] = "",
+        ["okuri"] = "し",
+        ["mode"] = "hira",
+        ["candidate"] = "察",
+        ["stage"] = "select",
+      },
+    },
+    ["C07"] = {
+      ["observe"] = {
+        ["text"] = "k",
+        ["mode"] = "hira",
+        ["stage"] = "none",
+      },
+    },
+    ["C04"] = {
+      ["observe"] = {
+        ["mode"] = "hira",
+        ["text"] = "",
+        ["candidate"] = "幹事",
+        ["stage"] = "select",
+      },
+    },
+    ["C14"] = {
+      ["observe"] = {
+        ["reading"] = "か",
+        ["text"] = "",
+        ["okuri"] = "",
+        ["mode"] = "hira",
+        ["stage"] = "register",
+      },
+    },
+    ["C20"] = {
+      ["observe"] = {
+        ["text"] = "a",
+        ["mode"] = "hira",
+        ["stage"] = "none",
+      },
+    },
+    ["C08"] = {
+      ["observe"] = {
+        ["text"] = "かん",
+        ["mode"] = "hira",
+        ["stage"] = "none",
+      },
+    },
+    ["C01"] = {
+      ["observe"] = {
+        ["text"] = "あいうえお",
+        ["mode"] = "hira",
+        ["stage"] = "none",
+      },
+    },
+  },
+}
