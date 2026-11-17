@@ -200,6 +200,8 @@ function M.input(prompt)
   local ok, res = pcall(function()
     kana.set_current(options.kanaTable)
     store.init_context()
+    -- 登録欄の Context はひらがななので、公開するモードも合わせる
+    M.mode_changed("hira")
     -- 新しい Context に合わせて参照用の変数も更新する（#54 の残り）
     vim.g["skkeleton#state"] = { phase = "input", henkanFeed = "", preedit = "" }
     vim.api.nvim_create_autocmd("CmdlineEnter", {
