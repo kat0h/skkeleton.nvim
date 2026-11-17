@@ -19,6 +19,7 @@ local cases = {
   { "nn", "kann", { "かん" }, "", "hira" },
   { "sokuon", "kitte", { "きって" }, "", "hira" },
   { "henkan point", "Kan", { "" }, "▽かn", "hira" },
+  { "Space keeps pending consonant in input state (#270)", "Kanj<Space>", { "" }, "▽かんj", "hira" },
   { "henkan point is fixed by <C-j>", "Kan<C-j>", { "かん" }, "", "hira" },
   { "okurinasi: first candidate", "Kan<Space>", { "" }, "▼缶", "hira" },
   { "okurinasi: kakutei by <C-j>", "Kan<Space><C-j>", { "缶" }, "", "hira" },

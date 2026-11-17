@@ -130,12 +130,12 @@ T["source"]["enabled reflects input state and options"] = function()
   eq(child.lua_get([[require("skkeleton.completion.blink"):enabled()]]), false)
 
   -- Okurinasi input state with henkan_feed
-  type("Kan")
+  type("Kanj")
   eq(child.lua_get([[require("skkeleton.completion.blink"):enabled()]]), true)
 
-  -- Leaving okurinasi input state via Space (into henkan state)
+  -- 打ちかけが残っている間は Space で変換に入らない
   type("<Space>")
-  eq(child.lua_get([[require("skkeleton.completion.blink"):enabled()]]), false)
+  eq(child.lua_get([[require("skkeleton.completion.blink"):enabled()]]), true)
 
   -- When completion option is disabled
   type("<C-g>")
@@ -355,14 +355,13 @@ T["auto_trigger"]["re-triggers on feed change and ignores identical key"] = func
   eq(count3, 2)
 end
 
-T["auto_trigger"]["calls hide when leaving okurinasi input via Space"] = function()
+T["auto_trigger"]["keeps the menu open when Space leaves a pending consonant"] = function()
   setup_blink_mock()
   enable()
   type("Kanj")
   child.lua("_G.blink_calls = {}")
   type("<Space>")
-  local last = child.lua_get("_G.blink_calls[#_G.blink_calls]")
-  eq(last, { "hide" })
+  eq(child.lua_get("_G.blink_calls"), {})
 end
 
 T["auto_trigger"]["reopens the menu for the same reading after enable/disable events (#92)"] = function()
