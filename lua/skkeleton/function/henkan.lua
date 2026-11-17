@@ -30,6 +30,11 @@ function M.henkan_first(ctx, key)
     return
   end
 
+  -- 打ちかけが残っている間は Space で変換に入らない
+  if ctx.state.feed ~= "" and not ctx.state.table:find(ctx.state.feed) and key == " " then
+    return
+  end
+
   input.kakutei_feed(ctx)
 
   if ctx.state.mode == "direct" then
