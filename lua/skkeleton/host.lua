@@ -45,6 +45,7 @@ end
 
 ---@class skkeleton.InputFrame
 ---@field context skkeleton.Context 退避した Context
+---@field mode string 呼び出し時のモード
 ---@field buf integer 呼び出し時のバッファ
 ---@field win integer 呼び出し時のウィンドウ
 ---@field cursor integer[] 呼び出し時のカーソル位置
@@ -107,6 +108,7 @@ local function push_input_frame(win, buf)
 
   local frame = {
     context = store.context(),
+    mode = store.context().mode,
     buf = buf,
     win = win,
     cursor = vim.api.nvim_win_get_cursor(win),
@@ -163,7 +165,7 @@ local function pop_input_frame(frame)
   vim.cmd("redrawstatus")
   -- 退避した Context とモードを戻す
   store.set_context(frame.context)
-  require("skkeleton.mode").mode_change(frame.context, frame.context.mode)
+  require("skkeleton.mode").mode_change(frame.context, frame.mode)
   doautocmd("skkeleton-enable-post")
 end
 
@@ -181,6 +183,8 @@ end
 function M.input(prompt)
   local store = require("skkeleton.store")
   local map = require("skkeleton.map")
+  local kana = require("skkeleton.kana")
+  local options = require("skkeleton.config").options
 
   -- 辞書登録に入る前に補完メニューや候補ポップアップを閉じる
   require("skkeleton.popup").close()
@@ -194,6 +198,7 @@ function M.input(prompt)
   local frame = push_input_frame(win, buf)
 
   local ok, res = pcall(function()
+    kana.set_current(options.kanaTable)
     store.init_context()
     -- 新しい Context に合わせて参照用の変数も更新する（#54 の残り）
     vim.g["skkeleton#state"] = { phase = "input", henkanFeed = "", preedit = "" }
@@ -220,6 +225,7 @@ function M.input(prompt)
   marker.drop_marker_history("@")
 
   pop_input_frame(frame)
+  kana.set_current(frame.context.state.table_name)
 
   if not ok then
     error(res, 0)

@@ -42,6 +42,7 @@ function M.hirakana(ctx)
     common.kakutei(ctx)
   end
   kana.set_current(options.kanaTable)
+  st.table_name = options.kanaTable
   state.initialize(st)
   mode.mode_change(ctx, "hira")
 end
@@ -84,6 +85,7 @@ local function to_converter_mode(ctx, converter, name)
   end
   if kana.current_name == "zen" then
     kana.set_current(options.kanaTable)
+    st.table_name = options.kanaTable
     st.table = kana.get_table()
   end
   if active then
@@ -116,6 +118,7 @@ function M.zenkaku(ctx)
   end
   st.converter = nil
   kana.set_current("zen")
+  st.table_name = "zen"
   st.table = kana.get_table()
   mode.mode_change(ctx, "zenkaku")
 end

@@ -463,6 +463,25 @@ T["purge"]["X removes the candidate after confirming"] = function()
   type("<Esc>")
 end
 
+T["purge"]["X keeps the active kana table and converter"] = function()
+  child.lua([[require("skkeleton.store").library():register_henkan_result("okurinasi", "か", "蚊")]])
+  child.lua([[require("skkeleton.host").confirm = function() return true end]])
+  enable()
+  type("qKa<Space>X")
+  type("a")
+  eq(helpers.buffer(child), { "ア" })
+  eq(helpers.mode(child), "kata")
+end
+
+T["register"]["the full-width table in registration does not leak outside"] = function()
+  enable()
+  type("qYomi<Space>")
+  type("Lab<CR>")
+  eq(helpers.mode(child), "kata")
+  type("<C-g>a")
+  eq(helpers.buffer(child), { "ａｂア" })
+end
+
 T["purge"]["answering no keeps the candidate"] = function()
   child.lua([[require("skkeleton.host").confirm = function() return false end]])
   enable()

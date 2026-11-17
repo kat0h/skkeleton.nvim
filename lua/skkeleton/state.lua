@@ -16,6 +16,7 @@ local M = {}
 ---@field mode "direct"|skkeleton.HenkanType
 ---@field affix? "prefix"|"suffix"
 ---@field direct_input boolean 真なら大文字が打たれても変換ポイントを切らない（abbrev に必要）
+---@field table_name string
 ---@field table skkeleton.KanaTable
 ---@field converter? fun(s: string): string
 ---@field feed string
@@ -40,6 +41,7 @@ local fields = {
   "mode",
   "affix",
   "direct_input",
+  "table_name",
   "table",
   "converter",
   "feed",
@@ -49,11 +51,13 @@ local fields = {
 }
 
 local function default_input_state()
+  local table_name = kana.current_name
   return {
     type = "input",
     mode = "direct",
     direct_input = false,
-    table = kana.get_table(),
+    table_name = table_name,
+    table = kana.get_table(table_name),
     feed = "",
     henkan_feed = "",
     okuri_feed = "",
