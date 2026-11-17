@@ -57,6 +57,110 @@ end
 local state_names = sorted_keys(model.states)
 local event_names = sorted_keys(model.events)
 
+-- B-2b: 現在のモデルで条件分岐する組。遷移 id まで固定し、追加・変更を失敗にする。
+local ALLOWED_SPLITS = {
+  ["C_DIRECT.bs"] = { "t.C_DIRECT.bs", "t.C_DIRECT.bs.empty" },
+  ["C_DIRECT.char"] = { "t.C_DIRECT.char.keep", "t.C_DIRECT.char.romaji" },
+  ["C_DIRECT.char_shift"] = { "t.C_DIRECT.char_shift", "t.C_DIRECT.char_shift.point" },
+  ["C_POINT.bs"] = { "t.C_POINT.bs", "t.C_POINT.bs.empty" },
+  ["C_POINT.cmdline_ctrl_p"] = { "t.C_POINT.cmdline_ctrl_p.history", "t.C_POINT.cmdline_ctrl_p.keep" },
+  ["C_POINT.ctrl_r"] = { "t.C_POINT.ctrl_r", "t.C_POINT.ctrl_r.eq" },
+  ["C_POINT.space"] = { "t.C_POINT.space.register", "t.C_POINT.space.select" },
+  ["C_REPLACE_DIRECT.char"] = { "t.C_REPLACE_DIRECT.char.keep", "t.C_REPLACE_DIRECT.char.romaji" },
+  ["C_REPLACE_ROMAJI.char"] = { "t.C_REPLACE_ROMAJI.char.commit", "t.C_REPLACE_ROMAJI.char.keep", "t.C_REPLACE_ROMAJI.char.point" },
+  ["C_REPLACE_SELECT.key_x"] = { "t.C_REPLACE_SELECT.x.back", "t.C_REPLACE_SELECT.x.prev" },
+  ["C_ROMAJI.bs"] = { "t.C_ROMAJI.bs", "t.C_ROMAJI.bs.empty" },
+  ["C_ROMAJI.char"] = { "t.C_ROMAJI.char.commit", "t.C_ROMAJI.char.keep", "t.C_ROMAJI.char.point" },
+  ["C_SELECT.char"] = { "t.C_SELECT.char.commit", "t.C_SELECT.char.romaji" },
+  ["C_SELECT.key_x"] = { "t.C_SELECT.x.back", "t.C_SELECT.x.prev" },
+  ["C_SELECT.space"] = { "t.C_SELECT.space.next", "t.C_SELECT.space.register" },
+  ["I_BLINK_POINT.completion_newline"] = { "t.I_BLINK_POINT.completion_newline.accept", "t.I_BLINK_POINT.completion_newline.newline" },
+  ["I_BLINK_POINT.completion_tab"] = { "t.I_BLINK_POINT.completion_tab.s-tab", "t.I_BLINK_POINT.completion_tab.tab" },
+  ["I_DIRECT.char"] = { "t.I_DIRECT.char.keep", "t.I_DIRECT.char.romaji" },
+  ["I_DIRECT.char_shift"] = { "t.I_DIRECT.char_shift", "t.I_DIRECT.char_shift.point" },
+  ["I_DIRECT.esc"] = { "t.I_DIRECT.esc", "t.I_DIRECT.esc.keepstate" },
+  ["I_DIRECT.stale"] = { "t.I_DIRECT.stale.buffer", "t.I_DIRECT.stale.cursor", "t.I_DIRECT.stale.none" },
+  ["I_POINT.bs"] = { "t.I_POINT.bs", "t.I_POINT.bs.empty" },
+  ["I_POINT.ctrl_a"] = { "t.I_POINT.ctrl_a", "t.I_POINT.ctrl_a.e29" },
+  ["I_POINT.ctrl_u"] = { "t.I_POINT.ctrl_u", "t.I_POINT.ctrl_u.keep" },
+  ["I_POINT.ctrl_w"] = { "t.I_POINT.ctrl_w", "t.I_POINT.ctrl_w.keep" },
+  ["I_POINT.esc"] = { "t.I_POINT.esc", "t.I_POINT.esc.keepstate" },
+  ["I_POINT.mouse_click"] = { "t.I_POINT.mouse_click", "t.I_POINT.mouse_click.keep" },
+  ["I_POINT.space"] = { "t.I_POINT.space.register", "t.I_POINT.space.select" },
+  ["I_POINT.stale"] = { "t.I_POINT.stale.buffer", "t.I_POINT.stale.cursor", "t.I_POINT.stale.none" },
+  ["I_POINT_OKURI.bs"] = { "t.I_POINT_OKURI.bs", "t.I_POINT_OKURI.bs.empty" },
+  ["I_POINT_OKURI.char"] = { "t.I_POINT_OKURI.char", "t.I_POINT_OKURI.char.select" },
+  ["I_POINT_OKURI.ctrl_a"] = { "t.I_POINT_OKURI.ctrl_a", "t.I_POINT_OKURI.ctrl_a.e29" },
+  ["I_POINT_OKURI.ctrl_u"] = { "t.I_POINT_OKURI.ctrl_u", "t.I_POINT_OKURI.ctrl_u.keep" },
+  ["I_POINT_OKURI.ctrl_w"] = { "t.I_POINT_OKURI.ctrl_w", "t.I_POINT_OKURI.ctrl_w.keep" },
+  ["I_POINT_OKURI.esc"] = { "t.I_POINT_OKURI.esc", "t.I_POINT_OKURI.esc.keepstate" },
+  ["I_POINT_OKURI.mouse_click"] = { "t.I_POINT_OKURI.mouse_click", "t.I_POINT_OKURI.mouse_click.keep" },
+  ["I_POINT_OKURI.stale"] = { "t.I_POINT_OKURI.stale.buffer", "t.I_POINT_OKURI.stale.cursor", "t.I_POINT_OKURI.stale.none" },
+  ["I_ROMAJI.bs"] = { "t.I_ROMAJI.bs", "t.I_ROMAJI.bs.empty" },
+  ["I_ROMAJI.char"] = { "t.I_ROMAJI.char.commit", "t.I_ROMAJI.char.keep" },
+  ["I_ROMAJI.ctrl_a"] = { "t.I_ROMAJI.ctrl_a", "t.I_ROMAJI.ctrl_a.e29" },
+  ["I_ROMAJI.ctrl_u"] = { "t.I_ROMAJI.ctrl_u", "t.I_ROMAJI.ctrl_u.keep" },
+  ["I_ROMAJI.ctrl_w"] = { "t.I_ROMAJI.ctrl_w", "t.I_ROMAJI.ctrl_w.keep" },
+  ["I_ROMAJI.esc"] = { "t.I_ROMAJI.esc", "t.I_ROMAJI.esc.keepstate" },
+  ["I_ROMAJI.mouse_click"] = { "t.I_ROMAJI.mouse_click", "t.I_ROMAJI.mouse_click.keep" },
+  ["I_ROMAJI.stale"] = { "t.I_ROMAJI.stale.buffer", "t.I_ROMAJI.stale.cursor", "t.I_ROMAJI.stale.none" },
+  ["I_SELECT.char"] = { "t.I_SELECT.char.commit", "t.I_SELECT.char.commit_romaji" },
+  ["I_SELECT.ctrl_u"] = { "t.I_SELECT.ctrl_u", "t.I_SELECT.ctrl_u.keep" },
+  ["I_SELECT.ctrl_w"] = { "t.I_SELECT.ctrl_w", "t.I_SELECT.ctrl_w.keep" },
+  ["I_SELECT.esc"] = { "t.I_SELECT.esc", "t.I_SELECT.esc.keepstate" },
+  ["I_SELECT.key_x"] = { "t.I_SELECT.x.back", "t.I_SELECT.x.back.okuri", "t.I_SELECT.x.prev" },
+  ["I_SELECT.mouse_click"] = { "t.I_SELECT.mouse_click", "t.I_SELECT.mouse_click.keep" },
+  ["I_SELECT.space"] = { "t.I_SELECT.space.next", "t.I_SELECT.space.register" },
+  ["I_SELECT.stale"] = { "t.I_SELECT.stale.buffer", "t.I_SELECT.stale.cursor", "t.I_SELECT.stale.none" },
+  ["NI_POINT.ni_return_keep"] = { "t.NI_POINT.return_keep", "t.NI_POINT.return_keep.okuri" },
+  ["N_KEEP.insert_enter"] = { "t.N_KEEP.insert_enter", "t.N_KEEP.insert_enter.keepstate" },
+  ["N_OFF.macro_replay"] = { "t.N_OFF.macro_replay", "t.N_OFF.macro_replay.keepstate" },
+  ["P_PROMPT_POINT.register_commit"] = { "t.P_PROMPT_POINT.commit", "t.P_PROMPT_POINT.commit_empty" },
+  ["P_PROMPT_POINT_NESTED.register_commit"] = { "t.P_PROMPT_POINT_NESTED.commit", "t.P_PROMPT_POINT_NESTED.commit_empty" },
+  ["P_PROMPT_POINT_READING.ctrl_r"] = { "t.P_PROMPT_POINT_READING.ctrl_r", "t.P_PROMPT_POINT_READING.ctrl_r_empty" },
+  ["P_PROMPT_POINT_READING.space"] = { "t.P_PROMPT_POINT_READING.space", "t.P_PROMPT_POINT_READING.space_register" },
+  ["P_PROMPT_SELECT.register_commit"] = { "t.P_PROMPT_SELECT.commit", "t.P_PROMPT_SELECT.commit_empty" },
+  ["P_PROMPT_SELECT_NESTED.register_commit"] = { "t.P_PROMPT_SELECT_NESTED.commit", "t.P_PROMPT_SELECT_NESTED.commit_empty" },
+  ["P_PROMPT_SELECT_READING.ctrl_r"] = { "t.P_PROMPT_SELECT_READING.ctrl_r", "t.P_PROMPT_SELECT_READING.ctrl_r_empty" },
+  ["P_PROMPT_SELECT_READING.space"] = { "t.P_PROMPT_SELECT_READING.space", "t.P_PROMPT_SELECT_READING.space_register" },
+  ["T_DIRECT.char"] = { "t.T_DIRECT.char.keep", "t.T_DIRECT.char.romaji" },
+  ["T_DIRECT.char_shift"] = { "t.T_DIRECT.char_shift", "t.T_DIRECT.char_shift.point" },
+  ["T_POINT.bs"] = { "t.T_POINT.bs", "t.T_POINT.bs.empty" },
+  ["T_ROMAJI.char"] = { "t.T_ROMAJI.char.commit", "t.T_ROMAJI.char.keep" },
+  ["T_SELECT.char"] = { "t.T_SELECT.char.commit", "t.T_SELECT.char.commit_romaji" },
+  ["T_SELECT.key_x"] = { "t.T_SELECT.key_x.back", "t.T_SELECT.key_x.prev" },
+  ["V_PRE_POINT.esc"] = { "t.V_PRE_POINT.esc", "t.V_PRE_POINT.esc.okuri" },
+}
+
+local function split_errors()
+  local actual = {}
+  for _, t in ipairs(model.transitions) do
+    local key = t.from .. "." .. t.event
+    actual[key] = actual[key] or {}
+    table.insert(actual[key], t.id)
+  end
+  local errors = {}
+  for key, ids in pairs(actual) do
+    if #ids > 1 then
+      table.sort(ids)
+      local allowed = ALLOWED_SPLITS[key]
+      if not allowed or table.concat(ids, "|") ~= table.concat(allowed, "|") then
+        table.insert(errors, { transition = key, detail = ("許可一覧に無い分岐: %s"):format(table.concat(ids, ", ")) })
+      end
+    end
+  end
+  for key, ids in pairs(ALLOWED_SPLITS) do
+    local found = actual[key] or {}
+    table.sort(found)
+    if #found > 1 and table.concat(found, "|") ~= table.concat(ids, "|") then
+      table.insert(errors, { transition = key, detail = ("許可一覧と違う分岐: %s"):format(table.concat(found, ", ")) })
+    elseif #found <= 1 then
+      table.insert(errors, { transition = key, detail = "許可一覧の分岐が無くなった" })
+    end
+  end
+  return errors
+end
+
 -- 遷移が参照する名前や効果の語が正しいか
 local function validate()
   local errors = {}
@@ -137,6 +241,9 @@ local function validate()
     if t.status == "gap" and not known_transitions[t.id] then
       table.insert(errors, ("%s: gap だが M.known に無い（破っている性質と issue を書く）"):format(t.id))
     end
+  end
+  for _, err in ipairs(split_errors()) do
+    table.insert(errors, ("B-2b: %s %s"):format(err.transition, err.detail))
   end
   return errors
 end
@@ -499,6 +606,24 @@ local function check_transient_progress()
     local st = model.states[name]
     if st.transient and #(by_from[name] or {}) == 0 then
       table.insert(out, { transition = "-", detail = ("途中の状態 %s から出る遷移が無い"):format(name) })
+    end
+  end
+  return out
+end
+
+-- P7: reset_state を 2 度流しても状態クラスは変わらない。
+local function check_idempotent_reset()
+  local out = {}
+  for _, name in ipairs(state_names) do
+    local found = false
+    for _, t in ipairs(by_from[name] or {}) do
+      if t.event == "reset_state" and t.to == name and effect_set(t).reset_state == 1 then
+        found = true
+        break
+      end
+    end
+    if not found then
+      table.insert(out, { transition = "-", detail = ("%s に reset_state の自己遷移が無い"):format(name) })
     end
   end
   return out
@@ -929,6 +1054,8 @@ local function main(argv)
     P3 = { title = "n / v / s / R では状態とマッピングが元に戻っている", run = check_return_to_normal },
     P4 = { title = "terminal の t → nt → t で読みと pre-edit が保たれる", run = check_terminal_normal_keep },
     P5 = { title = "1 つのキーを二重に処理しない", run = check_double_commit },
+    P6 = { title = "条件で分かれる組が許可一覧どおり", run = split_errors },
+    P7 = { title = "片付けは何度やっても同じ結果になる", run = check_idempotent_reset },
     P10 = { title = "同じ読みを 2 度確定しない", run = check_double_commit },
     P9 = { title = "辞書登録の入れ子から漏れずに戻れる", run = check_prompt_nesting },
     P13 = { title = "pending（途中の状態）が片付く", run = check_transient_progress },
@@ -945,7 +1072,7 @@ local function main(argv)
   if section("properties") then
     say("")
     say("== 性質 ==")
-    for _, id in ipairs({ "P1", "P3", "P4", "P5", "P9", "P10", "P13", "P14", "P8" }) do
+    for _, id in ipairs({ "P1", "P3", "P4", "P5", "P6", "P7", "P9", "P10", "P13", "P14", "P8" }) do
       local check = property_checks[id]
       local violations = check.run()
       local unknown, hits, stale = apply_known(id, violations)

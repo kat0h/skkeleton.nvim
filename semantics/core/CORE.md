@@ -25,7 +25,7 @@ skkeleton.nvim の入力エンジンを、Vim から切り離した状態機械�
    - V2 と P1 は同じものです。
    - V1・V6・P11 の破れは、どれも「モードの表示」と「かなテーブルと converter の組」がずれる、という 1 つの形でした（R-PG-01、R-RG-01、R-RG-07）。`ctx.mode` と converter とテーブルを別々に持っていて、片方だけを戻す道があるのが原因です。
    - 足りないのは **V11「入れ子の機械と外の機械は、互いに書き換えない」** です。辞書登録の中で替えたかなテーブルが外に漏れる（R-RG-07）、外のモードの表示が内側で使われる（R-RG-01）は、V1〜V10 のどれにもきれいには当たりません。
-   - V7 は「`<C-j>` を 1 打で」まで求めるのかが書かれていないので、結論を出せませんでした（§5）。
+   - V7 は、読みがあるときの `<C-j>` は確定で、ひらがなに戻るのは次の 1 打とします。
 8. **`src` の行番号は main（c2a78ff）のもの。** `formal-semantics` ブランチの `lua/` は main より古いので、main を読みました。
 
 #260 の本文を直すなら、次の 3 点です（issue は書き換えていません）。
@@ -589,7 +589,7 @@ flowchart LR
 | R-CK-04 | ▼、▼ 一覧 | &lt;C-g> | immediatelyCancel = false | ▽、▽ 送り | ▽ に戻る（送りも残る） | 触らない | V3 守る | 読んだ | lua/skkeleton/function/common.lua:83-85 |
 | R-CK-05 | 読みなし | &lt;C-j> |  | 読みなし | 確定するものが無いので、ひらがなモードに戻す（host.mode_changed） |  | V7 守る | 読んだ | lua/skkeleton/function/common.lua:47-54、lua/skkeleton/function/mode.lua:31-42 |
 | R-CK-06 | 打ちかけ | &lt;C-j> |  | 読みなし | 打ちかけを確定する（n → ん、k → k のまま） | 生のまま確定する | V2 守る、V4 守る | 読んだ | lua/skkeleton/function/common.lua:55、lua/skkeleton/function/common.lua:32-38 |
-| R-CK-07 | ▽（空）、▽、▽ 打ちかけ、▽ 送り、▽ 送り 打ちかけ | &lt;C-j> |  | 読みなし | 読み＋送り＋打ちかけをそのまま確定する。モードは変わらない | 生のまま確定する | V2 守る、V6 守る、V7 決められない | 読んだ | lua/skkeleton/function/common.lua:32-42 |
+| R-CK-07 | ▽（空）、▽、▽ 打ちかけ、▽ 送り、▽ 送り 打ちかけ | &lt;C-j> |  | 読みなし | 読み＋送り＋打ちかけをそのまま確定する。モードは変わらない | 生のまま確定する | V2 守る、V6 守る、V7 守る | 読んだ | lua/skkeleton/function/common.lua:32-42 |
 | R-CK-08 | ▼、▼ 一覧 | &lt;C-j> |  | 読みなし | 候補＋送りを確定し、辞書に覚える |  | V1 守る、V8 守る、P10 守る | 読んだ | lua/skkeleton/function/common.lua:20-31、lua/skkeleton/function/common.lua:42 |
 | R-CK-09 | 読みなし、打ちかけ | &lt;CR> |  | 読みなし | 打ちかけを確定してから、改行を確定する。モードは変わらない | 生のまま確定する | V2 守る、V6 守る | 読んだ | lua/skkeleton/function/common.lua:59-68 |
 | R-CK-10 | ▽（空）、▽、▽ 打ちかけ、▽ 送り、▽ 送り 打ちかけ | &lt;CR> |  | 読みなし | 読みを確定する。eggLikeNewline が偽（既定）なら改行もする | 生のまま確定する | V2 守る、V6 守る | 読んだ | lua/skkeleton/function/common.lua:61-67 |
@@ -720,13 +720,13 @@ flowchart LR
 
 | id | 状態 | キー | 条件 | 行き先 | 出力 | 打ちかけ | 視点 | 確度 | src |
 |---|---|---|---|---|---|---|---|---|---|
-| R-RG-01 → REC-INNER-MODE | 辞書登録 | （欄が開く） |  | 辞書登録 | 内側に新しい機械（読みなし、ctx.mode は hira）を作る。g:skkeleton#mode は外のモードのまま変えない |  | V1 **破る**、P11 **破る** | 推測 | lua/skkeleton/host.lua:196-199、lua/skkeleton/context.lua:18-26 |
+| R-RG-01 → REC-INNER-MODE | 辞書登録 | （欄が開く） |  | 辞書登録 | 内側に新しい機械（読みなし、ctx.mode は hira）を作る。g:skkeleton#mode は外のモードのまま変えない |  | V1 **破る**、V11 **破る**、P11 **破る** | 推測 | lua/skkeleton/host.lua:196-199、lua/skkeleton/context.lua:18-26 |
 | R-RG-02 | 辞書登録 | どのキーでも |  | 辞書登録 | キーは内側の機械が、同じ規則で受ける（入れ子にもなる） |  | V9 守る | 読んだ | lua/skkeleton/host.lua:200-211 |
 | R-RG-03 | 辞書登録 | 答え：語 |  | 読みなし | 外で 語＋送り を確定し、その語を辞書に覚える |  | V8 守る、V9 守る、P10 守る | 読んだ | lua/skkeleton/function/dictionary.lua:28-34、lua/skkeleton/function/common.lua:20-31 |
 | R-RG-04 | 辞書登録 | 答え：取り消し | 1 つ目の候補より前で開いた | ▽、▽ 打ちかけ、▽ 送り、▽ 送り 打ちかけ | 入る前の ▽ に戻る（送りも残る）。エラーで中断したときも同じ |  | V3 守る、V9 守る、P9 守る | 読んだ | lua/skkeleton/function/henkan.lua:118-121、lua/skkeleton/function/dictionary.lua:20-30 |
 | R-RG-05 | 辞書登録 | 答え：取り消し | 候補を見たあとで開いた | ▼、▼ 一覧 | 入る前の候補に戻る |  | V3 守る、P9 守る | 読んだ | lua/skkeleton/function/henkan.lua:118、lua/skkeleton/function/henkan.lua:123-125 |
 | R-RG-06 → REC-INNER-CANCEL | 辞書登録 | &lt;C-g>・&lt;Esc> | 内側に読みか候補がある | ▽、▽ 送り、▼、▼ 一覧 | 内側の読みではなく、登録そのものが取り消される（host が欄の &lt;Esc> &lt;C-g> &lt;C-c> を取り消しに割り当てている） |  | V3 **破る**、V9 **破る** | 推測 | lua/skkeleton/host.lua:204-208 |
-| R-RG-07 → REC-TABLE | 辞書登録 | 答え：語 | 内側でかなテーブルを替えたまま確定した（全英など） | 読みなし | 今のテーブルの名前（kana.current_name）は機械の外にあるので、外の次の初期化（&lt;C-g> など）で全英のテーブルが入る。モードの表示は外のまま |  | V1 **破る**、P6 **破る**、P11 **破る** | 推測 | lua/skkeleton/function/mode.lua:113、lua/skkeleton/state.lua:56、lua/skkeleton/function/common.lua:78、lua/skkeleton/host.lua:165-166 |
+| R-RG-07 → REC-TABLE | 辞書登録 | 答え：語 | 内側でかなテーブルを替えたまま確定した（全英など） | 読みなし | 今のテーブルの名前（kana.current_name）は機械の外にあるので、外の次の初期化（&lt;C-g> など）で全英のテーブルが入る。モードの表示は外のまま |  | V1 **破る**、V11 **破る**、P6 **破る**、P11 **破る** | 推測 | lua/skkeleton/function/mode.lua:113、lua/skkeleton/state.lua:56、lua/skkeleton/function/common.lua:78、lua/skkeleton/host.lua:165-166 |
 | R-RG-08（未定義） → REC-INNER-DISABLE | 辞書登録 | l | 内側が読みなし | 辞書登録 | 内側で無効にしたあとの動きを、core は決めていない |  |  | 分からない | lua/skkeleton/function/disable.lua:14-18、lua/skkeleton/host.lua:22-37 |
 | R-RG-09（未定義） → REC-REG-EVENT | 辞書登録 | enable・disable |  | 辞書登録 | 欄が開いている間の enable / disable を、core は決めていない |  |  | 分からない | lua/skkeleton/main.lua:101-176 |
 <!-- /gen:rules-register -->
@@ -847,10 +847,11 @@ flowchart LR
 | V4 | 前に打ったキーの意味が、あとのキーで変わらない | 破っている | R-ST-01 |  | n は確定のときに ん になる（upstream #6）。送りの前の n は読みに入る（upstream #18） |
 | V5 | 同じ状態で同じキーを押せば、同じことが起きる | 守っている |  |  | かなテーブルとキーマップの順番は keymap.handle_key の 1 か所で決まる（lua/skkeleton/keymap.lua:73-86） |
 | V6 | モードは、自分で切り替えるまで変わらない | 破っている | R-PG-01、R-MD-10 |  | 確定と取り消しは converter とテーブルを残す（lua/skkeleton/function/common.lua:42、lua/skkeleton/function/common.lua:78） |
-| V7 | どこからでも、決まったキーで決まった場所に戻れる | 決められない |  | R-CK-07 | &lt;C-g> と &lt;Esc> はどこからでも同じ。&lt;C-j> は読みがあれば確定、無ければ ひらがな に戻るので、カタカナの ▽ から ひらがな の読みなしまでは 2 打かかる。1 打で戻ることまで求めるかで結論が変わる |
+| V7 | どこからでも、決まったキーで決まった場所に戻れる | 守っている |  |  | &lt;C-g> と &lt;Esc> はどこからでも同じ。読みがあるときの &lt;C-j> は確定し、ひらがなに戻るのは次の 1 打 |
 | V8 | 確定は 1 度だけで、確定したものが辞書に覚えられる | 守っている |  |  | 候補の確定は、どの道も common.kakutei の 1 か所を通る（lua/skkeleton/function/common.lua:20-26） |
 | V9 | 辞書登録は変換の続きとして動く | 破っている | R-HK-05、R-RG-06 |  | 登録した語は送りと一緒に確定される。欄の中は同じ機械が動く |
 | V10 | 送り仮名はかなの単位で切れる | 破っている | R-HK-05、R-HK-07 |  | 送りの子音は、っ を除いた最初のかなから決める（lua/skkeleton/okuri.lua:43-59） |
+| V11 | 入れ子の機械と外の機械は、互いに書き換えない | 破っている | R-RG-01、R-RG-07 |  | 内側の辞書登録機械の状態や設定は外に漏れず、外側の状態や表示も内側で使わない |
 | P1 | 読みが黙って消えない | 破っている | R-IN-04、R-PR-04、R-OK-04、R-HK-04、R-MD-03 |  | V2 を core の外の言葉で言ったもの。破れは V2 と同じ |
 | P5 | 二重に処理しない | 破っている | R-HK-07 |  | 1 打は handle_key を 1 度通る。打ち直し（again）は同じ打鍵の中で起きる |
 | P6 | 決定的 | 破っている | R-RG-07 |  | 設定・辞書・host の答えを決めれば、行き先は 1 つに決まる。ただし今のテーブルの名前と last_mode が機械の外にある |

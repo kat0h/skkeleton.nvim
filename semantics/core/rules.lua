@@ -506,7 +506,7 @@ R({ id = "R-CK-05", group = "commit", from = { "direct" }, key = { "cj" }, to = 
 R({ id = "R-CK-06", group = "commit", from = { "pending" }, key = { "cj" }, to = { "direct" }, pending = "raw",
   short = "打ちかけを確定", out = "打ちかけを確定する（n → ん、k → k のまま）", src = C .. "55、" .. C .. "32-38", views = { V4 = "holds", V2 = "holds" } })
 R({ id = "R-CK-07", group = "commit", from = PRE, key = { "cj" }, to = { "direct" }, pending = "raw",
-  short = "読みを確定", out = "読み＋送り＋打ちかけをそのまま確定する。モードは変わらない", src = C .. "32-42", views = { V2 = "holds", V6 = "holds", V7 = "open" } })
+  short = "読みを確定", out = "読み＋送り＋打ちかけをそのまま確定する。モードは変わらない", src = C .. "32-42", views = { V2 = "holds", V6 = "holds", V7 = "holds" } })
 R({ id = "R-CK-08", group = "commit", from = HENKAN, key = { "cj" }, to = { "direct" },
   short = "候補を確定", out = "候補＋送りを確定し、辞書に覚える", src = C .. "20-31、" .. C .. "42", views = { V8 = "holds", P10 = "holds", V1 = "holds" } })
 R({ id = "R-CK-09", group = "commit", from = DIRECT, key = { "cr" }, to = { "direct" }, pending = "raw",
@@ -550,7 +550,7 @@ R({ id = "R-MD-11", group = "mode", from = { "direct" }, key = { "kana", "upper"
 -- 辞書登録 ---------------------------------------------------------------
 R({ id = "R-RG-01", group = "register", from = { "reg" }, key = { "open" }, to = { "reg" },
   short = "内側の機械を作る", out = "内側に新しい機械（読みなし、ctx.mode は hira）を作る。g:skkeleton#mode は外のモードのまま変えない",
-  src = HO .. "196-199、lua/skkeleton/context.lua:18-26", confidence = "inferred", views = { V1 = "breaks", P11 = "breaks" }, recommend = "REC-INNER-MODE" })
+  src = HO .. "196-199、lua/skkeleton/context.lua:18-26", confidence = "inferred", views = { V1 = "breaks", P11 = "breaks", V11 = "breaks" }, recommend = "REC-INNER-MODE" })
 R({ id = "R-RG-02", group = "register", from = { "reg" }, key = { "*" }, to = { "reg" },
   short = "内側の機械が受ける", out = "キーは内側の機械が、同じ規則で受ける（入れ子にもなる）", src = HO .. "200-211", views = { V9 = "holds" } })
 R({ id = "R-RG-03", group = "register", from = { "reg" }, key = { "ans:word" }, to = { "direct" },
@@ -564,7 +564,7 @@ R({ id = "R-RG-06", group = "register", from = { "reg" }, key = { "cg", "esc" },
   src = HO .. "204-208", confidence = "inferred", views = { V3 = "breaks", V9 = "breaks" }, recommend = "REC-INNER-CANCEL" })
 R({ id = "R-RG-07", group = "register", from = { "reg" }, key = { "ans:word" }, guard = "内側でかなテーブルを替えたまま確定した（全英など）", to = { "direct" },
   short = "テーブルが外に漏れる", out = "今のテーブルの名前（kana.current_name）は機械の外にあるので、外の次の初期化（<C-g> など）で全英のテーブルが入る。モードの表示は外のまま",
-  src = M .. "113、" .. S .. "56、" .. C .. "78、" .. HO .. "165-166", confidence = "inferred", views = { V1 = "breaks", P11 = "breaks", P6 = "breaks" }, recommend = "REC-TABLE" })
+  src = M .. "113、" .. S .. "56、" .. C .. "78、" .. HO .. "165-166", confidence = "inferred", views = { V1 = "breaks", P11 = "breaks", P6 = "breaks", V11 = "breaks" }, recommend = "REC-TABLE" })
 R({ id = "R-RG-08", group = "register", from = { "reg" }, key = { "l" }, guard = "内側が読みなし", to = { "reg" },
   short = "内側だけ無効", out = "内側で無効にしたあとの動きを、core は決めていない", src = D .. "14-18、" .. HO .. "22-37", confidence = "open", status = "undefined", recommend = "REC-INNER-DISABLE" })
 R({ id = "R-RG-09", group = "register", from = { "reg" }, key = { "ev:enable", "ev:disable" }, to = { "reg" },
@@ -600,10 +600,11 @@ T.views = {
   { id = "V4", title = "前に打ったキーの意味が、あとのキーで変わらない", note = "n は確定のときに ん になる（upstream #6）。送りの前の n は読みに入る（upstream #18）" },
   { id = "V5", title = "同じ状態で同じキーを押せば、同じことが起きる", note = "かなテーブルとキーマップの順番は keymap.handle_key の 1 か所で決まる（" .. K .. "73-86）" },
   { id = "V6", title = "モードは、自分で切り替えるまで変わらない", note = "確定と取り消しは converter とテーブルを残す（" .. C .. "42、" .. C .. "78）" },
-  { id = "V7", title = "どこからでも、決まったキーで決まった場所に戻れる", verdict = "open", note = "<C-g> と <Esc> はどこからでも同じ。<C-j> は読みがあれば確定、無ければ ひらがな に戻るので、カタカナの ▽ から ひらがな の読みなしまでは 2 打かかる。1 打で戻ることまで求めるかで結論が変わる" },
+  { id = "V7", title = "どこからでも、決まったキーで決まった場所に戻れる", note = "<C-g> と <Esc> はどこからでも同じ。読みがあるときの <C-j> は確定し、ひらがなに戻るのは次の 1 打" },
   { id = "V8", title = "確定は 1 度だけで、確定したものが辞書に覚えられる", note = "候補の確定は、どの道も common.kakutei の 1 か所を通る（" .. C .. "20-26）" },
   { id = "V9", title = "辞書登録は変換の続きとして動く", note = "登録した語は送りと一緒に確定される。欄の中は同じ機械が動く" },
   { id = "V10", title = "送り仮名はかなの単位で切れる", note = "送りの子音は、っ を除いた最初のかなから決める（" .. OK .. "43-59）" },
+  { id = "V11", title = "入れ子の機械と外の機械は、互いに書き換えない", note = "内側の辞書登録機械の状態や設定は外に漏れず、外側の状態や表示も内側で使わない" },
   { id = "P1", title = "読みが黙って消えない", note = "V2 を core の外の言葉で言ったもの。破れは V2 と同じ" },
   { id = "P5", title = "二重に処理しない", note = "1 打は handle_key を 1 度通る。打ち直し（again）は同じ打鍵の中で起きる" },
   { id = "P6", title = "決定的", note = "設定・辞書・host の答えを決めれば、行き先は 1 つに決まる。ただし今のテーブルの名前と last_mode が機械の外にある" },
