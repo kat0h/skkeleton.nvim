@@ -47,13 +47,13 @@ end
 
 ---@param ctx skkeleton.Context
 ---@param result skkeleton.KanaResult
-function M.accept_result(ctx, result)
+function M.accept_result(ctx, result, suppress_henkan)
   local state = ctx.state
   if state.type ~= "input" then
     return
   end
   M.kakutei_kana(state, ctx.preedit, result[1], result[2])
-  if state.mode == "okuriari" and result[2] == "" then
+  if not suppress_henkan and state.mode == "okuriari" and result[2] == "" then
     if util.last_char(state.okuri_feed) == "っ" then
       -- immediatelyOkuriConvert が有効になっていない場合
       -- 直接入力などで「使った」のように打つ時「つかっ」の段階では変換をしない
@@ -68,11 +68,11 @@ end
 
 -- 打ちかけの feed を確定する（kana_input で、キーがテーブルに続かないときの処理）
 ---@param ctx skkeleton.Context
-function M.flush_feed(ctx)
+function M.flush_feed(ctx, suppress_henkan)
   local state = ctx.state
   local current = state.table:find(state.feed)
   if current then
-    M.accept_result(ctx, current)
+    M.accept_result(ctx, current, suppress_henkan)
   elseif options.acceptIllegalResult then
     M.kakutei_kana(state, ctx.preedit, state.feed, "")
   else
@@ -135,7 +135,7 @@ function M.kana_function(fn)
       return M.kana_input(ctx, char)
     end
     if state.feed ~= "" then
-      M.flush_feed(ctx)
+      M.flush_feed(ctx, true)
     end
     state.type = "input"
     state.feed = ""
@@ -211,6 +211,9 @@ function M.prefix(ctx, key)
   end
 
   local state = ctx.state
+  if state.mode == "okuriari" then
+    return
+  end
   if not state.direct_input and state.henkan_feed ~= "" and (state.mode == "okurinasi" or state.mode == "okuriari") then
     M.kakutei_feed(ctx)
     M.accept_result(ctx, { ">", "" })

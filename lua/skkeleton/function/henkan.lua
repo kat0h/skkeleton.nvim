@@ -41,6 +41,11 @@ function M.henkan_first(ctx, key)
     return
   end
 
+  -- 送りが空なら送りなしの語として変換する
+  if ctx.state.mode == "okuriari" and ctx.state.okuri_feed == "" then
+    ctx.state.mode = "okurinasi"
+  end
+
   ---@type skkeleton.HenkanState
   local state = ctx.state ---@diagnostic disable-line: assign-type-mismatch
   state.type = "henkan"
