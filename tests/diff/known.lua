@@ -6,6 +6,8 @@
 --
 -- ここに入れないもの（Lua 版の不具合）:
 --   半角カタカナモードの ▽ で q を押すとカタカナで確定する（denops 版はひらがな）: kat0h/skkeleton.nvim#51
+--   辞書登録の input() 中は g:skkeleton#mode を hira とし、終了時に外側へ戻す（#269 item 8）。
+--   登録欄の E2E はこの差分テストの偽 host.input では再現できないため、upstream との動作比較は未確認。
 local root = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h:h:h")
 package.path = root .. "/lua/?.lua;" .. root .. "/lua/?/init.lua;" .. package.path
 
