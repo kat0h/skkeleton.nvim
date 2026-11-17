@@ -8707,12 +8707,12 @@ M.properties = {
       .. "cmdline は 07a（#187）で遷移にしたが、cmdline に残る文字列はまだ性質にしていない"
       .. "（#206 の ▽ が残る型は M.known と issue で表している）。" },
   { id = "P5", title = "1 つのキーを二重に処理しない", decided = true, kind = "no_double_commit" },
-  { id = "P6", title = "決定的に振る舞う（タイミングに左右されるものには印を付ける）", decided = false,
-    why = "モデルの分岐はタイミングではなく、辞書・バッファ・設定という持っていない条件。"
-      .. "分かれる組は検査の最後に一覧で出す。blink.cmp のメニューは User skkeleton-handled のあとに"
-      .. "タイマーで開くので、同じキー列でも観測の時点で開いていないことがある（07d）。" },
-  { id = "P7", title = "片付けは何度やっても同じ結果になる", decided = false,
-    why = "同じ片付けを 2 度流す遷移の対を持っていない（reset_state の自己遷移を足せば見られる）。" },
+  { id = "P6", title = "決定的に振る舞う（タイミングに左右されるものには印を付ける）", decided = true,
+    kind = "known_splits",
+    why = "隠れた条件で分岐する組は許可一覧に固定し、新しい組や遷移が増えたら検査を失敗させる。"
+      .. "blink.cmp のメニューは User skkeleton-handled のあとにタイマーで開くので、"
+      .. "同じキー列でも観測の時点で開いていないことがある（07d）。" },
+  { id = "P7", title = "片付けは何度やっても同じ結果になる", decided = true, kind = "idempotent_reset" },
   { id = "P8", title = "enable のあと disable すると元に戻る", decided = true, kind = "recoverable" },
   { id = "P9", title = "辞書登録の入れ子から漏れずに戻れる", decided = true, kind = "prompt_nesting",
     why = "07c（#189）で決めた。深さ 2 以上のプロンプトから insert / normal へ直接は抜けず、取り消しか確定で深さ 1 に戻る。深さ 1 のプロンプトは、取り消すと凍結した外側の ▽ / ▼ に、確定すると insert に戻る。" },
@@ -8902,6 +8902,48 @@ M.decisions = {
     decision = "<C-o>v で残り続ける状態の意味にする。マウスのドラッグで ModeChanged の確定より前に"
       .. "一瞬残るもの（events.md の O18）は、途中の状態として扱う。base を rebase して events.md も合わせる。",
     reflected_in = { "V_PRE_POINT", "V_PRE_SELECT", "semantics/inventory/events.md" },
+  },
+  {
+    id = 11,
+    title = "V7 と V11 の視点",
+    decision = "V7 は読みがあるときの <C-j> で確定し、次の 1 打でひらがなに戻るとする。V11 は入れ子の機械と外の機械が互いに書き換えないとする。",
+    reflected_in = { "semantics/core/CORE.md", "semantics/core/rules.lua" },
+  },
+  {
+    id = 12,
+    title = "B-2b: 条件で割れる遷移",
+    decision = "分岐する組と規則 id を許可一覧にし、新しい組や遷移の追加を検査で失敗にする。",
+    reflected_in = { "model_check.lua: ALLOWED_SPLITS" },
+  },
+  {
+    id = 13,
+    title = "B-3a: 片付けの冪等性",
+    decision = "各状態に reset_state の自己遷移を置き、2 度の片付けで状態が変わらないことを検査する。",
+    reflected_in = { "reset_state の自己遷移", "P7" },
+  },
+  {
+    id = 14,
+    title = "B-1b / B-5b / B-6b",
+    decision = "pre-edit の個数は性質で検査し、位置と表示は表示テストで見る。マッピングは出口だけを検査し、見えているかは表示テストで見る。",
+    reflected_in = { "P2", "P3", "P15" },
+  },
+  {
+    id = 15,
+    title = "C-1a / C-2a / C-4a",
+    decision = "N_KEEP と R_MID は状態クラスにせず、I_POINT は相を持つ 1 クラスにする。送りの細かい状態は core が持つ。",
+    reflected_in = { "N_KEEP", "R_MID", "I_POINT_OKURI", "semantics/core/CORE.md" },
+  },
+  {
+    id = 16,
+    title = "B-4 / C-3",
+    decision = "モード表示は core の状態から導き、escape は結合の層に途中状態として持たせない。",
+    reflected_in = { "semantics/core/CORE.md", "I_ESCAPE" },
+  },
+  {
+    id = 17,
+    title = "D-1d / D-2d / D-3b / D-4d",
+    decision = "terminal は対象外、辞書登録の結合層の粒度は今のまま、補完の並びは対象外、利用者キーと Alt/Meta と VimLeavePre は対象外にする。深さ 3 以上と X の確認は core の意味論で扱う。",
+    reflected_in = { "semantics/core/CORE.md", "semantics/core/DESIGN.md" },
   },
 }
 
@@ -9143,5 +9185,31 @@ do
     end
   end
 end
+
+-- B-3a: reset_state を重ねても状態クラスは変わらない。
+M.events.reset_state = {
+  kind = "model",
+  keys = {},
+  modes = {},
+  refs = { "B-3a", "P7" },
+  notes = "P7 の冪等性を見るためのモデル上の操作。",
+}
+for name in pairs(M.states) do
+  M.transitions[#M.transitions + 1] = {
+    id = "t." .. name .. ".reset_state",
+    from = name,
+    event = "reset_state",
+    to = name,
+    effects = { "reset_state" },
+    refs = { "B-3a", "P7" },
+    observed = {},
+    guard = {},
+    status = "ok",
+  }
+end
+M.inventory.events[#M.inventory.events + 1] = {
+  id = "reset_state",
+  covered_by = { "reset_state" },
+}
 
 return M

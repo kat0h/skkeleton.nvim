@@ -4,7 +4,7 @@
 
 - 親の issue: #179
 - モデルの issue: #184
-- データ源: `semantics/model/model.lua`（状態 57 / イベント 93 / 遷移 1052）
+- データ源: `semantics/model/model.lua`（状態 57 / イベント 94 / 遷移 1109）
 - 生成: `nvim --headless -u NONE -i NONE -l semantics/doc.lua`
 - 図の生成: `nvim --headless -u NONE -i NONE -l semantics/figures/gen.lua`（Graphviz の `dot` を使う）
 - この文書は**今の**振る舞いだけを書く。望ましい振る舞いは決めない。
@@ -98,7 +98,7 @@ pre-edit の置き場所は Vim のモードで変わる。insert は extmark、
 
 ### 2.2 イベント
 
-モデルのイベントは 93 個。種類は key（キー）/ autocmd（Vim のイベント）/ api（skkeleton の関数）/ input（キー以外の入力）/ internal（キーの処理の途中で走る片付け）/ vim（Vim 本体の動き）。
+モデルのイベントは 94 個。種類は key（キー）/ autocmd（Vim のイベント）/ api（skkeleton の関数）/ input（キー以外の入力）/ internal（キーの処理の途中で走る片付け）/ vim（Vim 本体の動き）。
 
 | イベント | 種類 | キー | モード | 根拠 |
 | --- | --- | --- | --- | --- |
@@ -195,6 +195,7 @@ pre-edit の置き場所は Vim のモードで変わる。insert は extmark、
 | `ni_return_commit` | Vim の動き | `0`, `$`, `<Left>`, `<Right>` | i | #117, cleanup.lua:120-147,185,215-217 |
 | `ni_return_drop` | Vim の動き | `x`, `dd`, `J` | i | #199, cleanup.lua:120-147,185,215-217 |
 | `ni_return_keep` | Vim の動き | `l`, `h`, `w`, `A`, `o`, `gI` | i | #117, #156, cleanup.lua:185,215-217 |
+| `reset_state` | model |  |  | B-3a, P7 |
 
 ## 3. Vim のモードごとの図と遷移表
 
@@ -213,28 +214,30 @@ stateDiagram-v2
   state "R_OFF replace（無効）" as R_OFF
   state "C_DIRECT cmdline（pre-edit 無し）" as C_DIRECT
   state "T_DIRECT terminal（pre-edit 無し）" as T_DIRECT
-  N_OFF --> N_OFF: blink_hide / dot_repeat / esc / ほか 6（23 遷移）
+  N_OFF --> N_OFF: blink_hide / dot_repeat / esc / ほか 7（26 遷移）
   N_OFF --> I_OFF: insert_enter / insert_key（4 遷移）
   N_OFF --> I_DIRECT: enable / insert_enter / insert_key / ほか 1（6 遷移）
   N_OFF --> R_OFF: normal_R（2 遷移）
   N_OFF --> C_DIRECT: cmdline_open（2 遷移）
   N_OFF --> T_DIRECT: term_open（2 遷移）
   N_WAIT --> N_OFF: safestate
+  N_WAIT --> N_WAIT: reset_state
 ```
 
 ![normal の状態遷移](figures/mode_normal.svg)
 
-状態クラス 2 個、遷移の組 7 行（この節から出るもの）。
+状態クラス 2 個、遷移の組 8 行（この節から出るもの）。
 
 | 状態 | イベント | effects | 遷移先 | status | 根拠 |
 | --- | --- | --- | --- | --- | --- |
-| `N_OFF` | `blink_hide`, `dot_repeat`, `esc`, `macro_record_start`, `macro_record_stop`, `macro_replay`, `mouse_click`, `normal_motion`, ほか 1 | `feed_key`, `hide_completion`, `pass_key` | `N_OFF` | `ok 18 / unknown 5` | `t.N_KEEP.blink_hide` / #24, #28, #36, ほか 11 / 観測: `A` `<Plug>(skkeleton-enable)` `k` `a` `n` `<C-j>` `<Esc>` `j0` … |
+| `N_OFF` | `blink_hide`, `dot_repeat`, `esc`, `macro_record_start`, `macro_record_stop`, `macro_replay`, `mouse_click`, `normal_motion`, ほか 2 | `feed_key`, `hide_completion`, `pass_key`, `reset_state` | `N_OFF` | `ok 21 / unknown 5` | `t.N_KEEP.blink_hide` / #24, #28, #36, ほか 13 / 観測: `A` `<Plug>(skkeleton-enable)` `k` `a` `n` `<C-j>` `<Esc>` `j0` … |
 | `N_OFF` | `insert_enter`, `insert_key` | `pass_key` | `I_OFF` | `ok 4` | `t.N_KEEP.insert_enter` / #36, #152, #192, ほか 4 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<Esc>` `i` |
 | `N_OFF` | `enable`, `insert_enter`, `insert_key`, `toggle` | `hide_completion`, `install_mapping`, `reset_state`, `save_mapping` | `I_DIRECT` | `ok 5 / unknown 1` | `t.N_KEEP.enable` / #29, #38, #152, ほか 6 / 観測: `<Plug>(skkeleton-enable)` |
 | `N_OFF` | `normal_R` | `pass_key` | `R_OFF` | `ok 2` | `t.N_KEEP.normal_R` / #152, #215, 06 の観測 P.t.N_OFF.R, ほか 1 / 観測: `R` |
 | `N_OFF` | `cmdline_open` | — | `C_DIRECT` | `ok 2` | `t.N_KEEP.cmdline_open` / #152, #187, #215, ほか 2 / 観測: `:` |
 | `N_OFF` | `term_open` | `pass_key` | `T_DIRECT` | `ok 2` | `t.N_KEEP.term_open` / #152, #188, #215, ほか 2 |
 | `N_WAIT` | `safestate` | `clear_extmark`, `commit_reading`, `reset_state`, `restore_mapping` | `N_OFF` | `ok 1` | `t.N_WAIT.safestate` / cleanup.lua:225-248 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<C-c>` |
+| `N_WAIT` | `reset_state` | `reset_state` | `N_WAIT` | `ok 1` | `t.N_WAIT.reset_state` / B-3a, P7 |
 
 ### 3.2 visual / select
 
@@ -251,9 +254,11 @@ stateDiagram-v2
   state "I_POINT ▽" as I_POINT
   state "I_SELECT ▼" as I_SELECT
   state "C_POINT cmdline（▽ / ▼）" as C_POINT
+  V_IDLE --> V_IDLE: reset_state
   V_IDLE --> I_DIRECT: esc
   V_IDLE --> C_DIRECT: cmdline_open
   V_PRE --> N_OFF: bufleave / winleave（4 遷移）
+  V_PRE --> V_PRE: reset_state（2 遷移）
   V_PRE --> I_OFF: mouse_click_other（2 遷移）
   V_PRE --> I_POINT: esc（2 遷移）
   V_PRE --> I_SELECT: esc
@@ -262,14 +267,16 @@ stateDiagram-v2
 
 ![visual / select の状態遷移](figures/mode_visual.svg)
 
-状態クラス 2 個、遷移の組 8 行（この節から出るもの）。
+状態クラス 2 個、遷移の組 10 行（この節から出るもの）。
 
 | 状態 | イベント | effects | 遷移先 | status | 根拠 |
 | --- | --- | --- | --- | --- | --- |
 | `V_IDLE` | `bufleave`, `winleave` | `clear_extmark`, `reset_state`, `restore_mapping` | `N_OFF` | `unknown 2` | `t.V_IDLE.bufleave` / #169, cleanup.lua:269-281 |
+| `V_IDLE` | `reset_state` | `reset_state` | `V_IDLE` | `ok 1` | `t.V_IDLE.reset_state` / B-3a, P7 |
 | `V_IDLE` | `esc` | `keep` | `I_DIRECT` | `ok 1` | `t.V_IDLE.esc` / cleanup.lua:192-251 / 観測: `<Plug>(skkeleton-enable)` `<C-o>v` `<Esc>` |
 | `V_IDLE` | `cmdline_open` | — | `C_DIRECT` | `ok 1` | `t.V_IDLE.cmdline_open` / #28, map.lua:113-139 / 観測: `i` `<Plug>(skkeleton-enable)` `<C-o>v` `/` |
 | `V_PRE` | `bufleave`, `winleave` | `clear_extmark`, `drop`, `reset_state`, `restore_mapping` | `N_OFF` | `gap 4（既知: #169）` | `t.V_PRE_POINT.bufleave` / #169, #191, cleanup.lua:269-281 |
+| `V_PRE` | `reset_state` | `reset_state` | `V_PRE` | `ok 2` | `t.V_PRE_POINT.reset_state` / B-3a, P7 |
 | `V_PRE` | `mouse_click_other` | `clear_extmark`, `drop`, `reset_state`, `restore_mapping` | `I_OFF` | `gap 2（既知: #47, #169）` | `t.V_PRE_POINT.mouse_click_other` / #47, #169, #191, ほか 1 |
 | `V_PRE` | `esc` | `keep`, `render` | `I_POINT` | `ok 1 / unknown 1` | `t.V_PRE_POINT.esc` / #186, cleanup.lua:192-251 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<C-o>v` `<Esc>` |
 | `V_PRE` | `esc` | `keep`, `render` | `I_SELECT` | `unknown 1` | `t.V_PRE_SELECT.esc` / cleanup.lua:192-251 / 観測: `i` `<Plug>(skkeleton-enable)` `K` `a` `n` `<Space>` `<C-o>` `v` … |
@@ -296,14 +303,14 @@ stateDiagram-v2
   state "V_PRE visual（pre-edit 付き）" as V_PRE
   state "P_PROMPT 辞書登録" as P_PROMPT
   I_OFF --> N_OFF: ctrl_at / esc / mouse_select（4 遷移）
-  I_OFF --> I_OFF: blink_hide / buffer_menu_close / buffer_menu_open / ほか 7（11 遷移）
+  I_OFF --> I_OFF: blink_hide / buffer_menu_close / buffer_menu_open / ほか 8（13 遷移）
   I_OFF --> I_DIRECT: enable / toggle（3 遷移）
   I_OFF --> R_OFF: insert_key
   I_DIRECT --> N_OFF: ctrl_at / esc / mouse_select / ほか 1（4 遷移）
   I_DIRECT --> N_WAIT: ctrl_c
   I_DIRECT --> V_IDLE: ctrl_o_v
   I_DIRECT --> I_OFF: bufleave / disable / key_l / ほか 3（6 遷移）
-  I_DIRECT --> I_DIRECT: blink_refresh / bs / cg / ほか 25（30 遷移）
+  I_DIRECT --> I_DIRECT: blink_refresh / bs / cg / ほか 26（31 遷移）
   I_DIRECT --> I_ROMAJI: char / char_shift / key_X / ほか 2（5 遷移）
   I_DIRECT --> I_POINT: char_shift
   I_DIRECT --> I_ESCAPE: esc
@@ -315,7 +322,7 @@ stateDiagram-v2
   I_ROMAJI --> V_PRE: ctrl_o_v
   I_ROMAJI --> I_OFF: bufleave / disable / key_l / ほか 3（6 遷移）
   I_ROMAJI --> I_DIRECT: bs / cg / cr / ほか 14（18 遷移）
-  I_ROMAJI --> I_ROMAJI: blink_refresh / bs / char / ほか 9（12 遷移）
+  I_ROMAJI --> I_ROMAJI: blink_refresh / bs / char / ほか 10（13 遷移）
   I_ROMAJI --> I_POINT: char / char_shift（2 遷移）
   I_ROMAJI --> I_ESCAPE: esc
   I_ROMAJI --> NI: ctrl_o
@@ -327,7 +334,7 @@ stateDiagram-v2
   I_POINT --> I_OFF: bufleave / disable / key_l / ほか 3（12 遷移）
   I_POINT --> I_DIRECT: cg / cr / ctrl_a / ほか 16（40 遷移）
   I_POINT --> I_ROMAJI: bs
-  I_POINT --> I_POINT: bs / char / char_shift / ほか 11（29 遷移）
+  I_POINT --> I_POINT: bs / char / char_shift / ほか 12（31 遷移）
   I_POINT --> I_SELECT: char / key_gt / space（4 遷移）
   I_POINT --> I_ESCAPE: esc（2 遷移）
   I_POINT --> NI: ctrl_o（2 遷移）
@@ -341,30 +348,31 @@ stateDiagram-v2
   I_SELECT --> I_DIRECT: bs / cg / char / ほか 15（19 遷移）
   I_SELECT --> I_ROMAJI: char / char_shift（2 遷移）
   I_SELECT --> I_POINT: key_x（2 遷移）
-  I_SELECT --> I_SELECT: blink_refresh / completion_accept / completion_cancel / ほか 10（13 遷移）
+  I_SELECT --> I_SELECT: blink_refresh / completion_accept / completion_cancel / ほか 11（14 遷移）
   I_SELECT --> I_ESCAPE: esc
   I_SELECT --> NI: ctrl_o
   I_SELECT --> R_OFF: ctrl_o_R / insert_key（2 遷移）
   I_SELECT --> IC: completion_key / completion_open（2 遷移）
   I_SELECT --> P_PROMPT: space
   I_ESCAPE --> N_OFF: cleanup_escape
+  I_ESCAPE --> I_ESCAPE: reset_state
 ```
 
 ![insert の状態遷移](figures/mode_insert.svg)
 
-状態クラス 6 個、遷移の組 53 行（この節から出るもの）。
+状態クラス 6 個、遷移の組 54 行（この節から出るもの）。
 
 | 状態 | イベント | effects | 遷移先 | status | 根拠 |
 | --- | --- | --- | --- | --- | --- |
 | `I_OFF` | `ctrl_at`, `esc`, `mouse_select` | `clear_extmark`, `feed_key`, `hide_completion`, `pass_key`, `reset_state`, `restore_mapping` | `N_OFF` | `ok 2 / unknown 2` | `t.I_OFF.ctrl_at` / #24, #56, #191, ほか 3 / 観測: `i` `<C-@>` |
-| `I_OFF` | `blink_hide`, `buffer_menu_close`, `buffer_menu_open`, `bufleave`, `guard_special`, `mouse_click`, `mouse_click_other`, `paste`, ほか 2 | `feed_key`, `hide_completion`, `pass_key`, `show_completion` | `I_OFF` | `ok 9 / unknown 2` | `t.I_OFF.blink_hide` / #24, #191, cleanup.lua:269-281, ほか 5 / 観測: `i` `<Plug>(skkeleton-enable)` `<Esc>` `i` `<S-Tab>` |
+| `I_OFF` | `blink_hide`, `buffer_menu_close`, `buffer_menu_open`, `bufleave`, `guard_special`, `mouse_click`, `mouse_click_other`, `paste`, ほか 3 | `feed_key`, `hide_completion`, `pass_key`, `reset_state`, `show_completion` | `I_OFF` | `ok 11 / unknown 2` | `t.I_OFF.blink_hide` / #24, #191, B-3a, ほか 7 / 観測: `i` `<Plug>(skkeleton-enable)` `<Esc>` `i` `<S-Tab>` |
 | `I_OFF` | `enable`, `toggle` | `hide_completion`, `install_mapping`, `reset_state`, `save_mapping` | `I_DIRECT` | `ok 3` | `t.I_OFF.enable` / #24, completion/init.lua:135-142, main.lua:101-125, ほか 1 / 観測: `<Plug>(skkeleton-enable)` `<Insert>` `<Insert>` `@buffer_menu_open` `<Plug>(skkeleton-enable)` |
 | `I_OFF` | `insert_key` | `pass_key` | `R_OFF` | `unknown 1` | `t.I_OFF.insert_key` / Vim 本体 / 観測: `i` `<Plug>(skkeleton-enable)` `<Esc>` `i` `<Insert>` |
 | `I_DIRECT` | `ctrl_at`, `esc`, `mouse_select`, `stopinsert` | `clear_extmark`, `feed_key`, `reset_state`, `restore_mapping` | `N_OFF` | `ok 4` | `t.I_DIRECT.ctrl_at` / #47, #56, #70, ほか 9 / 観測: `<Plug>(skkeleton-enable)` `<C-@>` |
 | `I_DIRECT` | `ctrl_c` | — | `N_WAIT` | `ok 1` | `t.I_DIRECT.ctrl_c` / #70, #142, cleanup.lua:187,225-248 / 観測: `i` `<Plug>(skkeleton-enable)` `<C-c>` |
 | `I_DIRECT` | `ctrl_o_v` | `keep` | `V_IDLE` | `ok 1` | `t.I_DIRECT.ctrl_o_v` / cleanup.lua:179-190 / 観測: `<Plug>(skkeleton-enable)` `<C-o>v` |
 | `I_DIRECT` | `bufleave`, `disable`, `key_l`, `mouse_click_other`, `toggle`, `winleave` | `clear_extmark`, `reset_state`, `restore_mapping` | `I_OFF` | `ok 3 / unknown 3` | `t.I_DIRECT.bufleave` / #67, #169, #191, ほか 7 / 観測: `<Plug>(skkeleton-enable)` `l` |
-| `I_DIRECT` | `blink_refresh`, `bs`, `cg`, `char`, `completion_accept`, `completion_cancel`, `cr`, `ctrl_a`, ほか 20 | `clean_cmdline`, `clear_extmark`, `drop`, `feed_key`, `hide_completion`, `install_mapping`, `keep`, `pass_key`, ほか 3 | `I_DIRECT` | `ok 26 / unknown 4` | `t.I_DIRECT.blink_refresh` / #8, #12, #20, ほか 34 / 観測: `<Plug>(skkeleton-enable)` `a` |
+| `I_DIRECT` | `blink_refresh`, `bs`, `cg`, `char`, `completion_accept`, `completion_cancel`, `cr`, `ctrl_a`, ほか 21 | `clean_cmdline`, `clear_extmark`, `drop`, `feed_key`, `hide_completion`, `install_mapping`, `keep`, `pass_key`, ほか 3 | `I_DIRECT` | `ok 27 / unknown 4` | `t.I_DIRECT.blink_refresh` / #8, #12, #20, ほか 36 / 観測: `<Plug>(skkeleton-enable)` `a` |
 | `I_DIRECT` | `char`, `char_shift`, `key_X`, `key_semicolon`, `key_slash` | `feed_key`, `render` | `I_ROMAJI` | `ok 3 / unknown 2` | `t.I_DIRECT.char.romaji` / 06 の観測 P.t.I_DIRECT.key_semicolon, 06 の観測 P.t.I_DIRECT.key_slash, function/input.lua:147-, ほか 3 / 観測: `<Plug>(skkeleton-enable)` `K` |
 | `I_DIRECT` | `char_shift` | `render` | `I_POINT` | `ok 1` | `t.I_DIRECT.char_shift.point` / function/input.lua:85-120 / 観測: `i` `<Plug>(skkeleton-enable)` `A` |
 | `I_DIRECT` | `esc` | `clear_extmark`, `reset_state`, `restore_mapping` | `I_ESCAPE` | `ok 1` | `t.I_DIRECT.esc` / cleanup.lua:218-221, function/disable.lua:21-27 / 観測: `<Plug>(skkeleton-enable)` `<Esc>` |
@@ -376,7 +384,7 @@ stateDiagram-v2
 | `I_ROMAJI` | `ctrl_o_v` | `keep`, `render` | `V_PRE` | `ok 1` | `t.I_ROMAJI.ctrl_o_v` / 06 の観測 P.t.I_ROMAJI.ctrl_o_v, cleanup.lua:179-190 / 観測: `i` `<Plug>(skkeleton-enable)` `K` `<C-o>v` |
 | `I_ROMAJI` | `bufleave`, `disable`, `key_l`, `mouse_click_other`, `toggle`, `winleave` | `clear_extmark`, `commit_reading`, `drop`, `reset_state`, `restore_mapping` | `I_OFF` | `ok 3 / gap 3（既知: #67, #169, 06 の観測）` | `t.I_ROMAJI.bufleave` / #67, #169, #191, ほか 8 / 観測: `i` `<Plug>(skkeleton-enable)` `K` `<Plug>(skkeleton-disable)` |
 | `I_ROMAJI` | `bs`, `cg`, `cr`, `ctrl_a`, `ctrl_k`, `ctrl_r`, `ctrl_t`, `ctrl_u`, ほか 9 | `cancel`, `clear_extmark`, `commit_reading`, `drop`, `feed_key`, `install_mapping`, `render`, `reset_state`, ほか 1 | `I_DIRECT` | `ok 7 / gap 10 / unknown 1（既知: #8, #12, #20, ほか 2）` | `t.I_ROMAJI.bs.empty` / #8, #12, #20, ほか 21 / 観測: `<Plug>(skkeleton-enable)` `K` `<C-.>` |
-| `I_ROMAJI` | `blink_refresh`, `bs`, `char`, `completion_accept`, `completion_cancel`, `ctrl_a`, `ctrl_o_colon`, `ctrl_u`, ほか 4 | `clean_cmdline`, `feed_key`, `hide_completion`, `keep`, `pass_key`, `render` | `I_ROMAJI` | `ok 9 / unknown 3` | `t.I_ROMAJI.blink_refresh` / #24, #86, #190, ほか 11 / 観測: `i` `<Plug>(skkeleton-enable)` `K` `<BS>` |
+| `I_ROMAJI` | `blink_refresh`, `bs`, `char`, `completion_accept`, `completion_cancel`, `ctrl_a`, `ctrl_o_colon`, `ctrl_u`, ほか 5 | `clean_cmdline`, `feed_key`, `hide_completion`, `keep`, `pass_key`, `render`, `reset_state` | `I_ROMAJI` | `ok 10 / unknown 3` | `t.I_ROMAJI.blink_refresh` / #24, #86, #190, ほか 13 / 観測: `i` `<Plug>(skkeleton-enable)` `K` `<BS>` |
 | `I_ROMAJI` | `char`, `char_shift` | `feed_key`, `keep`, `render` | `I_POINT` | `ok 1 / unknown 1` | `t.I_ROMAJI.char.commit` / 06 の観測 P.t.I_ROMAJI.char.commit, function/input.lua:85-120 / 観測: `<Plug>(skkeleton-enable)` `K` `a` |
 | `I_ROMAJI` | `esc` | `clear_extmark`, `commit_reading`, `reset_state`, `restore_mapping` | `I_ESCAPE` | `ok 1` | `t.I_ROMAJI.esc` / function/disable.lua:21-27 / 観測: `i` `<Plug>(skkeleton-enable)` `K` `<Esc>` |
 | `I_ROMAJI` | `ctrl_o` | `keep` | `NI` | `ok 1` | `t.I_ROMAJI.ctrl_o` / #117, 06 の観測 P.t.I_ROMAJI.ctrl_o / 観測: `i` `<Plug>(skkeleton-enable)` `K` `<C-o>` |
@@ -388,7 +396,7 @@ stateDiagram-v2
 | `I_POINT` | `bufleave`, `disable`, `key_l`, `mouse_click_other`, `toggle`, `winleave` | `clear_extmark`, `commit_reading`, `drop`, `reset_state`, `restore_mapping` | `I_OFF` | `ok 4 / gap 6 / unknown 2（既知: #169）` | `t.I_POINT.bufleave` / #67, #169, #191, ほか 7 / 観測: `i` `<Plug>(skkeleton-enable)` `K` `a` `n` `<Plug>(skkeleton-disable)` |
 | `I_POINT` | `cg`, `cr`, `ctrl_a`, `ctrl_k`, `ctrl_r`, `ctrl_t`, `ctrl_u`, `ctrl_v`, ほか 11 | `cancel`, `clear_extmark`, `commit_reading`, `drop`, `feed_key`, `install_mapping`, `render`, `reset_state`, ほか 1 | `I_DIRECT` | `ok 18 / gap 20 / unknown 2（既知: #8, #12, #20, ほか 2）` | `t.I_POINT.cg` / #8, #12, #20, ほか 28 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<C-g>` |
 | `I_POINT` | `bs` | `keep`, `render` | `I_ROMAJI` | `ok 1` | `t.I_POINT.bs.empty` / 06 の観測 P.t.I_POINT.bs.empty, function/input.lua:178-204 / 観測: `i` `<Plug>(skkeleton-enable)` `K` `a` `<BS>` |
-| `I_POINT` | `bs`, `char`, `char_shift`, `completion_accept`, `completion_cancel`, `ctrl_a`, `ctrl_o_colon`, `ctrl_u`, ほか 6 | `clean_cmdline`, `keep`, `pass_key`, `render` | `I_POINT` | `ok 23 / unknown 6` | `t.I_POINT.bs` / #86, #186, #190, ほか 13 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<BS>` |
+| `I_POINT` | `bs`, `char`, `char_shift`, `completion_accept`, `completion_cancel`, `ctrl_a`, `ctrl_o_colon`, `ctrl_u`, ほか 7 | `clean_cmdline`, `keep`, `pass_key`, `render`, `reset_state` | `I_POINT` | `ok 25 / unknown 6` | `t.I_POINT.bs` / #86, #186, #190, ほか 15 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<BS>` |
 | `I_POINT` | `char`, `key_gt`, `space` | `keep`, `render` | `I_SELECT` | `ok 2 / unknown 2` | `t.I_POINT.key_gt` / #186, function/henkan.lua:21-56, function/input.lua:206-223, ほか 2 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<Space>` |
 | `I_POINT` | `esc` | `clear_extmark`, `commit_reading`, `reset_state`, `restore_mapping` | `I_ESCAPE` | `ok 2` | `t.I_POINT.esc` / function/disable.lua:21-27 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<Esc>` |
 | `I_POINT` | `ctrl_o` | `keep` | `NI` | `ok 2` | `t.I_POINT.ctrl_o` / #117 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<C-o>` `l` |
@@ -402,13 +410,14 @@ stateDiagram-v2
 | `I_SELECT` | `bs`, `cg`, `char`, `cr`, `ctrl_a`, `ctrl_k`, `ctrl_r`, `ctrl_t`, ほか 10 | `cancel`, `clear_extmark`, `commit_candidate`, `drop`, `feed_key`, `install_mapping`, `render`, `reset_state`, ほか 1 | `I_DIRECT` | `ok 7 / gap 2 / unknown 10（既知: #8, #12, #210）` | `t.I_SELECT.bs` / #8, #12, #20, ほか 21 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<Space>` `<Left>` |
 | `I_SELECT` | `char`, `char_shift` | `commit_candidate`, `feed_key`, `render`, `reset_state` | `I_ROMAJI` | `ok 1 / unknown 1` | `t.I_SELECT.char.commit_romaji` / 06 の観測 P.t.I_SELECT.char_shift, function/henkan.lua:137-162 / 観測: `i` `<Plug>(skkeleton-enable)` `K` `a` `n` `<Space>` `z` |
 | `I_SELECT` | `key_x` | `keep`, `render` | `I_POINT` | `ok 1 / unknown 1` | `t.I_SELECT.x.back` / #186, function/henkan.lua:116-133, keymap.lua:51 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<Space>` `x` |
-| `I_SELECT` | `blink_refresh`, `completion_accept`, `completion_cancel`, `ctrl_o_colon`, `ctrl_u`, `ctrl_w`, `key_X`, `key_gt`, ほか 5 | `clean_cmdline`, `hide_completion`, `keep`, `pass_key`, `render` | `I_SELECT` | `ok 9 / unknown 4` | `t.I_SELECT.blink_refresh` / #24, #86, #129, ほか 15 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<Space>` `<C-o>:<CR>` |
+| `I_SELECT` | `blink_refresh`, `completion_accept`, `completion_cancel`, `ctrl_o_colon`, `ctrl_u`, `ctrl_w`, `key_X`, `key_gt`, ほか 6 | `clean_cmdline`, `hide_completion`, `keep`, `pass_key`, `render`, `reset_state` | `I_SELECT` | `ok 10 / unknown 4` | `t.I_SELECT.blink_refresh` / #24, #86, #129, ほか 17 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<Space>` `<C-o>:<CR>` |
 | `I_SELECT` | `esc` | `clear_extmark`, `commit_candidate`, `reset_state`, `restore_mapping` | `I_ESCAPE` | `ok 1` | `t.I_SELECT.esc` / function/disable.lua:21-27 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<Space>` `<Esc>` |
 | `I_SELECT` | `ctrl_o` | `keep` | `NI` | `ok 1` | `t.I_SELECT.ctrl_o` / #117 / 観測: `i` `<Plug>(skkeleton-enable)` `K` `a` `n` `<Space>` `<C-o>` |
 | `I_SELECT` | `ctrl_o_R`, `insert_key` | `clear_extmark`, `commit_candidate`, `reset_state`, `restore_mapping` | `R_OFF` | `unknown 2` | `t.I_SELECT.ctrl_o_R` / #29, #156, cleanup.lua:179-190, ほか 1 / 観測: `i` `<Plug>(skkeleton-enable)` `K` `a` `n` `<Space>` `<C-o>R` |
 | `I_SELECT` | `completion_key`, `completion_open` | `clear_extmark`, `drop`, `keep`, `reset_state` | `IC` | `gap 1 / unknown 1（既知: #18, #19, #190）` | `t.I_SELECT.completion_key` / #18, #190, keys.md §5 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<Space>` `<C-n>` |
 | `I_SELECT` | `space` | `install_mapping`, `keep`, `render`, `save_mapping` | `P_PROMPT` | `ok 1` | `t.I_SELECT.space.register` / #189, function/henkan.lua:90-113, host.lua:175-213 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<Space>` `<Space>` `<Space>` `<Space>` … |
 | `I_ESCAPE` | `cleanup_escape` | `reset_state` | `N_OFF` | `ok 1` | `t.I_ESCAPE.cleanup` / cleanup.lua:218-221 |
+| `I_ESCAPE` | `reset_state` | `reset_state` | `I_ESCAPE` | `ok 1` | `t.I_ESCAPE.reset_state` / B-3a, P7 |
 
 ### 3.4 insert-normal（`ni`）
 
@@ -432,12 +441,13 @@ stateDiagram-v2
   NI --> I_DIRECT: ni_return_commit / ni_return_drop / ni_return_keep（7 遷移）
   NI --> I_POINT: ni_return_keep（2 遷移）
   NI --> I_SELECT: ni_return_keep
+  NI --> NI: reset_state（3 遷移）
   NI --> R_OFF: ni_R（3 遷移）
 ```
 
 ![insert-normal（`ni`） の状態遷移](figures/mode_insert_normal.svg)
 
-状態クラス 1 個、遷移の組 8 行（この節から出るもの）。
+状態クラス 1 個、遷移の組 9 行（この節から出るもの）。
 
 | 状態 | イベント | effects | 遷移先 | status | 根拠 |
 | --- | --- | --- | --- | --- | --- |
@@ -448,6 +458,7 @@ stateDiagram-v2
 | `NI` | `ni_return_commit`, `ni_return_drop`, `ni_return_keep` | `clear_extmark`, `commit_candidate`, `commit_reading`, `drop`, `keep`, `render`, `reset_state` | `I_DIRECT` | `ok 3 / gap 2 / unknown 2（既知: #199）` | `t.NI_DIRECT.return_commit` / #117, #199, cleanup.lua:120-147,215-217 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<C-o>` `x` |
 | `NI` | `ni_return_keep` | `keep` | `I_POINT` | `ok 1 / unknown 1` | `t.NI_POINT.return_keep` / #117, #186 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<C-o>` `l` |
 | `NI` | `ni_return_keep` | `keep` | `I_SELECT` | `ok 1` | `t.NI_SELECT.return_keep` / #117 / 観測: `i` `<Plug>(skkeleton-enable)` `K` `a` `n` `<Space>` `<C-o>` `l` |
+| `NI` | `reset_state` | `reset_state` | `NI` | `ok 3` | `t.NI_DIRECT.reset_state` / B-3a, P7 |
 | `NI` | `ni_R` | `clear_extmark`, `commit_candidate`, `commit_reading`, `reset_state`, `restore_mapping` | `R_OFF` | `unknown 3` | `t.NI_DIRECT.replace` / cleanup.lua:179-190 / 観測: `i` `<Plug>(skkeleton-enable)` `<C-o>` `R` |
 
 ### 3.5 replace（`R`）
@@ -461,7 +472,7 @@ stateDiagram-v2
   state "I_OFF insert（無効）" as I_OFF
   R_OFF --> N_OFF: esc
   R_OFF --> I_OFF: insert_key
-  R_OFF --> R_OFF: modechanged_i_to_R
+  R_OFF --> R_OFF: modechanged_i_to_R / reset_state（3 遷移）
 ```
 
 ![replace（`R`） の状態遷移](figures/mode_replace.svg)
@@ -472,7 +483,7 @@ stateDiagram-v2
 | --- | --- | --- | --- | --- | --- |
 | `R_OFF` | `esc` | `pass_key` | `N_OFF` | `ok 1` | `t.R_OFF.esc` / Vim 本体 / 観測: `i` `<Plug>(skkeleton-enable)` `<Insert>` `<Esc>` |
 | `R_OFF` | `insert_key` | `pass_key` | `I_OFF` | `ok 1` | `t.R_OFF.insert_key` / #38 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<Insert>` `<Insert>` |
-| `R_OFF` | `modechanged_i_to_R` | `reset_state`, `restore_mapping` | `R_OFF` | `ok 1` | `t.R_MID.modechanged` / #156, cleanup.lua:207-214 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<Insert>` |
+| `R_OFF` | `modechanged_i_to_R`, `reset_state` | `reset_state`, `restore_mapping` | `R_OFF` | `ok 3` | `t.R_MID.modechanged` / #156, B-3a, P7, ほか 1 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<Insert>` |
 
 ### 3.6 cmdline（`c` / `cr`）
 
@@ -488,18 +499,18 @@ stateDiagram-v2
   state "V_PRE visual（pre-edit 付き）" as V_PRE
   C_DIRECT --> N_OFF: bs / cg / cmdline_window / ほか 4（16 遷移）
   C_DIRECT --> V_IDLE: esc
-  C_DIRECT --> C_DIRECT: bs / cg / char / ほか 24（57 遷移）
+  C_DIRECT --> C_DIRECT: bs / cg / char / ほか 25（60 遷移）
   C_DIRECT --> C_POINT: char / char_shift / key_X / ほか 2（6 遷移）
   C_DIRECT --> C_REPLACE: cmdline_insert（2 遷移）
   C_POINT --> N_OFF: cmdline_window / cr / ctrl_c / ほか 1（15 遷移）
   C_POINT --> V_PRE: esc
   C_POINT --> C_DIRECT: bs / cg / char / ほか 15（48 遷移）
-  C_POINT --> C_POINT: bs / cg / char / ほか 14（43 遷移）
+  C_POINT --> C_POINT: bs / cg / char / ほか 15（47 遷移）
   C_POINT --> C_REPLACE: cmdline_insert（3 遷移）
   C_REPLACE --> N_OFF: cg / cmdline_window / cr / ほか 3（23 遷移）
   C_REPLACE --> C_DIRECT: cmdline_insert（2 遷移）
   C_REPLACE --> C_POINT: cmdline_insert（3 遷移）
-  C_REPLACE --> C_REPLACE: bs / cg / char / ほか 19（87 遷移）
+  C_REPLACE --> C_REPLACE: bs / cg / char / ほか 20（92 遷移）
 ```
 
 ![cmdline（`c` / `cr`） の状態遷移](figures/mode_cmdline.svg)
@@ -510,19 +521,19 @@ stateDiagram-v2
 | --- | --- | --- | --- | --- | --- |
 | `C_DIRECT` | `bs`, `cg`, `cmdline_window`, `cr`, `ctrl_c`, `esc`, `nl` | `cancel`, `clean_cmdline`, `clear_extmark`, `feed_key`, `pass_key`, `reset_state`, `restore_mapping` | `N_OFF` | `ok 6 / unknown 10` | `t.C_DIRECT.bs.empty` / cleanup.lua:254-266, events.md, function/common.lua:18-45, ほか 3 / 観測: `:` `<Plug>(skkeleton-enable)` `<C-g>` |
 | `C_DIRECT` | `esc` | `clean_cmdline`, `keep` | `V_IDLE` | `ok 1` | `t.C_IDLE.esc` / #28, map.lua:113-139 / 観測: `i` `<Plug>(skkeleton-enable)` `<C-o>v` `/` `<Esc>` |
-| `C_DIRECT` | `bs`, `cg`, `char`, `char_shift`, `cmdline_ctrl_e`, `cmdline_ctrl_n`, `cmdline_ctrl_p`, `cmdline_ctrl_y`, ほか 19 | `cancel`, `clean_cmdline`, `clear_extmark`, `feed_key`, `install_mapping`, `pass_key`, `render`, `reset_state`, ほか 2 | `C_DIRECT` | `ok 12 / unknown 45` | `t.C_DIRECT.bs` / #46, cleanup.lua:269-281, function/disable.lua, ほか 13 / 観測: `:` `<Plug>(skkeleton-enable)` `a` |
+| `C_DIRECT` | `bs`, `cg`, `char`, `char_shift`, `cmdline_ctrl_e`, `cmdline_ctrl_n`, `cmdline_ctrl_p`, `cmdline_ctrl_y`, ほか 20 | `cancel`, `clean_cmdline`, `clear_extmark`, `feed_key`, `install_mapping`, `pass_key`, `render`, `reset_state`, ほか 2 | `C_DIRECT` | `ok 15 / unknown 45` | `t.C_DIRECT.bs` / #46, B-3a, P7, ほか 15 / 観測: `:` `<Plug>(skkeleton-enable)` `a` |
 | `C_DIRECT` | `char`, `char_shift`, `key_X`, `key_semicolon`, `key_slash` | `feed_key`, `render` | `C_POINT` | `ok 5 / unknown 1` | `t.C_DIRECT.char.romaji` / function/input.lua:85-120, keymap.lua:39, keymap.lua:40 / 観測: `:` `<Plug>(skkeleton-enable)` `X` |
 | `C_DIRECT` | `cmdline_insert` | `pass_key` | `C_REPLACE` | `ok 2` | `t.C_DIRECT.cmdline_insert` / keys.md §1 / 観測: `:` `<Plug>(skkeleton-enable)` `<Insert>` |
 | `C_POINT` | `cmdline_window`, `cr`, `ctrl_c`, `esc` | `cancel`, `clean_cmdline`, `clear_extmark`, `commit_candidate`, `commit_reading`, `drop`, `reset_state`, `restore_mapping` | `N_OFF` | `ok 6 / gap 4 / unknown 5（既知: #205）` | `t.C_IDLE_PRE.cmdline_window` / #205, cleanup.lua:254-266, events.md / 観測: `:` `<Plug>(skkeleton-enable)` `K` `a` `n` `<CR>` |
 | `C_POINT` | `esc` | `clean_cmdline`, `keep` | `V_PRE` | `ok 1` | `t.C_IDLE_PRE.esc` / #28, render.lua / 観測: `i` `<Plug>(skkeleton-enable)` `K` `a` `n` `<C-o>v` `/` `<Esc>` |
 | `C_POINT` | `bs`, `cg`, `char`, `char_shift`, `cmdline_ctrl_p`, `cmdline_ctrl_y`, `ctrl_at`, `ctrl_k`, ほか 10 | `cancel`, `clean_cmdline`, `clear_extmark`, `commit_candidate`, `commit_reading`, `drop`, `feed_key`, `reset_state`, ほか 1 | `C_DIRECT` | `ok 16 / gap 26 / unknown 6（既知: #8, #12, #206）` | `t.C_POINT.bs.empty` / #8, #12, #46, ほか 15 / 観測: `:` `<Plug>(skkeleton-enable)` `K` `a` `n` `<Space>` `<BS>` |
-| `C_POINT` | `bs`, `cg`, `char`, `char_shift`, `cmdline_ctrl_e`, `cmdline_ctrl_n`, `cmdline_ctrl_p`, `ctrl_a`, ほか 9 | `commit_candidate`, `feed_key`, `keep`, `pass_key`, `render`, `reset_state` | `C_POINT` | `ok 19 / unknown 24` | `t.C_IDLE_PRE.cg` / function/henkan.lua:116-133, function/henkan.lua:137-162, function/henkan.lua:21-56, ほか 12 / 観測: `:` `<Plug>(skkeleton-enable)` `K` `a` `n` `<BS>` |
+| `C_POINT` | `bs`, `cg`, `char`, `char_shift`, `cmdline_ctrl_e`, `cmdline_ctrl_n`, `cmdline_ctrl_p`, `ctrl_a`, ほか 10 | `commit_candidate`, `feed_key`, `keep`, `pass_key`, `render`, `reset_state` | `C_POINT` | `ok 23 / unknown 24` | `t.C_IDLE_PRE.cg` / B-3a, P7, function/henkan.lua:116-133, ほか 14 / 観測: `:` `<Plug>(skkeleton-enable)` `K` `a` `n` `<BS>` |
 | `C_POINT` | `cmdline_insert` | `keep` | `C_REPLACE` | `ok 2 / unknown 1` | `t.C_POINT.cmdline_insert` / keys.md §1 / 観測: `:` `<Plug>(skkeleton-enable)` `K` `a` `n` `<Insert>` |
 | `C_POINT` | `space` | `keep`, `render` | `P_PROMPT` | `unknown 2` | `t.C_POINT.space.register` / #189, function/henkan.lua:21-56, function/henkan.lua:90-113, ほか 1 |
 | `C_REPLACE` | `cg`, `cmdline_window`, `cr`, `ctrl_c`, `esc`, `nl` | `cancel`, `clean_cmdline`, `clear_extmark`, `commit_candidate`, `commit_reading`, `drop`, `pass_key`, `reset_state`, ほか 1 | `N_OFF` | `ok 12 / gap 3 / unknown 8（既知: #205）` | `t.C_REPLACE_DIRECT.cg` / #205, cleanup.lua:254-266, events.md, ほか 2 / 観測: `:` `<Plug>(skkeleton-enable)` `K` `a` `n` `<Insert>` `<CR>` |
 | `C_REPLACE` | `cmdline_insert` | `keep`, `pass_key` | `C_DIRECT` | `ok 1 / unknown 1` | `t.C_REPLACE_DIRECT.cmdline_insert` / keys.md §1 / 観測: `:` `<Plug>(skkeleton-enable)` `<Plug>(skkeleton-disable)` `<Insert>` `<Insert>` |
 | `C_REPLACE` | `cmdline_insert` | `keep` | `C_POINT` | `ok 1 / unknown 2` | `t.C_REPLACE_POINT.cmdline_insert` / keys.md §1 / 観測: `:` `<Plug>(skkeleton-enable)` `K` `a` `n` `<Insert>` `<Insert>` |
-| `C_REPLACE` | `bs`, `cg`, `char`, `char_shift`, `cmdline_ctrl_e`, `cmdline_ctrl_n`, `cmdline_ctrl_y`, `ctrl_a`, ほか 14 | `cancel`, `clean_cmdline`, `clear_extmark`, `commit_candidate`, `commit_reading`, `drop`, `feed_key`, `keep`, ほか 4 | `C_REPLACE` | `ok 13 / gap 24 / unknown 50（既知: #8, #12）` | `t.C_REPLACE_DIRECT.bs` / #8, #12, #46, ほか 15 / 観測: `:` `<Plug>(skkeleton-enable)` `K` `a` `n` `<Insert>` `<BS>` |
+| `C_REPLACE` | `bs`, `cg`, `char`, `char_shift`, `cmdline_ctrl_e`, `cmdline_ctrl_n`, `cmdline_ctrl_y`, `ctrl_a`, ほか 15 | `cancel`, `clean_cmdline`, `clear_extmark`, `commit_candidate`, `commit_reading`, `drop`, `feed_key`, `keep`, ほか 4 | `C_REPLACE` | `ok 18 / gap 24 / unknown 50（既知: #8, #12）` | `t.C_REPLACE_DIRECT.bs` / #8, #12, #46, ほか 17 / 観測: `:` `<Plug>(skkeleton-enable)` `K` `a` `n` `<Insert>` `<BS>` |
 
 ### 3.7 terminal（`t` / `nt`）
 
@@ -533,15 +544,15 @@ stateDiagram-v2
   state "T_DIRECT terminal（pre-edit 無し）" as T_DIRECT
   state "T_POINT terminal（▽ / ▼）" as T_POINT
   state "T_NORMAL terminal-normal" as T_NORMAL
-  T_DIRECT --> T_DIRECT: bs / cg / char / ほか 32（95 遷移）
+  T_DIRECT --> T_DIRECT: bs / cg / char / ほか 33（98 遷移）
   T_DIRECT --> T_POINT: char / char_shift / key_X / ほか 1（5 遷移）
   T_DIRECT --> T_NORMAL: t_normal（3 遷移）
   T_POINT --> T_DIRECT: bs / cg / char / ほか 21（68 遷移）
-  T_POINT --> T_POINT: bs / char / char_shift / ほか 10（36 遷移）
+  T_POINT --> T_POINT: bs / char / char_shift / ほか 11（39 遷移）
   T_POINT --> T_NORMAL: t_normal（3 遷移）
   T_NORMAL --> T_DIRECT: nt_insert（2 遷移）
   T_NORMAL --> T_POINT: nt_insert（3 遷移）
-  T_NORMAL --> T_NORMAL: ctrl_c / esc / nt_edit / ほか 1（20 遷移）
+  T_NORMAL --> T_NORMAL: ctrl_c / esc / nt_edit / ほか 2（25 遷移）
 ```
 
 ![terminal（`t` / `nt`） の状態遷移](figures/mode_terminal.svg)
@@ -550,15 +561,15 @@ stateDiagram-v2
 
 | 状態 | イベント | effects | 遷移先 | status | 根拠 |
 | --- | --- | --- | --- | --- | --- |
-| `T_DIRECT` | `bs`, `cg`, `char`, `char_shift`, `completion_accept`, `completion_open`, `cr`, `ctrl_a`, ほか 27 | `feed_key`, `install_mapping`, `pass_key`, `render`, `reset_state`, `restore_mapping`, `save_mapping` | `T_DIRECT` | `ok 14 / unknown 81` | `t.T_DIRECT.bs` / #67, function/common.lua:18-45, function/common.lua:59-68, ほか 20 / 観測: `:terminal` `<Plug>(skkeleton-enable)` `a` |
+| `T_DIRECT` | `bs`, `cg`, `char`, `char_shift`, `completion_accept`, `completion_open`, `cr`, `ctrl_a`, ほか 28 | `feed_key`, `install_mapping`, `pass_key`, `render`, `reset_state`, `restore_mapping`, `save_mapping` | `T_DIRECT` | `ok 17 / unknown 81` | `t.T_DIRECT.bs` / #67, B-3a, P7, ほか 22 / 観測: `:terminal` `<Plug>(skkeleton-enable)` `a` |
 | `T_DIRECT` | `char`, `char_shift`, `key_X`, `key_semicolon` | `feed_key`, `render` | `T_POINT` | `ok 1 / unknown 4` | `t.T_DIRECT.char.romaji` / function/input.lua:147-, function/input.lua:85-120, keymap.lua:39 / 観測: `:terminal` `<Plug>(skkeleton-enable)` `K` |
 | `T_DIRECT` | `t_normal` | `keep`, `reset_state` | `T_NORMAL` | `ok 3` | `t.T_DIRECT.t_normal` / #74, cleanup.lua:218-221, cleanup.lua:218-248, ほか 1 / 観測: `:terminal` `<Plug>(skkeleton-enable)` `<Plug>(skkeleton-disable)` `<C-\><C-n>` |
 | `T_POINT` | `bs`, `cg`, `char`, `char_shift`, `completion_accept`, `completion_open`, `cr`, `ctrl_a`, ほか 16 | `cancel`, `commit_candidate`, `commit_reading`, `feed_key`, `pass_key`, `reset_state`, `restore_mapping` | `T_DIRECT` | `ok 34 / unknown 34` | `t.T_POINT.bs.empty` / #67, #87, function/common.lua:18-45, ほか 15 / 観測: `:terminal` `<Plug>(skkeleton-enable)` `K` `a` `n` `<BS>` `<BS>` `<BS>` |
-| `T_POINT` | `bs`, `char`, `char_shift`, `insert_key`, `key_L`, `key_X`, `key_gt`, `key_q`, ほか 5 | `commit_candidate`, `feed_key`, `keep`, `pass_key`, `render` | `T_POINT` | `ok 11 / unknown 25` | `t.T_POINT.bs` / #129, function/henkan.lua:116-133, function/henkan.lua:137-162, ほか 15 / 観測: `:terminal` `<Plug>(skkeleton-enable)` `K` `a` `n` `<BS>` |
+| `T_POINT` | `bs`, `char`, `char_shift`, `insert_key`, `key_L`, `key_X`, `key_gt`, `key_q`, ほか 6 | `commit_candidate`, `feed_key`, `keep`, `pass_key`, `render`, `reset_state` | `T_POINT` | `ok 14 / unknown 25` | `t.T_POINT.bs` / #129, B-3a, P7, ほか 17 / 観測: `:terminal` `<Plug>(skkeleton-enable)` `K` `a` `n` `<BS>` |
 | `T_POINT` | `t_normal` | `keep` | `T_NORMAL` | `ok 3` | `t.T_POINT.t_normal` / #74, cleanup.lua:218-248, guard.lua:114-124,154-163 / 観測: `:terminal` `<Plug>(skkeleton-enable)` `K` `a` `n` `<C-\><C-n>` |
 | `T_NORMAL` | `nt_insert` | — | `T_DIRECT` | `ok 2` | `t.T_NORMAL_DIRECT.nt_insert` / #74, tests/test_e2e_cmdline.lua:147-172 / 観測: `:terminal` `<Plug>(skkeleton-enable)` `<Plug>(skkeleton-disable)` `<C-\><C-n>` `i` |
 | `T_NORMAL` | `nt_insert` | `keep` | `T_POINT` | `ok 3` | `t.T_NORMAL_POINT.nt_insert` / #74, tests/test_e2e_cmdline.lua:147-172 / 観測: `:terminal` `<Plug>(skkeleton-enable)` `K` `a` `n` `<C-\><C-n>` `i` |
-| `T_NORMAL` | `ctrl_c`, `esc`, `nt_edit`, `t_normal` | `pass_key` | `T_NORMAL` | `ok 20` | `t.T_NORMAL_DIRECT.ctrl_c` / #188, Vim 本体, keys.md §5 / 観測: `:terminal` `<Plug>(skkeleton-enable)` `K` `a` `n` `<C-\><C-n>` `<C-\><C-n>` |
+| `T_NORMAL` | `ctrl_c`, `esc`, `nt_edit`, `reset_state`, `t_normal` | `pass_key`, `reset_state` | `T_NORMAL` | `ok 25` | `t.T_NORMAL_DIRECT.ctrl_c` / #188, B-3a, P7, ほか 2 / 観測: `:terminal` `<Plug>(skkeleton-enable)` `K` `a` `n` `<C-\><C-n>` `<C-\><C-n>` |
 
 ### 3.8 辞書登録のプロンプト（`@`）
 
@@ -573,7 +584,7 @@ stateDiagram-v2
   P_PROMPT --> I_DIRECT: register_commit（4 遷移）
   P_PROMPT --> I_POINT: register_cancel / register_commit（3 遷移）
   P_PROMPT --> I_SELECT: register_cancel / register_commit（3 遷移）
-  P_PROMPT --> P_PROMPT: bufleave / char / char_shift / ほか 11（72 遷移）
+  P_PROMPT --> P_PROMPT: bufleave / char / char_shift / ほか 12（80 遷移）
 ```
 
 ![辞書登録のプロンプト（`@`） の状態遷移](figures/mode_prompt.svg)
@@ -585,7 +596,7 @@ stateDiagram-v2
 | `P_PROMPT` | `register_commit` | `commit_reading`, `render`, `reset_state`, `restore_mapping` | `I_DIRECT` | `ok 4` | `t.P_PROMPT_POINT.commit` / #189, events.md O12, host.lua:125-162 / 観測: `<Plug>(skkeleton-enable)` `N` `u` `r` `u` `<Space>` `K` `a` … |
 | `P_PROMPT` | `register_cancel`, `register_commit` | `cancel`, `keep`, `render`, `restore_mapping` | `I_POINT` | `ok 3` | `t.P_PROMPT_POINT.cancel` / #116, #154, #189, ほか 3 / 観測: `<Plug>(skkeleton-enable)` `N` `u` `r` `u` `<Space>` `<Esc>` |
 | `P_PROMPT` | `register_cancel`, `register_commit` | `cancel`, `keep`, `render`, `restore_mapping` | `I_SELECT` | `ok 3` | `t.P_PROMPT_SELECT.cancel` / #116, #189, host.lua:125-162,166-169, ほか 1 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `<Space>` `<Space>` `<Space>` `<Space>` … |
-| `P_PROMPT` | `bufleave`, `char`, `char_shift`, `cmdline_move`, `ctrl_r`, `ctrl_u`, `ctrl_w`, `prompt_cmdlineenter`, ほか 6 | `cancel`, `commit_reading`, `drop`, `install_mapping`, `keep`, `render`, `reset_state`, `restore_mapping`, ほか 1 | `P_PROMPT` | `ok 62 / gap 10（既知: #12, #116）` | `t.P_PROMPT_POINT.bufleave` / #12, #13, #54, ほか 22 / 観測: `<Plug>(skkeleton-enable)` `N` `u` `r` `u` `<Space>` `a` |
+| `P_PROMPT` | `bufleave`, `char`, `char_shift`, `cmdline_move`, `ctrl_r`, `ctrl_u`, `ctrl_w`, `prompt_cmdlineenter`, ほか 7 | `cancel`, `commit_reading`, `drop`, `install_mapping`, `keep`, `render`, `reset_state`, `restore_mapping`, ほか 1 | `P_PROMPT` | `ok 70 / gap 10（既知: #12, #116）` | `t.P_PROMPT_POINT.bufleave` / #12, #13, #54, ほか 24 / 観測: `<Plug>(skkeleton-enable)` `N` `u` `r` `u` `<Space>` `a` |
 
 ### 3.9 補完（`ic` / `ix` / blink）
 
@@ -608,7 +619,7 @@ stateDiagram-v2
   IC --> I_POINT: blink_hide / blink_menu_close / char / ほか 1（4 遷移）
   IC --> I_SELECT: space
   IC --> NI: ctrl_o
-  IC --> IC: blink_menu_open / blink_refresh / bs / ほか 4（13 遷移）
+  IC --> IC: blink_menu_open / blink_refresh / bs / ほか 5（19 遷移）
 ```
 
 ![補完（`ic` / `ix` / blink） の状態遷移](figures/mode_completion.svg)
@@ -624,7 +635,7 @@ stateDiagram-v2
 | `IC` | `blink_hide`, `blink_menu_close`, `char`, `completion_cancel` | `feed_key`, `hide_completion`, `keep`, `render` | `I_POINT` | `ok 3 / unknown 1` | `t.I_BLINK_POINT.blink_hide` / #24, #143, #174, ほか 4 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `j` `@blink_refresh` `<C-e>` |
 | `IC` | `space` | `hide_completion`, `keep`, `render` | `I_SELECT` | `ok 1` | `t.I_BLINK_POINT.space` / #190 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `j` `@blink_refresh` `<Space>` |
 | `IC` | `ctrl_o` | `keep`, `render` | `NI` | `unknown 1` | `t.I_BLINK_POINT.ctrl_o` / #117, #190 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `j` `@blink_refresh` `<C-o>` |
-| `IC` | `blink_menu_open`, `blink_refresh`, `bs`, `completion_accept`, `completion_key`, `completion_next`, `text_changed_p` | `clear_extmark`, `drop`, `keep`, `pass_key`, `render`, `reset_state`, `show_completion` | `IC` | `ok 9 / gap 3 / unknown 1（既知: #19, #190）` | `t.IC.bs` / #143, #174, #190, ほか 5 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `j` `@blink_refresh` `<BS>` |
+| `IC` | `blink_menu_open`, `blink_refresh`, `bs`, `completion_accept`, `completion_key`, `completion_next`, `reset_state`, `text_changed_p` | `clear_extmark`, `drop`, `keep`, `pass_key`, `render`, `reset_state`, `show_completion` | `IC` | `ok 15 / gap 3 / unknown 1（既知: #19, #190）` | `t.IC.bs` / #143, #174, #190, ほか 7 / 観測: `<Plug>(skkeleton-enable)` `K` `a` `n` `j` `@blink_refresh` `<BS>` |
 
 ## 4. モードをまたぐ遷移
 
@@ -814,8 +825,8 @@ stateDiagram-v2
 | `P3` | n / v / s / R では、状態とマッピングが元に戻っている | いまのモデルで決められる | 検査する | model_check の検査が通る。 |
 | `P4` | cmdline / terminal を抜けたら、何も残っていない | いまのモデルで決められる | 検査する | model_check の検査が通る。 |
 | `P5` | 1 つのキーを二重に処理しない | いまのモデルで決められる | 検査する | model_check の検査が通る。 |
-| `P6` | 決定的に振る舞う（タイミングに左右されるものには印を付ける） | 決められない | 検査しない | モデルの分岐はタイミングではなく、辞書・バッファ・設定という持っていない条件。分かれる組は検査の最後に一覧で出す。blink.cmp のメニューは User skkeleton-handled のあとにタイマーで開くので、同じキー列でも観測の時点で開いていないことがある（07d）。 |
-| `P7` | 片付けは何度やっても同じ結果になる | 決められない | 検査しない | 同じ片付けを 2 度流す遷移の対を持っていない（reset_state の自己遷移を足せば見られる）。 |
+| `P6` | 決定的に振る舞う（タイミングに左右されるものには印を付ける） | いまのモデルで決められる | 検査しない | model_check の検査が通る。 |
+| `P7` | 片付けは何度やっても同じ結果になる | いまのモデルで決められる | 検査しない | model_check の検査が通る。 |
 | `P8` | enable のあと disable すると元に戻る | いまのモデルで決められる | 検査する | model_check の検査が通る。 |
 | `P9` | 辞書登録の入れ子から漏れずに戻れる | いまのモデルで決められる | 検査する | model_check の検査が通る。 |
 | `P10` | 同じ読みを 2 度確定しない | いまのモデルで決められる | 検査する | model_check の検査が通る。 |
@@ -1016,6 +1027,13 @@ P1（読みが黙って消えない）の破れは 133 件。すべて `M.known`
 | 8 | R_MID は観測のクラスから外す | 途中の状態（transient）としてだけ残す。 | R_MID |
 | 9 | effects に install_mapping と save_mapping を足す | GLOSSARY にも足す。 | semantics/GLOSSARY.md, t.N_OFF.enable, t.I_OFF.enable, t.N_OFF.insert_enter.keepstate |
 | 10 | V_PRE の意味 | <C-o>v で残り続ける状態の意味にする。マウスのドラッグで ModeChanged の確定より前に一瞬残るもの（events.md の O18）は、途中の状態として扱う。base を rebase して events.md も合わせる。 | V_PRE_POINT, V_PRE_SELECT, semantics/inventory/events.md |
+| 11 | V7 と V11 の視点 | V7 は読みがあるときの <C-j> で確定し、次の 1 打でひらがなに戻るとする。V11 は入れ子の機械と外の機械が互いに書き換えないとする。 | semantics/core/CORE.md, semantics/core/rules.lua |
+| 12 | B-2b: 条件で割れる遷移 | 分岐する組と規則 id を許可一覧にし、新しい組や遷移の追加を検査で失敗にする。 | model_check.lua: ALLOWED_SPLITS |
+| 13 | B-3a: 片付けの冪等性 | 各状態に reset_state の自己遷移を置き、2 度の片付けで状態が変わらないことを検査する。 | reset_state の自己遷移, P7 |
+| 14 | B-1b / B-5b / B-6b | pre-edit の個数は性質で検査し、位置と表示は表示テストで見る。マッピングは出口だけを検査し、見えているかは表示テストで見る。 | P2, P3, P15 |
+| 15 | C-1a / C-2a / C-4a | N_KEEP と R_MID は状態クラスにせず、I_POINT は相を持つ 1 クラスにする。送りの細かい状態は core が持つ。 | N_KEEP, R_MID, I_POINT_OKURI, semantics/core/CORE.md |
+| 16 | B-4 / C-3 | モード表示は core の状態から導き、escape は結合の層に途中状態として持たせない。 | semantics/core/CORE.md, I_ESCAPE |
+| 17 | D-1d / D-2d / D-3b / D-4d | terminal は対象外、辞書登録の結合層の粒度は今のまま、補完の並びは対象外、利用者キーと Alt/Meta と VimLeavePre は対象外にする。深さ 3 以上と X の確認は core の意味論で扱う。 | semantics/core/CORE.md, semantics/core/DESIGN.md |
 
 ## 9. 図の一覧
 
